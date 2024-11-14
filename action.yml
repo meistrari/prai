@@ -1,0 +1,29 @@
+name: "AI Dependency & Migration Validator"
+description: "Validate dependency versioning and database migrations using AI"
+inputs:
+  GITHUB_TOKEN:
+    description: "GitHub token to interact with the repository"
+    required: true
+  OPENAI_API_KEY:
+    description: "OpenAI API key for GPT"
+    required: false
+  ANTHROPIC_API_KEY:
+    description: "Anthropic API key for Claude"
+    required: false
+  AI_PROVIDER:
+    description: "AI provider to use (openai or anthropic)"
+    required: false
+    default: "openai"
+  exclude:
+    description: "Glob patterns to exclude files from analysis"
+    required: false
+    default: ""
+  COOKBOOK_URL:
+    description: "URL to fetch validation rules cookbook from"
+    required: true
+runs:
+  using: "node16"
+  main: "dist/src/main.js"
+branding:
+  icon: "shield"
+  color: "blue"
