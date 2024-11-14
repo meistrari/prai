@@ -1,6 +1,6 @@
-# prai
+# prai (PRs + AI = a match made in heaven)
 
-A GitHub Action that uses OpenAI GPT-4 and Claude to perform automated code reviews on pull requests, following the Conventional Comments format.
+Prai is an AI-powered code review tool that streamlines pull request workflows by providing automated, intelligent feedback using leading language models. It integrates seamlessly with GitHub to deliver structured, actionable code reviews while supporting multiple AI providers.
 
 ## Key Features
 
