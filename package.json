@@ -2,8 +2,8 @@
   "name": "open-ai-reviewer",
   "version": "1.0.0",
   "description": "Open AI powered code reviews",
-  "main": "lib/main.js",
-  "author": "Ville Saukkonen",
+  "main": "dist/src/main.js",
+  "author": "Henrique Godoy (godoy@meistrari.com)",
   "license": "MIT",
   "scripts": {
     "build": "tsc",
@@ -13,10 +13,15 @@
   },
   "dependencies": {
     "@actions/core": "^1.10.0",
+    "@ai-sdk/anthropic": "^0.0.56",
+    "@ai-sdk/openai": "^0.0.72",
     "@anthropic-ai/sdk": "^0.32.1",
     "@octokit/rest": "^19.0.7",
+    "ai": "^3.4.33",
+    "dedent": "^1.5.3",
     "dotenv": "^16.4.5",
     "minimatch": "^7.4.2",
+    "neverthrow": "^8.1.1",
     "openai": "^4.20.1",
     "p-limit": "^6.1.0",
     "parse-diff": "^0.11.1",
@@ -24,6 +29,7 @@
     "typeorm": "^0.3.20"
   },
   "devDependencies": {
+    "@antfu/eslint-config": "^3.9.1",
     "@types/node": "^18.19.64",
     "@vercel/ncc": "^0.36.1",
     "prettier": "^2.8.6",

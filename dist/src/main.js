@@ -57,8 +57,8 @@ const anthropic = new sdk_1.default({
 });
 const SKIP_VALIDATION_COMMENT = '// @skip-validation';
 function getPRDetails() {
-    var _a, _b;
     return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b;
         const { repository, number } = JSON.parse((0, fs_1.readFileSync)(process.env.GITHUB_EVENT_PATH || "", "utf8"));
         const prResponse = yield octokit.pulls.get({
             owner: repository.owner.login,
@@ -84,8 +84,8 @@ const logPrefix = {
 };
 const defaultRules = `Review the Pull Request and provide a verdict on whether it should be approved, requires changes, or is blocked.`;
 function getAIResponse(prompt) {
-    var _a, _b;
     return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b;
         console.log(`🤖 Sending request to ${AI_PROVIDER.toUpperCase()}`);
         try {
             let content;
@@ -303,8 +303,8 @@ ${JSON.stringify(parsedDiff, null, 2)}`;
     });
 }
 function generateDetailedReviews(analysis, cookbook) {
-    var _a, _b, _c;
     return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b, _c;
         const reviews = [];
         for (const fileIssue of analysis.fileIssues) {
             for (const issue of fileIssue.issues) {
