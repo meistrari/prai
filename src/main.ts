@@ -3,8 +3,8 @@ import type { Result } from 'neverthrow'
 import type { File } from 'parse-diff'
 import { readFileSync } from 'node:fs'
 import * as core from '@actions/core'
-import anthropic from '@ai-sdk/anthropic'
-import openai from '@ai-sdk/openai'
+import { createAnthropic } from '@ai-sdk/anthropic'
+import { createOpenAI } from '@ai-sdk/openai'
 import { Octokit } from '@octokit/rest'
 import { generateText } from 'ai'
 import dedent from 'dedent'
@@ -38,6 +38,13 @@ interface AIResponse {
     analysis?: string;
     suggestion?: string;
     fixPatch?: string;
+    overallVerdict?: {
+        status: 'approve' | 'request_changes' | 'comment';
+        summary: string;
+        criticalIssues: string[];
+        warnings: string[];
+        suggestions: string[];
+    };
 }
 
 interface Review {
@@ -83,6 +90,21 @@ interface ReviewSuggestion {
     analysis: string;
     suggestion: string;
     fixPatch?: string;
+}
+
+interface SummaryAnalysis {
+    fileResults: Array<{
+        path: string;
+        reviews: Array<ReviewSuggestion>;
+        hasCriticalIssues: boolean;
+    }>;
+    overallVerdict: {
+        status: 'approve' | 'request_changes' | 'comment';
+        summary: string;
+        criticalIssues: string[];
+        warnings: string[];
+        suggestions: string[];
+    };
 }
 
 const SKIP_VALIDATION_COMMENT = '// @skip-validation'
@@ -141,8 +163,8 @@ const defaultRules = `Review the Pull Request and provide a verdict on whether i
 
 function resolveModel() {
     const modelPerProvider = {
-        openai: openai.createOpenAI({ apiKey: OPENAI_API_KEY })('gpt-4o'),
-        anthropic: anthropic.createAnthropic({ apiKey: ANTHROPIC_API_KEY })('claude-3-5-sonnet-20241022'),
+        openai: createOpenAI({ apiKey: OPENAI_API_KEY })('gpt-4-0125-preview'),
+        anthropic: createAnthropic({ apiKey: ANTHROPIC_API_KEY })('claude-3-5-sonnet-20241022'),
     } as Record<string, LanguageModelV1>
 
     return modelPerProvider[AI_PROVIDER] ?? modelPerProvider.openai
@@ -316,31 +338,25 @@ async function fetchCookbook(url: string): Promise<Result<string, Error>> {
     }
 }
 
-async function performTwoStepAnalysis(
-    parsedDiff: File[],
+async function performSingleFileAnalysis(
+    file: File,
     prDetails: PRDetails,
     cookbook: string,
 ): Promise<Result<{ reviews: Array<ReviewSuggestion>, hasCriticalIssues: boolean }, Error>> {
-    const filesToAnalyze = parsedDiff.filter((file) => {
-        const hasSkipComment = file.chunks.some(chunk =>
-            chunk.changes.some(change =>
-                change.content.includes(SKIP_VALIDATION_COMMENT),
-            ),
-        )
-        if (hasSkipComment) {
-            logger.info(`Skipping validation for ${file.to} due to skip comment`)
-        }
-        return !hasSkipComment
-    })
-
-    if (filesToAnalyze.length === 0) {
-        logger.info(`All files are marked to skip validation`)
+    const hasSkipComment = file.chunks.some(chunk =>
+        chunk.changes.some(change =>
+            change.content.includes(SKIP_VALIDATION_COMMENT),
+        ),
+    )
+    
+    if (hasSkipComment) {
+        logger.info(`Skipping validation for ${file.to} due to skip comment`)
         return ok({ reviews: [], hasCriticalIssues: false })
     }
 
     return ResultAsync.fromPromise(
         (async () => {
-            const initialAnalysis = await getComprehensiveAnalysis(filesToAnalyze, prDetails, cookbook)
+            const initialAnalysis = await getComprehensiveAnalysis([file], prDetails, cookbook)
             const detailedReviews = await generateDetailedReviews(initialAnalysis, cookbook)
             const hasCriticalIssues = detailedReviews.some(review => review.severity === 'critical')
 
@@ -360,7 +376,7 @@ async function getComprehensiveAnalysis(
 
       You are a code analysis expert. Analyze the provided changes according to the rules and guidelines above.
 
-      Provide a structured analysis following this JSON format:
+      Provide a structured analysis following this JSON format **without any markdown or code blocks**:
       {
         "fileIssues": [{
           "path": "file path",
@@ -409,9 +425,6 @@ async function generateDetailedReviews(
                   ${cookbook}
 
                   You are a code review expert. Follow Conventional Comments format strictly:
-                  <label> [decorations]: <subject>
-
-                  [discussion]
 
                   Labels: praise, nitpick, suggestion, issue, todo, question, thought, chore, note
                   Decorations: (blocking), (non-blocking), (if-minor)
@@ -423,7 +436,7 @@ async function generateDetailedReviews(
                   - If suggesting code changes, provide exact code in the suggestion
                   - Keep suggestions minimal and focused
 
-                  Response format must be JSON:
+                  **Do not include any markdown or code blocks. Only provide pure JSON in the following format:**
                   {
                     "severity": "critical|warning|info",
                     "analysis": "your conventional comment",
@@ -463,6 +476,53 @@ async function generateDetailedReviews(
     return reviews
 }
 
+async function generateFinalSummary(
+    fileResults: Array<{ path: string; reviews: Array<ReviewSuggestion>; hasCriticalIssues: boolean }>,
+    prDetails: PRDetails,
+    cookbook: string,
+): Promise<Result<SummaryAnalysis, Error>> {
+    const summaryPrompt = {
+        system: dedent`
+            ${cookbook}
+
+            You are a technical lead reviewing a pull request. Analyze the provided review results and create a comprehensive summary.
+            Consider:
+            1. Overall impact of changes
+            2. Patterns in issues found
+            3. Critical problems that need immediate attention
+            4. General suggestions for improvement
+
+            Provide a structured summary in this JSON format:
+            {
+                "overallVerdict": {
+                    "status": "approve|request_changes|comment",
+                    "summary": "overall assessment",
+                    "criticalIssues": ["list of critical issues"],
+                    "warnings": ["list of warnings"],
+                    "suggestions": ["list of suggestions"]
+                }
+            }`,
+        user: dedent`
+            PR Title: ${prDetails.title}
+            PR Description: ${prDetails.description}
+
+            File Analysis Results:
+            ${JSON.stringify(fileResults, null, 2)}
+        `,
+    }
+
+    const response = await getAIResponse(summaryPrompt)
+    
+    if (response.isErr() || !response.value.overallVerdict) {
+        return err(new Error('Failed to generate summary or missing verdict'))
+    }
+
+    return ok({
+        fileResults,
+        overallVerdict: response.value.overallVerdict,
+    })
+}
+
 async function main() {
     logger.info(`Starting validation process`)
     try {
@@ -490,48 +550,105 @@ async function main() {
         }
 
         const parsedDiff = parseDiff(diff.value)
-        const analysis = await performTwoStepAnalysis(parsedDiff, prDetails, cookbook.value)
+        const fileResults: Array<{
+            path: string;
+            reviews: Array<ReviewSuggestion>;
+            hasCriticalIssues: boolean;
+        }> = []
 
-        if (analysis.isErr()) {
-            logger.error(`Failed to perform two-step analysis:`, analysis.error)
+        for (const file of parsedDiff) {
+            const analysis = await performSingleFileAnalysis(file, prDetails, cookbook.value)
+            
+            if (analysis.isErr()) {
+                logger.error(`Failed to analyze file ${file.to}:`, analysis.error)
+                continue
+            }
+            
+            fileResults.push({
+                path: file.to || '',
+                reviews: analysis.value.reviews,
+                hasCriticalIssues: analysis.value.hasCriticalIssues,
+            })
+        }
+
+        const fullContextAnalysis = await getComprehensiveAnalysis(parsedDiff, prDetails, cookbook.value)
+        const fullContextReviews = await generateDetailedReviews(fullContextAnalysis, cookbook.value)
+        
+        for (const review of fullContextReviews) {
+            const fileResult = fileResults.find(f => f.path === review.path)
+            if (fileResult) {
+                fileResult.reviews.push(review)
+                fileResult.hasCriticalIssues = fileResult.hasCriticalIssues || review.severity === 'critical'
+            }
+        }
+
+        const finalSummary = await generateFinalSummary(fileResults, prDetails, cookbook.value)
+
+        if (finalSummary.isErr()) {
+            logger.error(`Failed to generate final summary:`, finalSummary.error)
             return
         }
 
-        if (analysis.value.reviews.length > 0) {
-            logger.info(`Posting review comments`)
-            await createReviewComment(
-                prDetails.owner,
-                prDetails.repo,
-                prDetails.pull_number,
-                analysis.value.reviews.map(review => ({
-                    body: dedent`
-                      ${review.analysis}
-                      
-                      ${review.suggestion
-                        ? dedent`
-                                  \`\`\`suggestion
-                                  ${review.suggestion}
-                                  \`\`\`\n
+        for (const fileResult of finalSummary.value.fileResults) {
+            if (fileResult.reviews.length > 0) {
+                logger.info(`Posting review comments for ${fileResult.path}`)
+                await createReviewComment(
+                    prDetails.owner,
+                    prDetails.repo,
+                    prDetails.pull_number,
+                    fileResult.reviews.map(review => ({
+                        body: dedent`
+                            ${review.analysis}
+                            
+                            ${review.suggestion
+                            ? dedent`
+                                    \`\`\`suggestion
+                                    ${review.suggestion}
+                                    \`\`\`\n
                                 `
-                        : ''}`,
-                    path: review.path,
-                    line: review.lineNumber,
-                })),
-            )
-
-            if (analysis.value.hasCriticalIssues) {
-                await octokit.pulls.createReview({
-                    owner: prDetails.owner,
-                    repo: prDetails.repo,
-                    pull_number: prDetails.pull_number,
-                    event: 'REQUEST_CHANGES',
-                    body: 'Changes requested based on critical issues found in review.',
-                })
-                core.setFailed(`Critical issues found in the PR`)
+                            : ''}`,
+                        path: fileResult.path,
+                        line: review.lineNumber,
+                    })),
+                )
             }
-
-            logger.success(`Review comments posted successfully`)
         }
+
+        const hasCriticalIssues = finalSummary.value.overallVerdict.criticalIssues.length > 0
+        const reviewEvent = hasCriticalIssues ? 'REQUEST_CHANGES' : 'COMMENT'
+
+        await octokit.pulls.createReview({
+            owner: prDetails.owner,
+            repo: prDetails.repo,
+            pull_number: prDetails.pull_number,
+            event: reviewEvent,
+            body: dedent`
+                # Pull Request Review Summary
+
+                ${finalSummary.value.overallVerdict.summary}
+
+                ${finalSummary.value.overallVerdict.criticalIssues.length > 0
+                ? `## Critical Issues
+                   ${finalSummary.value.overallVerdict.criticalIssues.map(issue => `- ${issue}`).join('\n')}`
+                : ''}
+
+                ${finalSummary.value.overallVerdict.warnings.length > 0
+                ? `## Warnings
+                   ${finalSummary.value.overallVerdict.warnings.map(warning => `- ${warning}`).join('\n')}`
+                : ''}
+
+                ${finalSummary.value.overallVerdict.suggestions.length > 0
+                ? `## Suggestions
+                   ${finalSummary.value.overallVerdict.suggestions.map(suggestion => `- ${suggestion}`).join('\n')}`
+                : ''}
+            `,
+        })
+
+        if (hasCriticalIssues) {
+            core.setFailed(`Critical issues found in the PR`)
+        }
+
+        logger.success(`Review completed successfully`)
     }
     catch (error) {
         logger.error(`Main process error:`, error)
@@ -546,7 +663,12 @@ main().catch((error) => {
 
 function safeParseJSON<T>(content: string): Result<T, Error> {
     try {
-        return ok(JSON.parse(content) as T)
+        const cleanedContent = content
+            .replace(/^```(?:json)?\s*/, '') 
+            .replace(/```$/, '')            
+            .trim();
+
+        return ok(JSON.parse(cleanedContent) as T)
     }
     catch (error) {
         return err(error as Error)

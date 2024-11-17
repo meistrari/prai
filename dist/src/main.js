@@ -35,31 +35,57 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-const fs_1 = require("fs");
+const node_fs_1 = require("node:fs");
 const core = __importStar(require("@actions/core"));
-const openai_1 = __importDefault(require("openai"));
-const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
+const anthropic_1 = require("@ai-sdk/anthropic");
+const openai_1 = require("@ai-sdk/openai");
 const rest_1 = require("@octokit/rest");
+const ai_1 = require("ai");
+const dedent_1 = __importDefault(require("dedent"));
+const neverthrow_1 = require("neverthrow");
 const parse_diff_1 = __importDefault(require("parse-diff"));
-const GITHUB_TOKEN = core.getInput("GITHUB_TOKEN");
-const OPENAI_API_KEY = core.getInput("OPENAI_API_KEY");
-const ANTHROPIC_API_KEY = core.getInput("ANTHROPIC_API_KEY");
-const AI_PROVIDER = core.getInput("AI_PROVIDER") || "openai";
-const OPENAI_API_MODEL = "gpt-4-0125-preview";
-const ANTHROPIC_API_MODEL = "claude-3-sonnet-20240229";
-const COOKBOOK_URL = "https://gist.githubusercontent.com/herniqeu/35669801a4bbdc8fa52953986fa61277/raw/24932e0a2422f06eb762802ba0efb1e24d11924f/cookbook.md";
+const GITHUB_TOKEN = core.getInput('GITHUB_TOKEN');
+const OPENAI_API_KEY = core.getInput('OPENAI_API_KEY');
+const ANTHROPIC_API_KEY = core.getInput('ANTHROPIC_API_KEY');
+const AI_PROVIDER = core.getInput('AI_PROVIDER') || 'openai';
+const COOKBOOK_URL = 'https://gist.githubusercontent.com/herniqeu/35669801a4bbdc8fa52953986fa61277/raw/24932e0a2422f06eb762802ba0efb1e24d11924f/cookbook.md';
 const octokit = new rest_1.Octokit({ auth: GITHUB_TOKEN });
-const openai = new openai_1.default({
-    apiKey: OPENAI_API_KEY,
-});
-const anthropic = new sdk_1.default({
-    apiKey: ANTHROPIC_API_KEY,
-});
 const SKIP_VALIDATION_COMMENT = '// @skip-validation';
+const logger = {
+    info: (message, ...args) => {
+        // eslint-disable-next-line no-console
+        console.log(`🔍 ${message}`, ...args);
+        core.info(message);
+    },
+    warn: (message, ...args) => {
+        // eslint-disable-next-line no-console
+        console.log(`⚠️ ${message}`, ...args);
+        core.warning(message);
+    },
+    error: (message, ...args) => {
+        console.error(`❌ ${message}`, ...args);
+        core.error(message);
+    },
+    debug: (message, ...args) => {
+        // eslint-disable-next-line no-console
+        console.log(`🐛 ${message}`, ...args);
+        core.debug(message);
+    },
+    success: (message, ...args) => {
+        // eslint-disable-next-line no-console
+        console.log(`✅ ${message}`, ...args);
+        core.info(message);
+    },
+    review: (message, ...args) => {
+        // eslint-disable-next-line no-console
+        console.log(`📝 ${message}`, ...args);
+        core.info(message);
+    },
+};
 function getPRDetails() {
     return __awaiter(this, void 0, void 0, function* () {
         var _a, _b;
-        const { repository, number } = JSON.parse((0, fs_1.readFileSync)(process.env.GITHUB_EVENT_PATH || "", "utf8"));
+        const { repository, number } = JSON.parse((0, node_fs_1.readFileSync)(process.env.GITHUB_EVENT_PATH || '', 'utf8'));
         const prResponse = yield octokit.pulls.get({
             owner: repository.owner.login,
             repo: repository.name,
@@ -69,95 +95,66 @@ function getPRDetails() {
             owner: repository.owner.login,
             repo: repository.name,
             pull_number: number,
-            title: (_a = prResponse.data.title) !== null && _a !== void 0 ? _a : "",
-            description: (_b = prResponse.data.body) !== null && _b !== void 0 ? _b : "",
+            title: (_a = prResponse.data.title) !== null && _a !== void 0 ? _a : '',
+            description: (_b = prResponse.data.body) !== null && _b !== void 0 ? _b : '',
         };
     });
 }
-const logPrefix = {
-    info: "🔍",
-    warning: "⚠️",
-    success: "✅",
-    error: "❌",
-    debug: "🐛",
-    review: "📝"
-};
 const defaultRules = `Review the Pull Request and provide a verdict on whether it should be approved, requires changes, or is blocked.`;
+function resolveModel() {
+    var _a;
+    const modelPerProvider = {
+        openai: (0, openai_1.createOpenAI)({ apiKey: OPENAI_API_KEY })('gpt-4-0125-preview'),
+        anthropic: (0, anthropic_1.createAnthropic)({ apiKey: ANTHROPIC_API_KEY })('claude-3-5-sonnet-20241022'),
+    };
+    return (_a = modelPerProvider[AI_PROVIDER]) !== null && _a !== void 0 ? _a : modelPerProvider.openai;
+}
 function getAIResponse(prompt) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b;
-        console.log(`🤖 Sending request to ${AI_PROVIDER.toUpperCase()}`);
-        try {
-            let content;
-            if (AI_PROVIDER === 'anthropic') {
-                const response = yield anthropic.messages.create({
-                    model: ANTHROPIC_API_MODEL,
-                    max_tokens: 4000,
-                    temperature: 0.3,
-                    system: prompt.system,
-                    messages: [
-                        {
-                            role: "user",
-                            content: prompt.user
-                        }
-                    ]
-                });
-                content = response.content[0].type === 'text' ? response.content[0].text : '';
-            }
-            else {
-                const response = yield openai.chat.completions.create({
-                    model: OPENAI_API_MODEL,
-                    temperature: 0.3,
-                    max_tokens: 4000,
-                    response_format: { type: "json_object" },
-                    messages: [
-                        {
-                            role: "system",
-                            content: prompt.system
-                        },
-                        {
-                            role: "user",
-                            content: prompt.user
-                        }
-                    ]
-                });
-                content = ((_b = (_a = response.choices[0].message) === null || _a === void 0 ? void 0 : _a.content) === null || _b === void 0 ? void 0 : _b.trim()) || "{}";
-            }
-            console.log('📥 Raw AI response:', content);
-            try {
-                const parsed = JSON.parse(content);
-                console.log('✅ Successfully parsed AI response');
-                return parsed;
-            }
-            catch (parseError) {
-                console.error('❌ Failed to parse AI response:', parseError);
-                console.log('📄 Problematic content:', content);
-                return null;
-            }
+        logger.info(`Sending request to ${AI_PROVIDER.toUpperCase()}`);
+        const response = yield neverthrow_1.ResultAsync.fromPromise((0, ai_1.generateText)({
+            model: resolveModel(),
+            system: prompt.system,
+            prompt: prompt.user,
+        }), (error) => {
+            logger.error(`${AI_PROVIDER.toUpperCase()} API error: ${error}`);
+            return error;
+        });
+        if (response.isErr()) {
+            logger.error(`Failed to generate text: ${response.error}`);
+            return (0, neverthrow_1.err)(response.error);
         }
-        catch (error) {
-            console.error(`❌ ${AI_PROVIDER.toUpperCase()} API error:`, error);
-            return null;
+        const content = response.value.text;
+        logger.debug('Raw AI response:', content);
+        const parsed = safeParseJSON(content);
+        if (parsed.isErr()) {
+            logger.error('Failed to parse AI response:', parsed.error);
+            return (0, neverthrow_1.err)(parsed.error);
         }
+        return (0, neverthrow_1.ok)(parsed.value);
     });
 }
 function createReviewComment(owner, repo, pull_number, comments) {
     return __awaiter(this, void 0, void 0, function* () {
-        console.log(`${logPrefix.review} Preparing to post ${comments.length} review comments`);
+        logger.review(`Preparing to post ${comments.length} review comments`);
         try {
             const diff = yield getDiff(owner, repo, pull_number);
-            const parsedDiff = (0, parse_diff_1.default)(diff);
+            if (diff.isErr()) {
+                logger.error('Failed to fetch diff:', diff.error);
+                return (0, neverthrow_1.err)(diff.error);
+            }
+            const parsedDiff = (0, parse_diff_1.default)(diff.value);
             const diffPositions = new Map();
-            parsedDiff.forEach(file => {
+            parsedDiff.forEach((file) => {
                 const positions = [];
                 let position = 0;
-                file.chunks.forEach(chunk => {
-                    chunk.changes.forEach(change => {
+                file.chunks.forEach((chunk) => {
+                    chunk.changes.forEach((change) => {
                         position++;
                         if (change.type !== 'del') {
                             positions.push({
                                 path: file.to || '',
-                                position: position,
+                                position,
                                 line: 'ln2' in change ? change.ln2 : change.ln,
                             });
                         }
@@ -165,141 +162,146 @@ function createReviewComment(owner, repo, pull_number, comments) {
                 });
                 diffPositions.set(file.to || '', positions);
             });
-            const validComments = comments.map(comment => {
+            const validComments = comments.map((comment) => {
                 const filePositions = diffPositions.get(comment.path);
                 if (!filePositions) {
-                    console.log(`${logPrefix.warning} No diff positions found for file: ${comment.path}`);
+                    logger.warn(`No diff positions found for file: ${comment.path}`);
                     return null;
                 }
                 const diffPosition = filePositions.find(pos => pos.line === comment.line);
                 if (!diffPosition) {
-                    console.log(`${logPrefix.warning} No diff position found for line ${comment.line} in ${comment.path}`);
+                    logger.warn(`No diff position found for line ${comment.line} in ${comment.path}`);
                     return null;
                 }
                 return {
                     path: comment.path,
                     body: comment.body,
-                    position: diffPosition.position
+                    position: diffPosition.position,
                 };
             }).filter((comment) => comment !== null);
             if (validComments.length === 0) {
-                console.log(`${logPrefix.warning} No valid diff positions found for any comments`);
-                return;
+                logger.warn(`No valid diff positions found for any comments`);
+                return (0, neverthrow_1.ok)(undefined);
             }
-            console.log(`${logPrefix.review} Posting ${validComments.length} comments (${comments.length - validComments.length} skipped)`);
+            logger.review(`Posting ${validComments.length} comments (${comments.length - validComments.length} skipped)`);
             yield octokit.pulls.createReview({
                 owner,
                 repo,
                 pull_number,
-                event: "COMMENT",
-                comments: validComments
+                event: 'COMMENT',
+                comments: validComments,
             });
-            console.log(`${logPrefix.success} Successfully posted review comments`);
+            logger.success(`Successfully posted review comments`);
+            return (0, neverthrow_1.ok)(undefined);
         }
         catch (error) {
-            console.error(`${logPrefix.error} Error posting review:`, error);
-            console.log(`${logPrefix.debug} Attempted to post comments:`, comments.map(c => ({
+            logger.error(`Error posting review:`, error);
+            logger.debug(`Attempted to post comments:`, comments.map(c => ({
                 path: c.path,
                 line: c.line,
-                bodyLength: c.body.length
+                bodyLength: c.body.length,
             })));
-            throw error;
+            return (0, neverthrow_1.err)(error);
         }
     });
 }
 function getDiff(owner, repo, pull_number) {
     return __awaiter(this, void 0, void 0, function* () {
-        const response = yield octokit.pulls.get({
-            owner,
-            repo,
-            pull_number,
-            mediaType: {
-                format: "diff"
-            }
-        });
-        const diff = response.data;
-        return diff;
+        try {
+            const response = yield octokit.pulls.get({
+                owner,
+                repo,
+                pull_number,
+                mediaType: {
+                    format: 'diff',
+                },
+            });
+            const diff = response.data;
+            return (0, neverthrow_1.ok)(diff);
+        }
+        catch (error) {
+            logger.error(`Error fetching diff:`, error);
+            return (0, neverthrow_1.err)(error);
+        }
     });
 }
 function fetchCookbook(url) {
     return __awaiter(this, void 0, void 0, function* () {
+        if (!url) {
+            logger.info(`No cookbook URL provided, using default rules`);
+            return (0, neverthrow_1.ok)(defaultRules);
+        }
+        logger.info(`Fetching cookbook from: ${url}`);
         try {
-            if (!url) {
-                console.log('ℹNo cookbook URL provided, using default rules');
-                return defaultRules;
-            }
-            console.log(`📥 Fetching cookbook from: ${url}`);
             const response = yield fetch(url);
             if (!response.ok) {
-                throw new Error(`Failed to fetch cookbook: ${response.statusText}`);
+                return (0, neverthrow_1.err)(new Error(`Failed to fetch cookbook: ${response.statusText}`));
             }
             const rules = yield response.text();
-            console.log('✅ Successfully fetched cookbook rules');
-            return rules;
+            logger.success(`Successfully fetched cookbook rules`);
+            return (0, neverthrow_1.ok)(rules);
         }
         catch (error) {
-            console.error('❌ Error fetching cookbook:', error);
-            console.log('⚠️ Falling back to default rules');
-            return defaultRules;
+            logger.error(`Error fetching cookbook:`, error);
+            logger.warn(`Falling back to default rules`);
+            return (0, neverthrow_1.ok)(defaultRules);
         }
     });
 }
-function performTwoStepAnalysis(parsedDiff, prDetails, cookbook) {
+function performSingleFileAnalysis(file, prDetails, cookbook) {
     return __awaiter(this, void 0, void 0, function* () {
-        const filesToAnalyze = parsedDiff.filter(file => {
-            const hasSkipComment = file.chunks.some(chunk => chunk.changes.some(change => change.content.includes(SKIP_VALIDATION_COMMENT)));
-            if (hasSkipComment) {
-                console.log(`🔕 Skipping validation for ${file.to} due to skip comment`);
-            }
-            return !hasSkipComment;
-        });
-        if (filesToAnalyze.length === 0) {
-            console.log('ℹ️ All files are marked to skip validation');
-            return { reviews: [], hasCriticalIssues: false };
+        const hasSkipComment = file.chunks.some(chunk => chunk.changes.some(change => change.content.includes(SKIP_VALIDATION_COMMENT)));
+        if (hasSkipComment) {
+            logger.info(`Skipping validation for ${file.to} due to skip comment`);
+            return (0, neverthrow_1.ok)({ reviews: [], hasCriticalIssues: false });
         }
-        const initialAnalysis = yield getComprehensiveAnalysis(filesToAnalyze, prDetails, cookbook);
-        const detailedReviews = yield generateDetailedReviews(initialAnalysis, cookbook);
-        const hasCriticalIssues = detailedReviews.some(review => review.severity === 'critical');
-        return { reviews: detailedReviews, hasCriticalIssues };
+        return neverthrow_1.ResultAsync.fromPromise((() => __awaiter(this, void 0, void 0, function* () {
+            const initialAnalysis = yield getComprehensiveAnalysis([file], prDetails, cookbook);
+            const detailedReviews = yield generateDetailedReviews(initialAnalysis, cookbook);
+            const hasCriticalIssues = detailedReviews.some(review => review.severity === 'critical');
+            return { reviews: detailedReviews, hasCriticalIssues };
+        }))(), error => error);
     });
 }
 function getComprehensiveAnalysis(parsedDiff, prDetails, cookbook) {
     return __awaiter(this, void 0, void 0, function* () {
-        const systemPrompt = `
-${cookbook}
+        const systemPrompt = (0, dedent_1.default) `
+      ${cookbook}
 
-You are a code analysis expert. Analyze the provided changes according to the rules and guidelines above.
+      You are a code analysis expert. Analyze the provided changes according to the rules and guidelines above.
 
-Provide a structured analysis following this JSON format:
-{
-  "fileIssues": [{
-    "path": "file path",
-    "issues": [{
-      "lineNumber": number,
-      "type": "string",
-      "description": "detailed description",
-      "suggestedFix": "specific fix",
-      "severity": "string",
-      "codeBlock": "relevant code"
-    }]
-  }],
-  "globalIssues": [{
-    "type": "category",
-    "description": "description",
-    "affectedFiles": ["files"]
-  }]
-}`;
-        const userPrompt = `
-PR Title: ${prDetails.title}
-PR Description: ${prDetails.description}
+      Provide a structured analysis following this JSON format **without any markdown or code blocks**:
+      {
+        "fileIssues": [{
+          "path": "file path",
+          "issues": [{
+            "lineNumber": number,
+            "type": "string",
+            "description": "detailed description",
+            "suggestedFix": "specific fix",
+            "severity": "string",
+            "codeBlock": "relevant code"
+          }]
+        }],
+        "globalIssues": [{
+          "type": "category",
+          "description": "description",
+          "affectedFiles": ["files"]
+        }]
+      }`;
+        const userPrompt = (0, dedent_1.default) `
+      PR Title: ${prDetails.title}
+      PR Description: ${prDetails.description}
 
-Changed Files:
-${JSON.stringify(parsedDiff, null, 2)}`;
+      Changed Files:
+      ${JSON.stringify(parsedDiff, null, 2)}
+    `;
         const response = yield getAIResponse({ system: systemPrompt, user: userPrompt });
-        if (!response) {
+        if (response.isErr()) {
+            logger.error(`Failed to generate comprehensive analysis:`, response.error);
             return { fileIssues: [], globalIssues: [] };
         }
-        return response;
+        return response.value;
     });
 }
 function generateDetailedReviews(analysis, cookbook) {
@@ -309,98 +311,214 @@ function generateDetailedReviews(analysis, cookbook) {
         for (const fileIssue of analysis.fileIssues) {
             for (const issue of fileIssue.issues) {
                 const reviewPrompt = {
-                    system: `
-${cookbook}
+                    system: (0, dedent_1.default) `
+                  ${cookbook}
 
-You are a code review expert. Follow Conventional Comments format strictly:
-<label> [decorations]: <subject>
+                  You are a code review expert. Follow Conventional Comments format strictly:
 
-[discussion]
+                  Labels: praise, nitpick, suggestion, issue, todo, question, thought, chore, note
+                  Decorations: (blocking), (non-blocking), (if-minor)
 
-Labels: praise, nitpick, suggestion, issue, todo, question, thought, chore, note
-Decorations: (blocking), (non-blocking), (if-minor)
+                  IMPORTANT:
+                  - Be concise and actionable
+                  - Replace "you" with "we"
+                  - Replace "should" with "could"
+                  - If suggesting code changes, provide exact code in the suggestion
+                  - Keep suggestions minimal and focused
 
-IMPORTANT:
-- Be concise and actionable
-- Replace "you" with "we"
-- Replace "should" with "could"
-- If suggesting code changes, provide exact code in the suggestion
-- Keep suggestions minimal and focused
-
-Response format must be JSON:
-{
-  "severity": "critical|warning|info",
-  "analysis": "your conventional comment",
-  "suggestion": "exact replacement code"
-}`,
-                    user: `
-Issue Type: ${issue.type}
-File: ${fileIssue.path}
-Line: ${issue.lineNumber}
-Description: ${issue.description}
-Code: ${issue.codeBlock}`
+                  **Do not include any markdown or code blocks. Only provide pure JSON in the following format:**
+                  {
+                    "severity": "critical|warning|info",
+                    "analysis": "your conventional comment",
+                    "suggestion": "exact replacement code"
+                  }
+                `,
+                    user: (0, dedent_1.default) `
+                  Issue Type: ${issue.type}
+                  File: ${fileIssue.path}
+                  Line: ${issue.lineNumber}
+                  Description: ${issue.description}
+                  Code: ${issue.codeBlock}
+                `,
                 };
                 const response = yield getAIResponse(reviewPrompt);
-                if (!response)
+                if (response.isErr()) {
+                    logger.error(`Failed to generate detailed review:`, response.error);
                     continue;
+                }
+                if (!response.value) {
+                    continue;
+                }
                 reviews.push({
                     path: fileIssue.path,
                     lineNumber: issue.lineNumber,
-                    severity: (_a = response.severity) !== null && _a !== void 0 ? _a : 'info',
-                    analysis: (_b = response.analysis) !== null && _b !== void 0 ? _b : 'No analysis',
-                    suggestion: (_c = response.suggestion) !== null && _c !== void 0 ? _c : ''
+                    severity: (_a = response.value.severity) !== null && _a !== void 0 ? _a : 'info',
+                    analysis: (_b = response.value.analysis) !== null && _b !== void 0 ? _b : 'No analysis',
+                    suggestion: (_c = response.value.suggestion) !== null && _c !== void 0 ? _c : '',
                 });
             }
         }
         return reviews;
     });
 }
+function generateFinalSummary(fileResults, prDetails, cookbook) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const summaryPrompt = {
+            system: (0, dedent_1.default) `
+            ${cookbook}
+
+            You are a technical lead reviewing a pull request. Analyze the provided review results and create a comprehensive summary.
+            Consider:
+            1. Overall impact of changes
+            2. Patterns in issues found
+            3. Critical problems that need immediate attention
+            4. General suggestions for improvement
+
+            Provide a structured summary in this JSON format:
+            {
+                "overallVerdict": {
+                    "status": "approve|request_changes|comment",
+                    "summary": "overall assessment",
+                    "criticalIssues": ["list of critical issues"],
+                    "warnings": ["list of warnings"],
+                    "suggestions": ["list of suggestions"]
+                }
+            }`,
+            user: (0, dedent_1.default) `
+            PR Title: ${prDetails.title}
+            PR Description: ${prDetails.description}
+
+            File Analysis Results:
+            ${JSON.stringify(fileResults, null, 2)}
+        `,
+        };
+        const response = yield getAIResponse(summaryPrompt);
+        if (response.isErr() || !response.value.overallVerdict) {
+            return (0, neverthrow_1.err)(new Error('Failed to generate summary or missing verdict'));
+        }
+        return (0, neverthrow_1.ok)({
+            fileResults,
+            overallVerdict: response.value.overallVerdict,
+        });
+    });
+}
 function main() {
     return __awaiter(this, void 0, void 0, function* () {
-        console.log('🚀 Starting validation process');
+        logger.info(`Starting validation process`);
         try {
             const prDetails = yield getPRDetails();
-            console.log(`📋 Analyzing PR #${prDetails.pull_number} in ${prDetails.owner}/${prDetails.repo}`);
+            logger.info(`Analyzing PR #${prDetails.pull_number} in ${prDetails.owner}/${prDetails.repo}`);
             const cookbook = yield fetchCookbook(COOKBOOK_URL);
-            console.log('✅ Cookbook loaded successfully');
-            const diff = yield getDiff(prDetails.owner, prDetails.repo, prDetails.pull_number);
-            if (!diff) {
-                console.log("❌ No diff found");
+            if (cookbook.isErr()) {
+                logger.error(`Failed to fetch cookbook:`, cookbook.error);
                 return;
             }
-            const parsedDiff = (0, parse_diff_1.default)(diff);
-            const { reviews, hasCriticalIssues } = yield performTwoStepAnalysis(parsedDiff, prDetails, cookbook);
-            if (reviews.length > 0) {
-                console.log('📤 Posting review comments');
-                yield createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, reviews.map(review => ({
-                    body: `${review.analysis}\n\n${review.suggestion ?
-                        `\`\`\`suggestion
-${review.suggestion}
-\`\`\`\n` : ''}`,
-                    path: review.path,
-                    line: review.lineNumber
-                })));
-                if (hasCriticalIssues) {
-                    yield octokit.pulls.createReview({
-                        owner: prDetails.owner,
-                        repo: prDetails.repo,
-                        pull_number: prDetails.pull_number,
-                        event: "REQUEST_CHANGES",
-                        body: "Changes requested based on critical issues found in review."
-                    });
-                    core.setFailed("Critical issues found in the PR");
-                }
-                console.log('✅ Review comments posted successfully');
+            logger.success(`Cookbook loaded successfully`);
+            const diff = yield getDiff(prDetails.owner, prDetails.repo, prDetails.pull_number);
+            if (diff.isErr()) {
+                logger.error(`Failed to fetch diff:`, diff.error);
+                return;
             }
+            const parsedDiff = (0, parse_diff_1.default)(diff.value);
+            const fileResults = [];
+            for (const file of parsedDiff) {
+                const analysis = yield performSingleFileAnalysis(file, prDetails, cookbook.value);
+                if (analysis.isErr()) {
+                    logger.error(`Failed to analyze file ${file.to}:`, analysis.error);
+                    continue;
+                }
+                fileResults.push({
+                    path: file.to || '',
+                    reviews: analysis.value.reviews,
+                    hasCriticalIssues: analysis.value.hasCriticalIssues,
+                });
+            }
+            const fullContextAnalysis = yield getComprehensiveAnalysis(parsedDiff, prDetails, cookbook.value);
+            const fullContextReviews = yield generateDetailedReviews(fullContextAnalysis, cookbook.value);
+            for (const review of fullContextReviews) {
+                const fileResult = fileResults.find(f => f.path === review.path);
+                if (fileResult) {
+                    fileResult.reviews.push(review);
+                    fileResult.hasCriticalIssues = fileResult.hasCriticalIssues || review.severity === 'critical';
+                }
+            }
+            const finalSummary = yield generateFinalSummary(fileResults, prDetails, cookbook.value);
+            if (finalSummary.isErr()) {
+                logger.error(`Failed to generate final summary:`, finalSummary.error);
+                return;
+            }
+            for (const fileResult of finalSummary.value.fileResults) {
+                if (fileResult.reviews.length > 0) {
+                    logger.info(`Posting review comments for ${fileResult.path}`);
+                    yield createReviewComment(prDetails.owner, prDetails.repo, prDetails.pull_number, fileResult.reviews.map(review => ({
+                        body: (0, dedent_1.default) `
+                            ${review.analysis}
+                            
+                            ${review.suggestion
+                            ? (0, dedent_1.default) `
+                                    \`\`\`suggestion
+                                    ${review.suggestion}
+                                    \`\`\`\n
+                                `
+                            : ''}`,
+                        path: fileResult.path,
+                        line: review.lineNumber,
+                    })));
+                }
+            }
+            const hasCriticalIssues = finalSummary.value.overallVerdict.criticalIssues.length > 0;
+            const reviewEvent = hasCriticalIssues ? 'REQUEST_CHANGES' : 'COMMENT';
+            yield octokit.pulls.createReview({
+                owner: prDetails.owner,
+                repo: prDetails.repo,
+                pull_number: prDetails.pull_number,
+                event: reviewEvent,
+                body: (0, dedent_1.default) `
+                # Pull Request Review Summary
+
+                ${finalSummary.value.overallVerdict.summary}
+
+                ${finalSummary.value.overallVerdict.criticalIssues.length > 0
+                    ? `## Critical Issues
+                   ${finalSummary.value.overallVerdict.criticalIssues.map(issue => `- ${issue}`).join('\n')}`
+                    : ''}
+
+                ${finalSummary.value.overallVerdict.warnings.length > 0
+                    ? `## Warnings
+                   ${finalSummary.value.overallVerdict.warnings.map(warning => `- ${warning}`).join('\n')}`
+                    : ''}
+
+                ${finalSummary.value.overallVerdict.suggestions.length > 0
+                    ? `## Suggestions
+                   ${finalSummary.value.overallVerdict.suggestions.map(suggestion => `- ${suggestion}`).join('\n')}`
+                    : ''}
+            `,
+            });
+            if (hasCriticalIssues) {
+                core.setFailed(`Critical issues found in the PR`);
+            }
+            logger.success(`Review completed successfully`);
         }
         catch (error) {
-            console.error('❌ Main process error:', error);
+            logger.error(`Main process error:`, error);
             throw error;
         }
     });
 }
 main().catch((error) => {
-    console.error("Error:", error);
+    logger.error(`Error:`, error);
     process.exit(1);
 });
+function safeParseJSON(content) {
+    try {
+        const cleanedContent = content
+            .replace(/^```(?:json)?\s*/, '')
+            .replace(/```$/, '')
+            .trim();
+        return (0, neverthrow_1.ok)(JSON.parse(cleanedContent));
+    }
+    catch (error) {
+        return (0, neverthrow_1.err)(error);
+    }
+}
 //# sourceMappingURL=main.js.map

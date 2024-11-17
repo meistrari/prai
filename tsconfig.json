@@ -7,7 +7,9 @@
     "target": "es6",
     "moduleResolution": "node",
     "sourceMap": true,
-    "strict": true
+    "strict": true,
+    "jsx": "react",
+    "skipLibCheck": true
   },
   "include": [
     "src/**/*",
