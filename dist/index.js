@@ -51,6 +51,7 @@ const ai_1 = __nccwpck_require__(3691);
 const dedent_1 = __importDefault(__nccwpck_require__(8333));
 const neverthrow_1 = __nccwpck_require__(8591);
 const parse_diff_1 = __importDefault(__nccwpck_require__(4833));
+const zod_1 = __importDefault(__nccwpck_require__(3301));
 const GITHUB_TOKEN = core.getInput('GITHUB_TOKEN');
 const OPENAI_API_KEY = core.getInput('OPENAI_API_KEY');
 const ANTHROPIC_API_KEY = core.getInput('ANTHROPIC_API_KEY');
@@ -118,27 +119,45 @@ function resolveModel() {
 }
 function getAIResponse(prompt) {
     return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b;
         logger.info(`Sending request to ${AI_PROVIDER.toUpperCase()}`);
-        const response = yield neverthrow_1.ResultAsync.fromPromise((0, ai_1.generateText)({
-            model: resolveModel(),
-            system: prompt.system,
-            prompt: prompt.user,
-        }), (error) => {
-            logger.error(`${AI_PROVIDER.toUpperCase()} API error: ${error}`);
-            return error;
-        });
-        if (response.isErr()) {
-            logger.error(`Failed to generate text: ${response.error}`);
-            return (0, neverthrow_1.err)(response.error);
+        try {
+            const options = {
+                model: resolveModel(),
+                system: prompt.system,
+                prompt: prompt.user,
+            };
+            if (prompt.format) {
+                options.tools = {
+                    responseFormat: {
+                        parameters: prompt.format,
+                        description: 'Always use this schema to format your response.',
+                    },
+                };
+                options.toolChoice = { toolName: 'responseFormat', type: 'tool' };
+            }
+            const response = yield neverthrow_1.ResultAsync.fromPromise((0, ai_1.generateText)(options), (error) => {
+                logger.error(`${AI_PROVIDER.toUpperCase()} API error:`, error);
+                return error;
+            });
+            if (response.isErr()) {
+                logger.error(`Failed to generate text:`, response.error);
+                return (0, neverthrow_1.err)(response.error);
+            }
+            if ((_b = (_a = response.value.toolCalls) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.args) {
+                logger.debug('Tool call response:', JSON.stringify(response.value.toolCalls[0].args, null, 2));
+                return (0, neverthrow_1.ok)(response.value.toolCalls[0].args);
+            }
+            if (response.value.text) {
+                logger.debug('Text response:', response.value.text);
+                return (0, neverthrow_1.ok)(response.value.text);
+            }
+            return (0, neverthrow_1.err)(new Error('No valid response content found'));
         }
-        const content = response.value.text;
-        logger.debug('Raw AI response:', content);
-        const parsed = safeParseJSON(content);
-        if (parsed.isErr()) {
-            logger.error('Failed to parse AI response:', parsed.error);
-            return (0, neverthrow_1.err)(parsed.error);
+        catch (error) {
+            logger.error('Unexpected error in getAIResponse:', error);
+            return (0, neverthrow_1.err)(error);
         }
-        return (0, neverthrow_1.ok)(parsed.value);
     });
 }
 function createReviewComment(owner, repo, pull_number, comments) {
@@ -272,38 +291,39 @@ function performSingleFileAnalysis(file, prDetails, cookbook) {
 }
 function getComprehensiveAnalysis(parsedDiff, prDetails, cookbook) {
     return __awaiter(this, void 0, void 0, function* () {
-        const systemPrompt = (0, dedent_1.default) `
-      ${cookbook}
+        const prompt = {
+            system: (0, dedent_1.default) `
+          ${cookbook}
 
-      You are a code analysis expert. Analyze the provided changes according to the rules and guidelines above.
+          You are a code analysis expert. Analyze the provided changes according to the rules and guidelines above.
+        `,
+            user: (0, dedent_1.default) `
+          PR Title: ${prDetails.title}
+          PR Description: ${prDetails.description}
 
-      Provide a structured analysis following this JSON format **without any markdown or code blocks**:
-      {
-        "fileIssues": [{
-          "path": "file path",
-          "issues": [{
-            "lineNumber": number,
-            "type": "string",
-            "description": "detailed description",
-            "suggestedFix": "specific fix",
-            "severity": "string",
-            "codeBlock": "relevant code"
-          }]
-        }],
-        "globalIssues": [{
-          "type": "category",
-          "description": "description",
-          "affectedFiles": ["files"]
-        }]
-      }`;
-        const userPrompt = (0, dedent_1.default) `
-      PR Title: ${prDetails.title}
-      PR Description: ${prDetails.description}
-
-      Changed Files:
-      ${JSON.stringify(parsedDiff, null, 2)}
-    `;
-        const response = yield getAIResponse({ system: systemPrompt, user: userPrompt });
+          Changed Files:
+              ${JSON.stringify(parsedDiff, null, 2)}
+        `,
+            format: zod_1.default.object({
+                fileIssues: zod_1.default.array(zod_1.default.object({
+                    path: zod_1.default.string().describe('The path of the file'),
+                    issues: zod_1.default.array(zod_1.default.object({
+                        lineNumber: zod_1.default.number().describe('The line number of the issue'),
+                        type: zod_1.default.string().describe('The type of the issue'),
+                        description: zod_1.default.string().describe('A detailed description of the issue'),
+                        suggestedFix: zod_1.default.string().describe('A specific fix for the issue'),
+                        severity: zod_1.default.string().describe('The severity of the issue'),
+                        codeBlock: zod_1.default.string().describe('The relevant code block'),
+                    })),
+                })).describe('The issues found in the files'),
+                globalIssues: zod_1.default.array(zod_1.default.object({
+                    type: zod_1.default.string().describe('The type of the global issue'),
+                    description: zod_1.default.string().describe('A detailed description of the global issue'),
+                    affectedFiles: zod_1.default.array(zod_1.default.string()).describe('A list of files affected by the global issue'),
+                })).describe('The global issues found in the PR'),
+            }),
+        };
+        const response = yield getAIResponse(prompt);
         if (response.isErr()) {
             logger.error(`Failed to generate comprehensive analysis:`, response.error);
             return { fileIssues: [], globalIssues: [] };
@@ -332,13 +352,6 @@ function generateDetailedReviews(analysis, cookbook) {
                   - Replace "should" with "could"
                   - If suggesting code changes, provide exact code in the suggestion
                   - Keep suggestions minimal and focused
-
-                  **Do not include any markdown or code blocks. Only provide pure JSON in the following format:**
-                  {
-                    "severity": "critical|warning|info",
-                    "analysis": "your conventional comment",
-                    "suggestion": "exact replacement code"
-                  }
                 `,
                     user: (0, dedent_1.default) `
                   Issue Type: ${issue.type}
@@ -347,6 +360,11 @@ function generateDetailedReviews(analysis, cookbook) {
                   Description: ${issue.description}
                   Code: ${issue.codeBlock}
                 `,
+                    format: zod_1.default.object({
+                        severity: zod_1.default.enum(['critical', 'warning', 'info']).describe('The severity of the issue'),
+                        analysis: zod_1.default.string().describe('A detailed analysis of the issue'),
+                        suggestion: zod_1.default.string().describe('A specific fix for the issue'),
+                    }),
                 };
                 const response = yield getAIResponse(reviewPrompt);
                 if (response.isErr()) {
@@ -380,17 +398,7 @@ function generateFinalSummary(fileResults, prDetails, cookbook) {
             2. Patterns in issues found
             3. Critical problems that need immediate attention
             4. General suggestions for improvement
-
-            Provide a structured summary in this JSON format:
-            {
-                "overallVerdict": {
-                    "status": "approve|request_changes|comment",
-                    "summary": "overall assessment",
-                    "criticalIssues": ["list of critical issues"],
-                    "warnings": ["list of warnings"],
-                    "suggestions": ["list of suggestions"]
-                }
-            }`,
+            `,
             user: (0, dedent_1.default) `
             PR Title: ${prDetails.title}
             PR Description: ${prDetails.description}
@@ -398,6 +406,15 @@ function generateFinalSummary(fileResults, prDetails, cookbook) {
             File Analysis Results:
             ${JSON.stringify(fileResults, null, 2)}
         `,
+            format: zod_1.default.object({
+                overallVerdict: zod_1.default.object({
+                    status: zod_1.default.enum(['approve', 'request_changes', 'comment']).describe('The overall status of the PR'),
+                    summary: zod_1.default.string().describe('A concise summary of the PR'),
+                    criticalIssues: zod_1.default.array(zod_1.default.string()).describe('A list of critical issues found in the PR'),
+                    warnings: zod_1.default.array(zod_1.default.string()).describe('A list of warnings found in the PR'),
+                    suggestions: zod_1.default.array(zod_1.default.string()).describe('A list of suggestions for the PR'),
+                }).describe('The overall verdict of the PR'),
+            }),
         };
         const response = yield getAIResponse(summaryPrompt);
         if (response.isErr() || !response.value.overallVerdict) {
@@ -516,18 +533,6 @@ main().catch((error) => {
     logger.error(`Error:`, error);
     process.exit(1);
 });
-function safeParseJSON(content) {
-    try {
-        const cleanedContent = content
-            .replace(/^```(?:json)?\s*/, '')
-            .replace(/```$/, '')
-            .trim();
-        return (0, neverthrow_1.ok)(JSON.parse(cleanedContent));
-    }
-    catch (error) {
-        return (0, neverthrow_1.err)(error);
-    }
-}
 //# sourceMappingURL=main.js.map
 
 /***/ }),
