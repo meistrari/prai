@@ -10,6 +10,7 @@ import { generateText } from 'ai'
 import dedent from 'dedent'
 import { err, ok, ResultAsync } from 'neverthrow'
 import parseDiff from 'parse-diff'
+import z from 'zod'
 
 const GITHUB_TOKEN: string = core.getInput('GITHUB_TOKEN')
 const OPENAI_API_KEY: string = core.getInput('OPENAI_API_KEY')
@@ -170,15 +171,27 @@ function resolveModel() {
     return modelPerProvider[AI_PROVIDER] ?? modelPerProvider.openai
 }
 
-async function getAIResponse(prompt: { system: string, user: string }): Promise<Result<AIResponse, Error>> {
+async function getAIResponse(prompt: { system: string, user: string, format?: z.ZodSchema<any> }): Promise<Result<AIResponse, Error>> {
     logger.info(`Sending request to ${AI_PROVIDER.toUpperCase()}`)
 
+    const options: Parameters<typeof generateText>[0] = {
+        model: resolveModel(),
+        system: prompt.system,
+        prompt: prompt.user,
+    }
+
+    if (prompt.format) {
+        options.tools = {
+            responseFormat: {
+                parameters: prompt.format,
+                description: 'Always use this schema to format your response.',
+            },
+        }
+        options.toolChoice = { toolName: 'responseFormat', type: 'tool' }
+    }
+
     const response = await ResultAsync.fromPromise(
-        generateText({
-            model: resolveModel(),
-            system: prompt.system,
-            prompt: prompt.user,
-        }),
+        generateText(options),
         (error) => {
             logger.error(`${AI_PROVIDER.toUpperCase()} API error: ${error}`)
             return error as Error
@@ -348,7 +361,7 @@ async function performSingleFileAnalysis(
             change.content.includes(SKIP_VALIDATION_COMMENT),
         ),
     )
-    
+
     if (hasSkipComment) {
         logger.info(`Skipping validation for ${file.to} due to skip comment`)
         return ok({ reviews: [], hasCriticalIssues: false })
@@ -371,40 +384,40 @@ async function getComprehensiveAnalysis(
     prDetails: PRDetails,
     cookbook: string,
 ): Promise<DetailedAnalysis> {
-    const systemPrompt = dedent`
-      ${cookbook}
+    const prompt = {
+        system: dedent`
+          ${cookbook}
 
-      You are a code analysis expert. Analyze the provided changes according to the rules and guidelines above.
+          You are a code analysis expert. Analyze the provided changes according to the rules and guidelines above.
+        `,
+        user: dedent`
+          PR Title: ${prDetails.title}
+          PR Description: ${prDetails.description}
 
-      Provide a structured analysis following this JSON format **without any markdown or code blocks**:
-      {
-        "fileIssues": [{
-          "path": "file path",
-          "issues": [{
-            "lineNumber": number,
-            "type": "string",
-            "description": "detailed description",
-            "suggestedFix": "specific fix",
-            "severity": "string",
-            "codeBlock": "relevant code"
-          }]
-        }],
-        "globalIssues": [{
-          "type": "category",
-          "description": "description",
-          "affectedFiles": ["files"]
-        }]
-      }`
+          Changed Files:
+              ${JSON.stringify(parsedDiff, null, 2)}
+        `,
+        format: z.object({
+            fileIssues: z.array(z.object({
+                path: z.string().describe('The path of the file'),
+                issues: z.array(z.object({
+                    lineNumber: z.number().describe('The line number of the issue'),
+                    type: z.string().describe('The type of the issue'),
+                    description: z.string().describe('A detailed description of the issue'),
+                    suggestedFix: z.string().describe('A specific fix for the issue'),
+                    severity: z.string().describe('The severity of the issue'),
+                    codeBlock: z.string().describe('The relevant code block'),
+                })),
+            })).describe('The issues found in the files'),
+            globalIssues: z.array(z.object({
+                type: z.string().describe('The type of the global issue'),
+                description: z.string().describe('A detailed description of the global issue'),
+                affectedFiles: z.array(z.string()).describe('A list of files affected by the global issue'),
+            })).describe('The global issues found in the PR'),
+        }),
+    }
 
-    const userPrompt = dedent`
-      PR Title: ${prDetails.title}
-      PR Description: ${prDetails.description}
-
-      Changed Files:
-      ${JSON.stringify(parsedDiff, null, 2)}
-    `
-
-    const response = await getAIResponse({ system: systemPrompt, user: userPrompt })
+    const response = await getAIResponse(prompt)
     if (response.isErr()) {
         logger.error(`Failed to generate comprehensive analysis:`, response.error)
         return { fileIssues: [], globalIssues: [] }
@@ -435,13 +448,6 @@ async function generateDetailedReviews(
                   - Replace "should" with "could"
                   - If suggesting code changes, provide exact code in the suggestion
                   - Keep suggestions minimal and focused
-
-                  **Do not include any markdown or code blocks. Only provide pure JSON in the following format:**
-                  {
-                    "severity": "critical|warning|info",
-                    "analysis": "your conventional comment",
-                    "suggestion": "exact replacement code"
-                  }
                 `,
                 user: dedent`
                   Issue Type: ${issue.type}
@@ -450,6 +456,11 @@ async function generateDetailedReviews(
                   Description: ${issue.description}
                   Code: ${issue.codeBlock}
                 `,
+                format: z.object({
+                    severity: z.enum(['critical', 'warning', 'info']).describe('The severity of the issue'),
+                    analysis: z.string().describe('A detailed analysis of the issue'),
+                    suggestion: z.string().describe('A specific fix for the issue'),
+                }),
             }
 
             const response = await getAIResponse(reviewPrompt)
@@ -491,17 +502,7 @@ async function generateFinalSummary(
             2. Patterns in issues found
             3. Critical problems that need immediate attention
             4. General suggestions for improvement
-
-            Provide a structured summary in this JSON format:
-            {
-                "overallVerdict": {
-                    "status": "approve|request_changes|comment",
-                    "summary": "overall assessment",
-                    "criticalIssues": ["list of critical issues"],
-                    "warnings": ["list of warnings"],
-                    "suggestions": ["list of suggestions"]
-                }
-            }`,
+            `,
         user: dedent`
             PR Title: ${prDetails.title}
             PR Description: ${prDetails.description}
@@ -509,10 +510,19 @@ async function generateFinalSummary(
             File Analysis Results:
             ${JSON.stringify(fileResults, null, 2)}
         `,
+        format: z.object({
+            overallVerdict: z.object({
+                status: z.enum(['approve', 'request_changes', 'comment']).describe('The overall status of the PR'),
+                summary: z.string().describe('A concise summary of the PR'),
+                criticalIssues: z.array(z.string()).describe('A list of critical issues found in the PR'),
+                warnings: z.array(z.string()).describe('A list of warnings found in the PR'),
+                suggestions: z.array(z.string()).describe('A list of suggestions for the PR'),
+            }).describe('The overall verdict of the PR'),
+        }),
     }
 
     const response = await getAIResponse(summaryPrompt)
-    
+
     if (response.isErr() || !response.value.overallVerdict) {
         return err(new Error('Failed to generate summary or missing verdict'))
     }
@@ -558,12 +568,12 @@ async function main() {
 
         for (const file of parsedDiff) {
             const analysis = await performSingleFileAnalysis(file, prDetails, cookbook.value)
-            
+
             if (analysis.isErr()) {
                 logger.error(`Failed to analyze file ${file.to}:`, analysis.error)
                 continue
             }
-            
+
             fileResults.push({
                 path: file.to || '',
                 reviews: analysis.value.reviews,
@@ -573,7 +583,7 @@ async function main() {
 
         const fullContextAnalysis = await getComprehensiveAnalysis(parsedDiff, prDetails, cookbook.value)
         const fullContextReviews = await generateDetailedReviews(fullContextAnalysis, cookbook.value)
-        
+
         for (const review of fullContextReviews) {
             const fileResult = fileResults.find(f => f.path === review.path)
             if (fileResult) {
@@ -628,19 +638,19 @@ async function main() {
                 ${finalSummary.value.overallVerdict.summary}
 
                 ${finalSummary.value.overallVerdict.criticalIssues.length > 0
-                ? `## Critical Issues
+                    ? `## Critical Issues
                    ${finalSummary.value.overallVerdict.criticalIssues.map(issue => `- ${issue}`).join('\n')}`
-                : ''}
+                    : ''}
 
                 ${finalSummary.value.overallVerdict.warnings.length > 0
-                ? `## Warnings
+                    ? `## Warnings
                    ${finalSummary.value.overallVerdict.warnings.map(warning => `- ${warning}`).join('\n')}`
-                : ''}
+                    : ''}
 
                 ${finalSummary.value.overallVerdict.suggestions.length > 0
-                ? `## Suggestions
+                    ? `## Suggestions
                    ${finalSummary.value.overallVerdict.suggestions.map(suggestion => `- ${suggestion}`).join('\n')}`
-                : ''}
+                    : ''}
             `,
         })
 
@@ -664,9 +674,9 @@ main().catch((error) => {
 function safeParseJSON<T>(content: string): Result<T, Error> {
     try {
         const cleanedContent = content
-            .replace(/^```(?:json)?\s*/, '') 
-            .replace(/```$/, '')            
-            .trim();
+            .replace(/^```(?:json)?\s*/, '')
+            .replace(/```$/, '')
+            .trim()
 
         return ok(JSON.parse(cleanedContent) as T)
     }
