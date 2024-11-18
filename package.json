@@ -26,7 +26,8 @@
     "p-limit": "^6.1.0",
     "parse-diff": "^0.11.1",
     "ts-node": "^10.9.1",
-    "typeorm": "^0.3.20"
+    "typeorm": "^0.3.20",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^3.9.1",
