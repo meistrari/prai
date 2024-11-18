@@ -112,33 +112,22 @@ const SKIP_VALIDATION_COMMENT = '// @skip-validation'
 
 const logger = {
     info: (message: string, ...args: any[]) => {
-        // eslint-disable-next-line no-console
-        console.log(`🔍 ${message}`, ...args)
-        core.info(message)
+        core.info(`🔍 ${message}`)
     },
     warn: (message: string, ...args: any[]) => {
-        // eslint-disable-next-line no-console
-        console.log(`⚠️ ${message}`, ...args)
-        core.warning(message)
+        core.warning(`⚠️ ${message}`)
     },
     error: (message: string, ...args: any[]) => {
-        console.error(`❌ ${message}`, ...args)
-        core.error(message)
+        core.error(`❌ ${message}`)
     },
     debug: (message: string, ...args: any[]) => {
-        // eslint-disable-next-line no-console
-        console.log(`🐛 ${message}`, ...args)
-        core.debug(message)
+        core.debug(`🐛 ${message}`)
     },
     success: (message: string, ...args: any[]) => {
-        // eslint-disable-next-line no-console
-        console.log(`✅ ${message}`, ...args)
-        core.info(message)
+        core.info(`✅ ${message}`)
     },
     review: (message: string, ...args: any[]) => {
-        // eslint-disable-next-line no-console
-        console.log(`📝 ${message}`, ...args)
-        core.info(message)
+        core.info(`📝 ${message}`)
     },
 }
 
