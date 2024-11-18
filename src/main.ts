@@ -172,48 +172,54 @@ function resolveModel() {
 }
 
 async function getAIResponse(prompt: { system: string, user: string, format?: z.ZodSchema<any> }): Promise<Result<AIResponse, Error>> {
-    logger.info(`Sending request to ${AI_PROVIDER.toUpperCase()}`)
+    logger.info(`Sending request to ${AI_PROVIDER.toUpperCase()}`);
+    
+    try {
+        const options: Parameters<typeof generateText>[0] = {
+            model: resolveModel(),
+            system: prompt.system,
+            prompt: prompt.user,
+        };
 
-    const options: Parameters<typeof generateText>[0] = {
-        model: resolveModel(),
-        system: prompt.system,
-        prompt: prompt.user,
-    }
-
-    if (prompt.format) {
-        options.tools = {
-            responseFormat: {
-                parameters: prompt.format,
-                description: 'Always use this schema to format your response.',
-            },
+        if (prompt.format) {
+            options.tools = {
+                responseFormat: {
+                    parameters: prompt.format,
+                    description: 'Always use this schema to format your response.',
+                },
+            };
+            options.toolChoice = { toolName: 'responseFormat', type: 'tool' };
         }
-        options.toolChoice = { toolName: 'responseFormat', type: 'tool' }
+
+        const response = await ResultAsync.fromPromise(
+            generateText(options),
+            (error) => {
+                logger.error(`${AI_PROVIDER.toUpperCase()} API error:`, error);
+                return error as Error;
+            },
+        );
+
+        if (response.isErr()) {
+            logger.error(`Failed to generate text:`, response.error);
+            return err(response.error);
+        }
+
+        if (response.value.toolCalls?.[0]?.args) {
+            logger.debug('Tool call response:', JSON.stringify(response.value.toolCalls[0].args, null, 2));
+            return ok(response.value.toolCalls[0].args as AIResponse);
+        }
+        
+        if (response.value.text) {
+            logger.debug('Text response:', response.value.text);
+            return ok(response.value.text as unknown as AIResponse);
+        }
+
+        return err(new Error('No valid response content found'));
     }
-
-    const response = await ResultAsync.fromPromise(
-        generateText(options),
-        (error) => {
-            logger.error(`${AI_PROVIDER.toUpperCase()} API error: ${error}`)
-            return error as Error
-        },
-    )
-
-    if (response.isErr()) {
-        logger.error(`Failed to generate text: ${response.error}`)
-        return err(response.error)
+    catch (error) {
+        logger.error('Unexpected error in getAIResponse:', error);
+        return err(error as Error);
     }
-
-    const content = response.value.text
-    logger.debug('Raw AI response:', content)
-
-    const parsed = safeParseJSON<AIResponse>(content)
-
-    if (parsed.isErr()) {
-        logger.error('Failed to parse AI response:', parsed.error)
-        return err(parsed.error)
-    }
-
-    return ok(parsed.value)
 }
 
 async function createReviewComment(
@@ -670,17 +676,3 @@ main().catch((error) => {
     logger.error(`Error:`, error)
     process.exit(1)
 })
-
-function safeParseJSON<T>(content: string): Result<T, Error> {
-    try {
-        const cleanedContent = content
-            .replace(/^```(?:json)?\s*/, '')
-            .replace(/```$/, '')
-            .trim()
-
-        return ok(JSON.parse(cleanedContent) as T)
-    }
-    catch (error) {
-        return err(error as Error)
-    }
-}
