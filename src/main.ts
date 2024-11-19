@@ -11,12 +11,18 @@ import dedent from 'dedent'
 import { err, ok, ResultAsync } from 'neverthrow'
 import parseDiff from 'parse-diff'
 import z from 'zod'
+import { createGoogleGenerativeAI } from '@ai-sdk/google'
+
+if (typeof globalThis.TransformStream === 'undefined') {
+  globalThis.TransformStream = TransformStream
+}
 
 const GITHUB_TOKEN: string = core.getInput('GITHUB_TOKEN')
 const OPENAI_API_KEY: string = core.getInput('OPENAI_API_KEY')
 const ANTHROPIC_API_KEY: string = core.getInput('ANTHROPIC_API_KEY')
-const AI_PROVIDER: string = core.getInput('AI_PROVIDER') || 'openai'
+const AI_PROVIDER: string = core.getInput('AI_PROVIDER') || 'google'
 const COOKBOOK_URL: string = 'https://gist.githubusercontent.com/herniqeu/35669801a4bbdc8fa52953986fa61277/raw/24932e0a2422f06eb762802ba0efb1e24d11924f/cookbook.md'
+const GOOGLE_API_KEY: string = core.getInput('GOOGLE_API_KEY')
 
 const octokit = new Octokit({ auth: GITHUB_TOKEN })
 
@@ -152,20 +158,32 @@ async function getPRDetails(): Promise<PRDetails> {
 const defaultRules = `Review the Pull Request and provide a verdict on whether it should be approved, requires changes, or is blocked.`
 
 function resolveModel() {
+    logger.debug(`Resolving AI model for provider: ${AI_PROVIDER}`);
+    logger.debug(`API Key present: ${!!GOOGLE_API_KEY}`);
+    
     const modelPerProvider = {
-        openai: createOpenAI({ apiKey: OPENAI_API_KEY })('gpt-4-0125-preview'),
+        openai: createOpenAI({ apiKey: OPENAI_API_KEY })('gpt-4o-2024-08-06'),
         anthropic: createAnthropic({ apiKey: ANTHROPIC_API_KEY })('claude-3-5-sonnet-20241022'),
+        google: createGoogleGenerativeAI({ apiKey: GOOGLE_API_KEY })('models/gemini-1.5-pro-001')
     } as Record<string, LanguageModelV1>
 
-    return modelPerProvider[AI_PROVIDER] ?? modelPerProvider.openai
+    const model = modelPerProvider[AI_PROVIDER]
+    if (!model) {
+        throw new Error(`Invalid AI provider: ${AI_PROVIDER}`)
+    }
+    logger.debug(`Model resolved successfully for ${AI_PROVIDER}`);
+    return model
 }
 
 async function getAIResponse(prompt: { system: string, user: string, format?: z.ZodSchema<any> }): Promise<Result<AIResponse, Error>> {
     logger.info(`Sending request to ${AI_PROVIDER.toUpperCase()}`);
     
     try {
+        const model = await resolveModel();
+        logger.info(`Model configuration: ${JSON.stringify(model, null, 2)}`);
+        
         const options: Parameters<typeof generateText>[0] = {
-            model: resolveModel(),
+            model,
             system: prompt.system,
             prompt: prompt.user,
         };
@@ -180,33 +198,51 @@ async function getAIResponse(prompt: { system: string, user: string, format?: z.
             options.toolChoice = { toolName: 'responseFormat', type: 'tool' };
         }
 
+        logger.info(`Sending request to ${AI_PROVIDER.toUpperCase()}:`, JSON.stringify(options, null, 2));
+
         const response = await ResultAsync.fromPromise(
             generateText(options),
-            (error) => {
-                logger.error(`${AI_PROVIDER.toUpperCase()} API error:`, error);
+            (error: any) => {
+                logger.error('API Error Details:', {
+                    name: error.name,
+                    message: error.message,
+                    response: error.response?.data,
+                    status: error.response?.status,
+                    headers: error.response?.headers,
+                    stack: error.stack,
+                    raw: error
+                });
                 return error as Error;
             },
         );
 
+        logger.info(`Received response from ${AI_PROVIDER.toUpperCase()}:`, JSON.stringify(response, null, 2));
+
         if (response.isErr()) {
-            logger.error(`Failed to generate text:`, response.error);
             return err(response.error);
         }
 
+        // Add validation for the response format
         if (response.value.toolCalls?.[0]?.args) {
-            logger.debug('Tool call response:', JSON.stringify(response.value.toolCalls[0].args, null, 2));
-            return ok(response.value.toolCalls[0].args as AIResponse);
+            const args = response.value.toolCalls[0].args;
+            logger.info('Validating tool call response:', JSON.stringify(args, null, 2));
+            return ok(args as AIResponse);
         }
         
         if (response.value.text) {
-            logger.debug('Text response:', response.value.text);
+            logger.info('Validating text response:', response.value.text);
             return ok(response.value.text as unknown as AIResponse);
         }
 
         return err(new Error('No valid response content found'));
-    }
-    catch (error) {
-        logger.error('Unexpected error in getAIResponse:', error);
+    } catch (error: any) {
+        logger.error('Unexpected error:', {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+            cause: error.cause,
+            raw: error
+        });
         return err(error as Error);
     }
 }
@@ -432,17 +468,12 @@ async function generateDetailedReviews(
                 system: dedent`
                   ${cookbook}
 
-                  You are a code review expert. Follow Conventional Comments format strictly:
+                  You are a code review expert. Follow these severity levels EXACTLY as shown:
+                  - "critical" for blocking issues
+                  - "warning" for non-blocking issues
+                  - "info" for suggestions and improvements
 
-                  Labels: praise, nitpick, suggestion, issue, todo, question, thought, chore, note
-                  Decorations: (blocking), (non-blocking), (if-minor)
-
-                  IMPORTANT:
-                  - Be concise and actionable
-                  - Replace "you" with "we"
-                  - Replace "should" with "could"
-                  - If suggesting code changes, provide exact code in the suggestion
-                  - Keep suggestions minimal and focused
+                  IMPORTANT: Severity MUST be lowercase and EXACTLY one of: critical, warning, info
                 `,
                 user: dedent`
                   Issue Type: ${issue.type}
@@ -452,34 +483,67 @@ async function generateDetailedReviews(
                   Code: ${issue.codeBlock}
                 `,
                 format: z.object({
-                    severity: z.enum(['critical', 'warning', 'info']).describe('The severity of the issue'),
-                    analysis: z.string().describe('A detailed analysis of the issue'),
-                    suggestion: z.string().describe('A specific fix for the issue'),
-                }),
+                    severity: z.enum(['critical', 'warning', 'info'])
+                        .describe('The severity level (must be lowercase: critical, warning, or info)'),
+                    analysis: z.string()
+                        .describe('A detailed analysis of the issue'),
+                    suggestion: z.string()
+                        .describe('A specific fix for the issue'),
+                }).strict(), // Add strict() to ensure no extra properties
             }
 
-            const response = await getAIResponse(reviewPrompt)
+            try {
+                const response = await getAIResponse(reviewPrompt)
 
-            if (response.isErr()) {
-                logger.error(`Failed to generate detailed review:`, response.error)
+                if (response.isErr()) {
+                    logger.error(`Failed to generate detailed review for ${fileIssue.path}:${issue.lineNumber}`, response.error)
+                    continue
+                }
+
+                if (!response.value) {
+                    logger.warn(`Empty response for ${fileIssue.path}:${issue.lineNumber}`)
+                    continue
+                }
+
+                // Normalize severity to lowercase and validate
+                const severity = (response.value.severity || '').toLowerCase()
+                if (!['critical', 'warning', 'info'].includes(severity)) {
+                    logger.warn(`Invalid severity "${severity}" for ${fileIssue.path}:${issue.lineNumber}, defaulting to "info"`)
+                    response.value.severity = 'info'
+                }
+
+                reviews.push({
+                    path: fileIssue.path,
+                    lineNumber: issue.lineNumber,
+                    severity: normalizeSeverity(response.value.severity ?? 'info'),
+                    analysis: response.value.analysis ?? 'No analysis provided',
+                    suggestion: response.value.suggestion ?? '',
+                })
+            } catch (error) {
+                logger.error(`Error processing review for ${fileIssue.path}:${issue.lineNumber}:`, error)
                 continue
             }
-
-            if (!response.value) {
-                continue
-            }
-
-            reviews.push({
-                path: fileIssue.path,
-                lineNumber: issue.lineNumber,
-                severity: response.value.severity ?? 'info',
-                analysis: response.value.analysis ?? 'No analysis',
-                suggestion: response.value.suggestion ?? '',
-            })
         }
     }
 
     return reviews
+}
+
+function normalizeStatus(status: string): 'approve' | 'request_changes' | 'comment' {
+    const normalized = status.toLowerCase();
+    if (['approve', 'request_changes', 'comment'].includes(normalized)) {
+        return normalized as 'approve' | 'request_changes' | 'comment';
+    }
+    // Default to request_changes if invalid
+    return 'request_changes';
+}
+
+function normalizeSeverity(severity: string): 'critical' | 'warning' | 'info' {
+    const normalized = severity.toLowerCase();
+    if (['critical', 'warning', 'info'].includes(normalized)) {
+        return normalized as 'critical' | 'warning' | 'info';
+    }
+    return 'info'; // Default to info if invalid
 }
 
 async function generateFinalSummary(
@@ -492,12 +556,18 @@ async function generateFinalSummary(
             ${cookbook}
 
             You are a technical lead reviewing a pull request. Analyze the provided review results and create a comprehensive summary.
+            
+            The status MUST be EXACTLY one of these lowercase values:
+            - "request_changes" for PRs with critical issues
+            - "comment" for PRs with warnings or suggestions
+            - "approve" for PRs with no issues
+
             Consider:
             1. Overall impact of changes
             2. Patterns in issues found
             3. Critical problems that need immediate attention
             4. General suggestions for improvement
-            `,
+        `,
         user: dedent`
             PR Title: ${prDetails.title}
             PR Description: ${prDetails.description}
@@ -524,7 +594,10 @@ async function generateFinalSummary(
 
     return ok({
         fileResults,
-        overallVerdict: response.value.overallVerdict,
+        overallVerdict: {
+            ...response.value.overallVerdict,
+            status: normalizeStatus(response.value.overallVerdict.status),
+        },
     })
 }
 
