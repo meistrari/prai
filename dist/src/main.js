@@ -18,6 +18,7 @@ import { err, ok, ResultAsync } from 'neverthrow';
 import parseDiff from 'parse-diff';
 import z from 'zod';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createVertex } from '@ai-sdk/google-vertex';
 if (typeof globalThis.TransformStream === 'undefined') {
     globalThis.TransformStream = TransformStream;
 }
@@ -27,6 +28,8 @@ const ANTHROPIC_API_KEY = core.getInput('ANTHROPIC_API_KEY');
 const AI_PROVIDER = core.getInput('AI_PROVIDER') || 'google';
 const COOKBOOK_URL = 'https://gist.githubusercontent.com/herniqeu/35669801a4bbdc8fa52953986fa61277/raw/24932e0a2422f06eb762802ba0efb1e24d11924f/cookbook.md';
 const GOOGLE_API_KEY = core.getInput('GOOGLE_API_KEY');
+const GOOGLE_VERTEX_PROJECT = core.getInput('GOOGLE_VERTEX_PROJECT');
+const GOOGLE_VERTEX_LOCATION = core.getInput('GOOGLE_VERTEX_LOCATION') || 'us-central1';
 const octokit = new Octokit({ auth: GITHUB_TOKEN });
 const SKIP_VALIDATION_COMMENT = '// @skip-validation';
 const logger = {
@@ -70,11 +73,14 @@ function getPRDetails() {
 const defaultRules = `Review the Pull Request and provide a verdict on whether it should be approved, requires changes, or is blocked.`;
 function resolveModel() {
     logger.debug(`Resolving AI model for provider: ${AI_PROVIDER}`);
-    logger.debug(`API Key present: ${!!GOOGLE_API_KEY}`);
     const modelPerProvider = {
         openai: createOpenAI({ apiKey: OPENAI_API_KEY })('gpt-4o-2024-08-06'),
         anthropic: createAnthropic({ apiKey: ANTHROPIC_API_KEY })('claude-3-5-sonnet-20241022'),
-        google: createGoogleGenerativeAI({ apiKey: GOOGLE_API_KEY })('models/gemini-1.5-pro-001')
+        google: createGoogleGenerativeAI({ apiKey: GOOGLE_API_KEY })('models/gemini-1.5-flash-latest'),
+        vertex: createVertex({
+            project: GOOGLE_VERTEX_PROJECT,
+            location: GOOGLE_VERTEX_LOCATION
+        })('gemini-1.5-pro')
     };
     const model = modelPerProvider[AI_PROVIDER];
     if (!model) {
@@ -122,7 +128,6 @@ function getAIResponse(prompt) {
             if (response.isErr()) {
                 return err(response.error);
             }
-            // Add validation for the response format
             if ((_b = (_a = response.value.toolCalls) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.args) {
                 const args = response.value.toolCalls[0].args;
                 logger.info('Validating tool call response:', JSON.stringify(args, null, 2));
@@ -148,7 +153,7 @@ function getAIResponse(prompt) {
 }
 function createReviewComment(owner, repo, pull_number, comments) {
     return __awaiter(this, void 0, void 0, function* () {
-        logger.review(`Preparing to post ${comments.length} review comments`);
+        logger.info(`Preparing to post ${comments.length} review comments`);
         try {
             const diff = yield getDiff(owner, repo, pull_number);
             if (diff.isErr()) {
@@ -195,7 +200,7 @@ function createReviewComment(owner, repo, pull_number, comments) {
                 logger.warn(`No valid diff positions found for any comments`);
                 return ok(undefined);
             }
-            logger.review(`Posting ${validComments.length} comments (${comments.length - validComments.length} skipped)`);
+            logger.info(`Posting ${validComments.length} comments (${comments.length - validComments.length} skipped)`);
             yield octokit.pulls.createReview({
                 owner,
                 repo,
@@ -388,7 +393,6 @@ function normalizeStatus(status) {
     if (['approve', 'request_changes', 'comment'].includes(normalized)) {
         return normalized;
     }
-    // Default to request_changes if invalid
     return 'request_changes';
 }
 function normalizeSeverity(severity) {
@@ -396,7 +400,7 @@ function normalizeSeverity(severity) {
     if (['critical', 'warning', 'info'].includes(normalized)) {
         return normalized;
     }
-    return 'info'; // Default to info if invalid
+    return 'info';
 }
 function generateFinalSummary(fileResults, prDetails, cookbook) {
     return __awaiter(this, void 0, void 0, function* () {

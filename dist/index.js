@@ -9391,6 +9391,416 @@ exports.VERSION = '1.9.0';
 
 /***/ }),
 
+/***/ 8348:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.req = exports.json = exports.toBuffer = void 0;
+const http = __importStar(__nccwpck_require__(3685));
+const https = __importStar(__nccwpck_require__(5687));
+async function toBuffer(stream) {
+    let length = 0;
+    const chunks = [];
+    for await (const chunk of stream) {
+        length += chunk.length;
+        chunks.push(chunk);
+    }
+    return Buffer.concat(chunks, length);
+}
+exports.toBuffer = toBuffer;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function json(stream) {
+    const buf = await toBuffer(stream);
+    const str = buf.toString('utf8');
+    try {
+        return JSON.parse(str);
+    }
+    catch (_err) {
+        const err = _err;
+        err.message += ` (input: ${str})`;
+        throw err;
+    }
+}
+exports.json = json;
+function req(url, opts = {}) {
+    const href = typeof url === 'string' ? url : url.href;
+    const req = (href.startsWith('https:') ? https : http).request(url, opts);
+    const promise = new Promise((resolve, reject) => {
+        req
+            .once('response', resolve)
+            .once('error', reject)
+            .end();
+    });
+    req.then = promise.then.bind(promise);
+    return req;
+}
+exports.req = req;
+//# sourceMappingURL=helpers.js.map
+
+/***/ }),
+
+/***/ 694:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.Agent = void 0;
+const net = __importStar(__nccwpck_require__(1808));
+const http = __importStar(__nccwpck_require__(3685));
+const https_1 = __nccwpck_require__(5687);
+__exportStar(__nccwpck_require__(8348), exports);
+const INTERNAL = Symbol('AgentBaseInternalState');
+class Agent extends http.Agent {
+    constructor(opts) {
+        super(opts);
+        this[INTERNAL] = {};
+    }
+    /**
+     * Determine whether this is an `http` or `https` request.
+     */
+    isSecureEndpoint(options) {
+        if (options) {
+            // First check the `secureEndpoint` property explicitly, since this
+            // means that a parent `Agent` is "passing through" to this instance.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if (typeof options.secureEndpoint === 'boolean') {
+                return options.secureEndpoint;
+            }
+            // If no explicit `secure` endpoint, check if `protocol` property is
+            // set. This will usually be the case since using a full string URL
+            // or `URL` instance should be the most common usage.
+            if (typeof options.protocol === 'string') {
+                return options.protocol === 'https:';
+            }
+        }
+        // Finally, if no `protocol` property was set, then fall back to
+        // checking the stack trace of the current call stack, and try to
+        // detect the "https" module.
+        const { stack } = new Error();
+        if (typeof stack !== 'string')
+            return false;
+        return stack
+            .split('\n')
+            .some((l) => l.indexOf('(https.js:') !== -1 ||
+            l.indexOf('node:https:') !== -1);
+    }
+    // In order to support async signatures in `connect()` and Node's native
+    // connection pooling in `http.Agent`, the array of sockets for each origin
+    // has to be updated synchronously. This is so the length of the array is
+    // accurate when `addRequest()` is next called. We achieve this by creating a
+    // fake socket and adding it to `sockets[origin]` and incrementing
+    // `totalSocketCount`.
+    incrementSockets(name) {
+        // If `maxSockets` and `maxTotalSockets` are both Infinity then there is no
+        // need to create a fake socket because Node.js native connection pooling
+        // will never be invoked.
+        if (this.maxSockets === Infinity && this.maxTotalSockets === Infinity) {
+            return null;
+        }
+        // All instances of `sockets` are expected TypeScript errors. The
+        // alternative is to add it as a private property of this class but that
+        // will break TypeScript subclassing.
+        if (!this.sockets[name]) {
+            // @ts-expect-error `sockets` is readonly in `@types/node`
+            this.sockets[name] = [];
+        }
+        const fakeSocket = new net.Socket({ writable: false });
+        this.sockets[name].push(fakeSocket);
+        // @ts-expect-error `totalSocketCount` isn't defined in `@types/node`
+        this.totalSocketCount++;
+        return fakeSocket;
+    }
+    decrementSockets(name, socket) {
+        if (!this.sockets[name] || socket === null) {
+            return;
+        }
+        const sockets = this.sockets[name];
+        const index = sockets.indexOf(socket);
+        if (index !== -1) {
+            sockets.splice(index, 1);
+            // @ts-expect-error  `totalSocketCount` isn't defined in `@types/node`
+            this.totalSocketCount--;
+            if (sockets.length === 0) {
+                // @ts-expect-error `sockets` is readonly in `@types/node`
+                delete this.sockets[name];
+            }
+        }
+    }
+    // In order to properly update the socket pool, we need to call `getName()` on
+    // the core `https.Agent` if it is a secureEndpoint.
+    getName(options) {
+        const secureEndpoint = typeof options.secureEndpoint === 'boolean'
+            ? options.secureEndpoint
+            : this.isSecureEndpoint(options);
+        if (secureEndpoint) {
+            // @ts-expect-error `getName()` isn't defined in `@types/node`
+            return https_1.Agent.prototype.getName.call(this, options);
+        }
+        // @ts-expect-error `getName()` isn't defined in `@types/node`
+        return super.getName(options);
+    }
+    createSocket(req, options, cb) {
+        const connectOpts = {
+            ...options,
+            secureEndpoint: this.isSecureEndpoint(options),
+        };
+        const name = this.getName(connectOpts);
+        const fakeSocket = this.incrementSockets(name);
+        Promise.resolve()
+            .then(() => this.connect(req, connectOpts))
+            .then((socket) => {
+            this.decrementSockets(name, fakeSocket);
+            if (socket instanceof http.Agent) {
+                // @ts-expect-error `addRequest()` isn't defined in `@types/node`
+                return socket.addRequest(req, connectOpts);
+            }
+            this[INTERNAL].currentSocket = socket;
+            // @ts-expect-error `createSocket()` isn't defined in `@types/node`
+            super.createSocket(req, options, cb);
+        }, (err) => {
+            this.decrementSockets(name, fakeSocket);
+            cb(err);
+        });
+    }
+    createConnection() {
+        const socket = this[INTERNAL].currentSocket;
+        this[INTERNAL].currentSocket = undefined;
+        if (!socket) {
+            throw new Error('No socket was returned in the `connect()` function');
+        }
+        return socket;
+    }
+    get defaultPort() {
+        return (this[INTERNAL].defaultPort ??
+            (this.protocol === 'https:' ? 443 : 80));
+    }
+    set defaultPort(v) {
+        if (this[INTERNAL]) {
+            this[INTERNAL].defaultPort = v;
+        }
+    }
+    get protocol() {
+        return (this[INTERNAL].protocol ??
+            (this.isSecureEndpoint() ? 'https:' : 'http:'));
+    }
+    set protocol(v) {
+        if (this[INTERNAL]) {
+            this[INTERNAL].protocol = v;
+        }
+    }
+}
+exports.Agent = Agent;
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 6463:
+/***/ ((__unused_webpack_module, exports) => {
+
+
+
+exports.byteLength = byteLength
+exports.toByteArray = toByteArray
+exports.fromByteArray = fromByteArray
+
+var lookup = []
+var revLookup = []
+var Arr = typeof Uint8Array !== 'undefined' ? Uint8Array : Array
+
+var code = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+for (var i = 0, len = code.length; i < len; ++i) {
+  lookup[i] = code[i]
+  revLookup[code.charCodeAt(i)] = i
+}
+
+// Support decoding URL-safe base64 strings, as Node.js does.
+// See: https://en.wikipedia.org/wiki/Base64#URL_applications
+revLookup['-'.charCodeAt(0)] = 62
+revLookup['_'.charCodeAt(0)] = 63
+
+function getLens (b64) {
+  var len = b64.length
+
+  if (len % 4 > 0) {
+    throw new Error('Invalid string. Length must be a multiple of 4')
+  }
+
+  // Trim off extra bytes after placeholder bytes are found
+  // See: https://github.com/beatgammit/base64-js/issues/42
+  var validLen = b64.indexOf('=')
+  if (validLen === -1) validLen = len
+
+  var placeHoldersLen = validLen === len
+    ? 0
+    : 4 - (validLen % 4)
+
+  return [validLen, placeHoldersLen]
+}
+
+// base64 is 4/3 + up to two characters of the original data
+function byteLength (b64) {
+  var lens = getLens(b64)
+  var validLen = lens[0]
+  var placeHoldersLen = lens[1]
+  return ((validLen + placeHoldersLen) * 3 / 4) - placeHoldersLen
+}
+
+function _byteLength (b64, validLen, placeHoldersLen) {
+  return ((validLen + placeHoldersLen) * 3 / 4) - placeHoldersLen
+}
+
+function toByteArray (b64) {
+  var tmp
+  var lens = getLens(b64)
+  var validLen = lens[0]
+  var placeHoldersLen = lens[1]
+
+  var arr = new Arr(_byteLength(b64, validLen, placeHoldersLen))
+
+  var curByte = 0
+
+  // if there are placeholders, only get up to the last complete 4 chars
+  var len = placeHoldersLen > 0
+    ? validLen - 4
+    : validLen
+
+  var i
+  for (i = 0; i < len; i += 4) {
+    tmp =
+      (revLookup[b64.charCodeAt(i)] << 18) |
+      (revLookup[b64.charCodeAt(i + 1)] << 12) |
+      (revLookup[b64.charCodeAt(i + 2)] << 6) |
+      revLookup[b64.charCodeAt(i + 3)]
+    arr[curByte++] = (tmp >> 16) & 0xFF
+    arr[curByte++] = (tmp >> 8) & 0xFF
+    arr[curByte++] = tmp & 0xFF
+  }
+
+  if (placeHoldersLen === 2) {
+    tmp =
+      (revLookup[b64.charCodeAt(i)] << 2) |
+      (revLookup[b64.charCodeAt(i + 1)] >> 4)
+    arr[curByte++] = tmp & 0xFF
+  }
+
+  if (placeHoldersLen === 1) {
+    tmp =
+      (revLookup[b64.charCodeAt(i)] << 10) |
+      (revLookup[b64.charCodeAt(i + 1)] << 4) |
+      (revLookup[b64.charCodeAt(i + 2)] >> 2)
+    arr[curByte++] = (tmp >> 8) & 0xFF
+    arr[curByte++] = tmp & 0xFF
+  }
+
+  return arr
+}
+
+function tripletToBase64 (num) {
+  return lookup[num >> 18 & 0x3F] +
+    lookup[num >> 12 & 0x3F] +
+    lookup[num >> 6 & 0x3F] +
+    lookup[num & 0x3F]
+}
+
+function encodeChunk (uint8, start, end) {
+  var tmp
+  var output = []
+  for (var i = start; i < end; i += 3) {
+    tmp =
+      ((uint8[i] << 16) & 0xFF0000) +
+      ((uint8[i + 1] << 8) & 0xFF00) +
+      (uint8[i + 2] & 0xFF)
+    output.push(tripletToBase64(tmp))
+  }
+  return output.join('')
+}
+
+function fromByteArray (uint8) {
+  var tmp
+  var len = uint8.length
+  var extraBytes = len % 3 // if we have 1 byte left, pad 2 bytes
+  var parts = []
+  var maxChunkLength = 16383 // must be multiple of 3
+
+  // go through the array every three bytes, we'll deal with trailing stuff later
+  for (var i = 0, len2 = len - extraBytes; i < len2; i += maxChunkLength) {
+    parts.push(encodeChunk(uint8, i, (i + maxChunkLength) > len2 ? len2 : (i + maxChunkLength)))
+  }
+
+  // pad the end with zeros, but make sure to not forget the extra bytes
+  if (extraBytes === 1) {
+    tmp = uint8[len - 1]
+    parts.push(
+      lookup[tmp >> 2] +
+      lookup[(tmp << 4) & 0x3F] +
+      '=='
+    )
+  } else if (extraBytes === 2) {
+    tmp = (uint8[len - 2] << 8) + uint8[len - 1]
+    parts.push(
+      lookup[tmp >> 10] +
+      lookup[(tmp >> 4) & 0x3F] +
+      lookup[(tmp << 2) & 0x3F] +
+      '='
+    )
+  }
+
+  return parts.join('')
+}
+
+
+/***/ }),
+
 /***/ 3682:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
@@ -9572,6 +9982,3829 @@ function removeHook(state, name, method) {
 
 /***/ }),
 
+/***/ 7558:
+/***/ (function(module) {
+
+;(function (globalObject) {
+  'use strict';
+
+/*
+ *      bignumber.js v9.1.2
+ *      A JavaScript library for arbitrary-precision arithmetic.
+ *      https://github.com/MikeMcl/bignumber.js
+ *      Copyright (c) 2022 Michael Mclaughlin <M8ch88l@gmail.com>
+ *      MIT Licensed.
+ *
+ *      BigNumber.prototype methods     |  BigNumber methods
+ *                                      |
+ *      absoluteValue            abs    |  clone
+ *      comparedTo                      |  config               set
+ *      decimalPlaces            dp     |      DECIMAL_PLACES
+ *      dividedBy                div    |      ROUNDING_MODE
+ *      dividedToIntegerBy       idiv   |      EXPONENTIAL_AT
+ *      exponentiatedBy          pow    |      RANGE
+ *      integerValue                    |      CRYPTO
+ *      isEqualTo                eq     |      MODULO_MODE
+ *      isFinite                        |      POW_PRECISION
+ *      isGreaterThan            gt     |      FORMAT
+ *      isGreaterThanOrEqualTo   gte    |      ALPHABET
+ *      isInteger                       |  isBigNumber
+ *      isLessThan               lt     |  maximum              max
+ *      isLessThanOrEqualTo      lte    |  minimum              min
+ *      isNaN                           |  random
+ *      isNegative                      |  sum
+ *      isPositive                      |
+ *      isZero                          |
+ *      minus                           |
+ *      modulo                   mod    |
+ *      multipliedBy             times  |
+ *      negated                         |
+ *      plus                            |
+ *      precision                sd     |
+ *      shiftedBy                       |
+ *      squareRoot               sqrt   |
+ *      toExponential                   |
+ *      toFixed                         |
+ *      toFormat                        |
+ *      toFraction                      |
+ *      toJSON                          |
+ *      toNumber                        |
+ *      toPrecision                     |
+ *      toString                        |
+ *      valueOf                         |
+ *
+ */
+
+
+  var BigNumber,
+    isNumeric = /^-?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i,
+    mathceil = Math.ceil,
+    mathfloor = Math.floor,
+
+    bignumberError = '[BigNumber Error] ',
+    tooManyDigits = bignumberError + 'Number primitive has more than 15 significant digits: ',
+
+    BASE = 1e14,
+    LOG_BASE = 14,
+    MAX_SAFE_INTEGER = 0x1fffffffffffff,         // 2^53 - 1
+    // MAX_INT32 = 0x7fffffff,                   // 2^31 - 1
+    POWS_TEN = [1, 10, 100, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13],
+    SQRT_BASE = 1e7,
+
+    // EDITABLE
+    // The limit on the value of DECIMAL_PLACES, TO_EXP_NEG, TO_EXP_POS, MIN_EXP, MAX_EXP, and
+    // the arguments to toExponential, toFixed, toFormat, and toPrecision.
+    MAX = 1E9;                                   // 0 to MAX_INT32
+
+
+  /*
+   * Create and return a BigNumber constructor.
+   */
+  function clone(configObject) {
+    var div, convertBase, parseNumeric,
+      P = BigNumber.prototype = { constructor: BigNumber, toString: null, valueOf: null },
+      ONE = new BigNumber(1),
+
+
+      //----------------------------- EDITABLE CONFIG DEFAULTS -------------------------------
+
+
+      // The default values below must be integers within the inclusive ranges stated.
+      // The values can also be changed at run-time using BigNumber.set.
+
+      // The maximum number of decimal places for operations involving division.
+      DECIMAL_PLACES = 20,                     // 0 to MAX
+
+      // The rounding mode used when rounding to the above decimal places, and when using
+      // toExponential, toFixed, toFormat and toPrecision, and round (default value).
+      // UP         0 Away from zero.
+      // DOWN       1 Towards zero.
+      // CEIL       2 Towards +Infinity.
+      // FLOOR      3 Towards -Infinity.
+      // HALF_UP    4 Towards nearest neighbour. If equidistant, up.
+      // HALF_DOWN  5 Towards nearest neighbour. If equidistant, down.
+      // HALF_EVEN  6 Towards nearest neighbour. If equidistant, towards even neighbour.
+      // HALF_CEIL  7 Towards nearest neighbour. If equidistant, towards +Infinity.
+      // HALF_FLOOR 8 Towards nearest neighbour. If equidistant, towards -Infinity.
+      ROUNDING_MODE = 4,                       // 0 to 8
+
+      // EXPONENTIAL_AT : [TO_EXP_NEG , TO_EXP_POS]
+
+      // The exponent value at and beneath which toString returns exponential notation.
+      // Number type: -7
+      TO_EXP_NEG = -7,                         // 0 to -MAX
+
+      // The exponent value at and above which toString returns exponential notation.
+      // Number type: 21
+      TO_EXP_POS = 21,                         // 0 to MAX
+
+      // RANGE : [MIN_EXP, MAX_EXP]
+
+      // The minimum exponent value, beneath which underflow to zero occurs.
+      // Number type: -324  (5e-324)
+      MIN_EXP = -1e7,                          // -1 to -MAX
+
+      // The maximum exponent value, above which overflow to Infinity occurs.
+      // Number type:  308  (1.7976931348623157e+308)
+      // For MAX_EXP > 1e7, e.g. new BigNumber('1e100000000').plus(1) may be slow.
+      MAX_EXP = 1e7,                           // 1 to MAX
+
+      // Whether to use cryptographically-secure random number generation, if available.
+      CRYPTO = false,                          // true or false
+
+      // The modulo mode used when calculating the modulus: a mod n.
+      // The quotient (q = a / n) is calculated according to the corresponding rounding mode.
+      // The remainder (r) is calculated as: r = a - n * q.
+      //
+      // UP        0 The remainder is positive if the dividend is negative, else is negative.
+      // DOWN      1 The remainder has the same sign as the dividend.
+      //             This modulo mode is commonly known as 'truncated division' and is
+      //             equivalent to (a % n) in JavaScript.
+      // FLOOR     3 The remainder has the same sign as the divisor (Python %).
+      // HALF_EVEN 6 This modulo mode implements the IEEE 754 remainder function.
+      // EUCLID    9 Euclidian division. q = sign(n) * floor(a / abs(n)).
+      //             The remainder is always positive.
+      //
+      // The truncated division, floored division, Euclidian division and IEEE 754 remainder
+      // modes are commonly used for the modulus operation.
+      // Although the other rounding modes can also be used, they may not give useful results.
+      MODULO_MODE = 1,                         // 0 to 9
+
+      // The maximum number of significant digits of the result of the exponentiatedBy operation.
+      // If POW_PRECISION is 0, there will be unlimited significant digits.
+      POW_PRECISION = 0,                       // 0 to MAX
+
+      // The format specification used by the BigNumber.prototype.toFormat method.
+      FORMAT = {
+        prefix: '',
+        groupSize: 3,
+        secondaryGroupSize: 0,
+        groupSeparator: ',',
+        decimalSeparator: '.',
+        fractionGroupSize: 0,
+        fractionGroupSeparator: '\xA0',        // non-breaking space
+        suffix: ''
+      },
+
+      // The alphabet used for base conversion. It must be at least 2 characters long, with no '+',
+      // '-', '.', whitespace, or repeated character.
+      // '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ$_'
+      ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz',
+      alphabetHasNormalDecimalDigits = true;
+
+
+    //------------------------------------------------------------------------------------------
+
+
+    // CONSTRUCTOR
+
+
+    /*
+     * The BigNumber constructor and exported function.
+     * Create and return a new instance of a BigNumber object.
+     *
+     * v {number|string|BigNumber} A numeric value.
+     * [b] {number} The base of v. Integer, 2 to ALPHABET.length inclusive.
+     */
+    function BigNumber(v, b) {
+      var alphabet, c, caseChanged, e, i, isNum, len, str,
+        x = this;
+
+      // Enable constructor call without `new`.
+      if (!(x instanceof BigNumber)) return new BigNumber(v, b);
+
+      if (b == null) {
+
+        if (v && v._isBigNumber === true) {
+          x.s = v.s;
+
+          if (!v.c || v.e > MAX_EXP) {
+            x.c = x.e = null;
+          } else if (v.e < MIN_EXP) {
+            x.c = [x.e = 0];
+          } else {
+            x.e = v.e;
+            x.c = v.c.slice();
+          }
+
+          return;
+        }
+
+        if ((isNum = typeof v == 'number') && v * 0 == 0) {
+
+          // Use `1 / n` to handle minus zero also.
+          x.s = 1 / v < 0 ? (v = -v, -1) : 1;
+
+          // Fast path for integers, where n < 2147483648 (2**31).
+          if (v === ~~v) {
+            for (e = 0, i = v; i >= 10; i /= 10, e++);
+
+            if (e > MAX_EXP) {
+              x.c = x.e = null;
+            } else {
+              x.e = e;
+              x.c = [v];
+            }
+
+            return;
+          }
+
+          str = String(v);
+        } else {
+
+          if (!isNumeric.test(str = String(v))) return parseNumeric(x, str, isNum);
+
+          x.s = str.charCodeAt(0) == 45 ? (str = str.slice(1), -1) : 1;
+        }
+
+        // Decimal point?
+        if ((e = str.indexOf('.')) > -1) str = str.replace('.', '');
+
+        // Exponential form?
+        if ((i = str.search(/e/i)) > 0) {
+
+          // Determine exponent.
+          if (e < 0) e = i;
+          e += +str.slice(i + 1);
+          str = str.substring(0, i);
+        } else if (e < 0) {
+
+          // Integer.
+          e = str.length;
+        }
+
+      } else {
+
+        // '[BigNumber Error] Base {not a primitive number|not an integer|out of range}: {b}'
+        intCheck(b, 2, ALPHABET.length, 'Base');
+
+        // Allow exponential notation to be used with base 10 argument, while
+        // also rounding to DECIMAL_PLACES as with other bases.
+        if (b == 10 && alphabetHasNormalDecimalDigits) {
+          x = new BigNumber(v);
+          return round(x, DECIMAL_PLACES + x.e + 1, ROUNDING_MODE);
+        }
+
+        str = String(v);
+
+        if (isNum = typeof v == 'number') {
+
+          // Avoid potential interpretation of Infinity and NaN as base 44+ values.
+          if (v * 0 != 0) return parseNumeric(x, str, isNum, b);
+
+          x.s = 1 / v < 0 ? (str = str.slice(1), -1) : 1;
+
+          // '[BigNumber Error] Number primitive has more than 15 significant digits: {n}'
+          if (BigNumber.DEBUG && str.replace(/^0\.0*|\./, '').length > 15) {
+            throw Error
+             (tooManyDigits + v);
+          }
+        } else {
+          x.s = str.charCodeAt(0) === 45 ? (str = str.slice(1), -1) : 1;
+        }
+
+        alphabet = ALPHABET.slice(0, b);
+        e = i = 0;
+
+        // Check that str is a valid base b number.
+        // Don't use RegExp, so alphabet can contain special characters.
+        for (len = str.length; i < len; i++) {
+          if (alphabet.indexOf(c = str.charAt(i)) < 0) {
+            if (c == '.') {
+
+              // If '.' is not the first character and it has not be found before.
+              if (i > e) {
+                e = len;
+                continue;
+              }
+            } else if (!caseChanged) {
+
+              // Allow e.g. hexadecimal 'FF' as well as 'ff'.
+              if (str == str.toUpperCase() && (str = str.toLowerCase()) ||
+                  str == str.toLowerCase() && (str = str.toUpperCase())) {
+                caseChanged = true;
+                i = -1;
+                e = 0;
+                continue;
+              }
+            }
+
+            return parseNumeric(x, String(v), isNum, b);
+          }
+        }
+
+        // Prevent later check for length on converted number.
+        isNum = false;
+        str = convertBase(str, b, 10, x.s);
+
+        // Decimal point?
+        if ((e = str.indexOf('.')) > -1) str = str.replace('.', '');
+        else e = str.length;
+      }
+
+      // Determine leading zeros.
+      for (i = 0; str.charCodeAt(i) === 48; i++);
+
+      // Determine trailing zeros.
+      for (len = str.length; str.charCodeAt(--len) === 48;);
+
+      if (str = str.slice(i, ++len)) {
+        len -= i;
+
+        // '[BigNumber Error] Number primitive has more than 15 significant digits: {n}'
+        if (isNum && BigNumber.DEBUG &&
+          len > 15 && (v > MAX_SAFE_INTEGER || v !== mathfloor(v))) {
+            throw Error
+             (tooManyDigits + (x.s * v));
+        }
+
+         // Overflow?
+        if ((e = e - i - 1) > MAX_EXP) {
+
+          // Infinity.
+          x.c = x.e = null;
+
+        // Underflow?
+        } else if (e < MIN_EXP) {
+
+          // Zero.
+          x.c = [x.e = 0];
+        } else {
+          x.e = e;
+          x.c = [];
+
+          // Transform base
+
+          // e is the base 10 exponent.
+          // i is where to slice str to get the first element of the coefficient array.
+          i = (e + 1) % LOG_BASE;
+          if (e < 0) i += LOG_BASE;  // i < 1
+
+          if (i < len) {
+            if (i) x.c.push(+str.slice(0, i));
+
+            for (len -= LOG_BASE; i < len;) {
+              x.c.push(+str.slice(i, i += LOG_BASE));
+            }
+
+            i = LOG_BASE - (str = str.slice(i)).length;
+          } else {
+            i -= len;
+          }
+
+          for (; i--; str += '0');
+          x.c.push(+str);
+        }
+      } else {
+
+        // Zero.
+        x.c = [x.e = 0];
+      }
+    }
+
+
+    // CONSTRUCTOR PROPERTIES
+
+
+    BigNumber.clone = clone;
+
+    BigNumber.ROUND_UP = 0;
+    BigNumber.ROUND_DOWN = 1;
+    BigNumber.ROUND_CEIL = 2;
+    BigNumber.ROUND_FLOOR = 3;
+    BigNumber.ROUND_HALF_UP = 4;
+    BigNumber.ROUND_HALF_DOWN = 5;
+    BigNumber.ROUND_HALF_EVEN = 6;
+    BigNumber.ROUND_HALF_CEIL = 7;
+    BigNumber.ROUND_HALF_FLOOR = 8;
+    BigNumber.EUCLID = 9;
+
+
+    /*
+     * Configure infrequently-changing library-wide settings.
+     *
+     * Accept an object with the following optional properties (if the value of a property is
+     * a number, it must be an integer within the inclusive range stated):
+     *
+     *   DECIMAL_PLACES   {number}           0 to MAX
+     *   ROUNDING_MODE    {number}           0 to 8
+     *   EXPONENTIAL_AT   {number|number[]}  -MAX to MAX  or  [-MAX to 0, 0 to MAX]
+     *   RANGE            {number|number[]}  -MAX to MAX (not zero)  or  [-MAX to -1, 1 to MAX]
+     *   CRYPTO           {boolean}          true or false
+     *   MODULO_MODE      {number}           0 to 9
+     *   POW_PRECISION       {number}           0 to MAX
+     *   ALPHABET         {string}           A string of two or more unique characters which does
+     *                                       not contain '.'.
+     *   FORMAT           {object}           An object with some of the following properties:
+     *     prefix                 {string}
+     *     groupSize              {number}
+     *     secondaryGroupSize     {number}
+     *     groupSeparator         {string}
+     *     decimalSeparator       {string}
+     *     fractionGroupSize      {number}
+     *     fractionGroupSeparator {string}
+     *     suffix                 {string}
+     *
+     * (The values assigned to the above FORMAT object properties are not checked for validity.)
+     *
+     * E.g.
+     * BigNumber.config({ DECIMAL_PLACES : 20, ROUNDING_MODE : 4 })
+     *
+     * Ignore properties/parameters set to null or undefined, except for ALPHABET.
+     *
+     * Return an object with the properties current values.
+     */
+    BigNumber.config = BigNumber.set = function (obj) {
+      var p, v;
+
+      if (obj != null) {
+
+        if (typeof obj == 'object') {
+
+          // DECIMAL_PLACES {number} Integer, 0 to MAX inclusive.
+          // '[BigNumber Error] DECIMAL_PLACES {not a primitive number|not an integer|out of range}: {v}'
+          if (obj.hasOwnProperty(p = 'DECIMAL_PLACES')) {
+            v = obj[p];
+            intCheck(v, 0, MAX, p);
+            DECIMAL_PLACES = v;
+          }
+
+          // ROUNDING_MODE {number} Integer, 0 to 8 inclusive.
+          // '[BigNumber Error] ROUNDING_MODE {not a primitive number|not an integer|out of range}: {v}'
+          if (obj.hasOwnProperty(p = 'ROUNDING_MODE')) {
+            v = obj[p];
+            intCheck(v, 0, 8, p);
+            ROUNDING_MODE = v;
+          }
+
+          // EXPONENTIAL_AT {number|number[]}
+          // Integer, -MAX to MAX inclusive or
+          // [integer -MAX to 0 inclusive, 0 to MAX inclusive].
+          // '[BigNumber Error] EXPONENTIAL_AT {not a primitive number|not an integer|out of range}: {v}'
+          if (obj.hasOwnProperty(p = 'EXPONENTIAL_AT')) {
+            v = obj[p];
+            if (v && v.pop) {
+              intCheck(v[0], -MAX, 0, p);
+              intCheck(v[1], 0, MAX, p);
+              TO_EXP_NEG = v[0];
+              TO_EXP_POS = v[1];
+            } else {
+              intCheck(v, -MAX, MAX, p);
+              TO_EXP_NEG = -(TO_EXP_POS = v < 0 ? -v : v);
+            }
+          }
+
+          // RANGE {number|number[]} Non-zero integer, -MAX to MAX inclusive or
+          // [integer -MAX to -1 inclusive, integer 1 to MAX inclusive].
+          // '[BigNumber Error] RANGE {not a primitive number|not an integer|out of range|cannot be zero}: {v}'
+          if (obj.hasOwnProperty(p = 'RANGE')) {
+            v = obj[p];
+            if (v && v.pop) {
+              intCheck(v[0], -MAX, -1, p);
+              intCheck(v[1], 1, MAX, p);
+              MIN_EXP = v[0];
+              MAX_EXP = v[1];
+            } else {
+              intCheck(v, -MAX, MAX, p);
+              if (v) {
+                MIN_EXP = -(MAX_EXP = v < 0 ? -v : v);
+              } else {
+                throw Error
+                 (bignumberError + p + ' cannot be zero: ' + v);
+              }
+            }
+          }
+
+          // CRYPTO {boolean} true or false.
+          // '[BigNumber Error] CRYPTO not true or false: {v}'
+          // '[BigNumber Error] crypto unavailable'
+          if (obj.hasOwnProperty(p = 'CRYPTO')) {
+            v = obj[p];
+            if (v === !!v) {
+              if (v) {
+                if (typeof crypto != 'undefined' && crypto &&
+                 (crypto.getRandomValues || crypto.randomBytes)) {
+                  CRYPTO = v;
+                } else {
+                  CRYPTO = !v;
+                  throw Error
+                   (bignumberError + 'crypto unavailable');
+                }
+              } else {
+                CRYPTO = v;
+              }
+            } else {
+              throw Error
+               (bignumberError + p + ' not true or false: ' + v);
+            }
+          }
+
+          // MODULO_MODE {number} Integer, 0 to 9 inclusive.
+          // '[BigNumber Error] MODULO_MODE {not a primitive number|not an integer|out of range}: {v}'
+          if (obj.hasOwnProperty(p = 'MODULO_MODE')) {
+            v = obj[p];
+            intCheck(v, 0, 9, p);
+            MODULO_MODE = v;
+          }
+
+          // POW_PRECISION {number} Integer, 0 to MAX inclusive.
+          // '[BigNumber Error] POW_PRECISION {not a primitive number|not an integer|out of range}: {v}'
+          if (obj.hasOwnProperty(p = 'POW_PRECISION')) {
+            v = obj[p];
+            intCheck(v, 0, MAX, p);
+            POW_PRECISION = v;
+          }
+
+          // FORMAT {object}
+          // '[BigNumber Error] FORMAT not an object: {v}'
+          if (obj.hasOwnProperty(p = 'FORMAT')) {
+            v = obj[p];
+            if (typeof v == 'object') FORMAT = v;
+            else throw Error
+             (bignumberError + p + ' not an object: ' + v);
+          }
+
+          // ALPHABET {string}
+          // '[BigNumber Error] ALPHABET invalid: {v}'
+          if (obj.hasOwnProperty(p = 'ALPHABET')) {
+            v = obj[p];
+
+            // Disallow if less than two characters,
+            // or if it contains '+', '-', '.', whitespace, or a repeated character.
+            if (typeof v == 'string' && !/^.?$|[+\-.\s]|(.).*\1/.test(v)) {
+              alphabetHasNormalDecimalDigits = v.slice(0, 10) == '0123456789';
+              ALPHABET = v;
+            } else {
+              throw Error
+               (bignumberError + p + ' invalid: ' + v);
+            }
+          }
+
+        } else {
+
+          // '[BigNumber Error] Object expected: {v}'
+          throw Error
+           (bignumberError + 'Object expected: ' + obj);
+        }
+      }
+
+      return {
+        DECIMAL_PLACES: DECIMAL_PLACES,
+        ROUNDING_MODE: ROUNDING_MODE,
+        EXPONENTIAL_AT: [TO_EXP_NEG, TO_EXP_POS],
+        RANGE: [MIN_EXP, MAX_EXP],
+        CRYPTO: CRYPTO,
+        MODULO_MODE: MODULO_MODE,
+        POW_PRECISION: POW_PRECISION,
+        FORMAT: FORMAT,
+        ALPHABET: ALPHABET
+      };
+    };
+
+
+    /*
+     * Return true if v is a BigNumber instance, otherwise return false.
+     *
+     * If BigNumber.DEBUG is true, throw if a BigNumber instance is not well-formed.
+     *
+     * v {any}
+     *
+     * '[BigNumber Error] Invalid BigNumber: {v}'
+     */
+    BigNumber.isBigNumber = function (v) {
+      if (!v || v._isBigNumber !== true) return false;
+      if (!BigNumber.DEBUG) return true;
+
+      var i, n,
+        c = v.c,
+        e = v.e,
+        s = v.s;
+
+      out: if ({}.toString.call(c) == '[object Array]') {
+
+        if ((s === 1 || s === -1) && e >= -MAX && e <= MAX && e === mathfloor(e)) {
+
+          // If the first element is zero, the BigNumber value must be zero.
+          if (c[0] === 0) {
+            if (e === 0 && c.length === 1) return true;
+            break out;
+          }
+
+          // Calculate number of digits that c[0] should have, based on the exponent.
+          i = (e + 1) % LOG_BASE;
+          if (i < 1) i += LOG_BASE;
+
+          // Calculate number of digits of c[0].
+          //if (Math.ceil(Math.log(c[0] + 1) / Math.LN10) == i) {
+          if (String(c[0]).length == i) {
+
+            for (i = 0; i < c.length; i++) {
+              n = c[i];
+              if (n < 0 || n >= BASE || n !== mathfloor(n)) break out;
+            }
+
+            // Last element cannot be zero, unless it is the only element.
+            if (n !== 0) return true;
+          }
+        }
+
+      // Infinity/NaN
+      } else if (c === null && e === null && (s === null || s === 1 || s === -1)) {
+        return true;
+      }
+
+      throw Error
+        (bignumberError + 'Invalid BigNumber: ' + v);
+    };
+
+
+    /*
+     * Return a new BigNumber whose value is the maximum of the arguments.
+     *
+     * arguments {number|string|BigNumber}
+     */
+    BigNumber.maximum = BigNumber.max = function () {
+      return maxOrMin(arguments, -1);
+    };
+
+
+    /*
+     * Return a new BigNumber whose value is the minimum of the arguments.
+     *
+     * arguments {number|string|BigNumber}
+     */
+    BigNumber.minimum = BigNumber.min = function () {
+      return maxOrMin(arguments, 1);
+    };
+
+
+    /*
+     * Return a new BigNumber with a random value equal to or greater than 0 and less than 1,
+     * and with dp, or DECIMAL_PLACES if dp is omitted, decimal places (or less if trailing
+     * zeros are produced).
+     *
+     * [dp] {number} Decimal places. Integer, 0 to MAX inclusive.
+     *
+     * '[BigNumber Error] Argument {not a primitive number|not an integer|out of range}: {dp}'
+     * '[BigNumber Error] crypto unavailable'
+     */
+    BigNumber.random = (function () {
+      var pow2_53 = 0x20000000000000;
+
+      // Return a 53 bit integer n, where 0 <= n < 9007199254740992.
+      // Check if Math.random() produces more than 32 bits of randomness.
+      // If it does, assume at least 53 bits are produced, otherwise assume at least 30 bits.
+      // 0x40000000 is 2^30, 0x800000 is 2^23, 0x1fffff is 2^21 - 1.
+      var random53bitInt = (Math.random() * pow2_53) & 0x1fffff
+       ? function () { return mathfloor(Math.random() * pow2_53); }
+       : function () { return ((Math.random() * 0x40000000 | 0) * 0x800000) +
+         (Math.random() * 0x800000 | 0); };
+
+      return function (dp) {
+        var a, b, e, k, v,
+          i = 0,
+          c = [],
+          rand = new BigNumber(ONE);
+
+        if (dp == null) dp = DECIMAL_PLACES;
+        else intCheck(dp, 0, MAX);
+
+        k = mathceil(dp / LOG_BASE);
+
+        if (CRYPTO) {
+
+          // Browsers supporting crypto.getRandomValues.
+          if (crypto.getRandomValues) {
+
+            a = crypto.getRandomValues(new Uint32Array(k *= 2));
+
+            for (; i < k;) {
+
+              // 53 bits:
+              // ((Math.pow(2, 32) - 1) * Math.pow(2, 21)).toString(2)
+              // 11111 11111111 11111111 11111111 11100000 00000000 00000000
+              // ((Math.pow(2, 32) - 1) >>> 11).toString(2)
+              //                                     11111 11111111 11111111
+              // 0x20000 is 2^21.
+              v = a[i] * 0x20000 + (a[i + 1] >>> 11);
+
+              // Rejection sampling:
+              // 0 <= v < 9007199254740992
+              // Probability that v >= 9e15, is
+              // 7199254740992 / 9007199254740992 ~= 0.0008, i.e. 1 in 1251
+              if (v >= 9e15) {
+                b = crypto.getRandomValues(new Uint32Array(2));
+                a[i] = b[0];
+                a[i + 1] = b[1];
+              } else {
+
+                // 0 <= v <= 8999999999999999
+                // 0 <= (v % 1e14) <= 99999999999999
+                c.push(v % 1e14);
+                i += 2;
+              }
+            }
+            i = k / 2;
+
+          // Node.js supporting crypto.randomBytes.
+          } else if (crypto.randomBytes) {
+
+            // buffer
+            a = crypto.randomBytes(k *= 7);
+
+            for (; i < k;) {
+
+              // 0x1000000000000 is 2^48, 0x10000000000 is 2^40
+              // 0x100000000 is 2^32, 0x1000000 is 2^24
+              // 11111 11111111 11111111 11111111 11111111 11111111 11111111
+              // 0 <= v < 9007199254740992
+              v = ((a[i] & 31) * 0x1000000000000) + (a[i + 1] * 0x10000000000) +
+                 (a[i + 2] * 0x100000000) + (a[i + 3] * 0x1000000) +
+                 (a[i + 4] << 16) + (a[i + 5] << 8) + a[i + 6];
+
+              if (v >= 9e15) {
+                crypto.randomBytes(7).copy(a, i);
+              } else {
+
+                // 0 <= (v % 1e14) <= 99999999999999
+                c.push(v % 1e14);
+                i += 7;
+              }
+            }
+            i = k / 7;
+          } else {
+            CRYPTO = false;
+            throw Error
+             (bignumberError + 'crypto unavailable');
+          }
+        }
+
+        // Use Math.random.
+        if (!CRYPTO) {
+
+          for (; i < k;) {
+            v = random53bitInt();
+            if (v < 9e15) c[i++] = v % 1e14;
+          }
+        }
+
+        k = c[--i];
+        dp %= LOG_BASE;
+
+        // Convert trailing digits to zeros according to dp.
+        if (k && dp) {
+          v = POWS_TEN[LOG_BASE - dp];
+          c[i] = mathfloor(k / v) * v;
+        }
+
+        // Remove trailing elements which are zero.
+        for (; c[i] === 0; c.pop(), i--);
+
+        // Zero?
+        if (i < 0) {
+          c = [e = 0];
+        } else {
+
+          // Remove leading elements which are zero and adjust exponent accordingly.
+          for (e = -1 ; c[0] === 0; c.splice(0, 1), e -= LOG_BASE);
+
+          // Count the digits of the first element of c to determine leading zeros, and...
+          for (i = 1, v = c[0]; v >= 10; v /= 10, i++);
+
+          // adjust the exponent accordingly.
+          if (i < LOG_BASE) e -= LOG_BASE - i;
+        }
+
+        rand.e = e;
+        rand.c = c;
+        return rand;
+      };
+    })();
+
+
+    /*
+     * Return a BigNumber whose value is the sum of the arguments.
+     *
+     * arguments {number|string|BigNumber}
+     */
+    BigNumber.sum = function () {
+      var i = 1,
+        args = arguments,
+        sum = new BigNumber(args[0]);
+      for (; i < args.length;) sum = sum.plus(args[i++]);
+      return sum;
+    };
+
+
+    // PRIVATE FUNCTIONS
+
+
+    // Called by BigNumber and BigNumber.prototype.toString.
+    convertBase = (function () {
+      var decimal = '0123456789';
+
+      /*
+       * Convert string of baseIn to an array of numbers of baseOut.
+       * Eg. toBaseOut('255', 10, 16) returns [15, 15].
+       * Eg. toBaseOut('ff', 16, 10) returns [2, 5, 5].
+       */
+      function toBaseOut(str, baseIn, baseOut, alphabet) {
+        var j,
+          arr = [0],
+          arrL,
+          i = 0,
+          len = str.length;
+
+        for (; i < len;) {
+          for (arrL = arr.length; arrL--; arr[arrL] *= baseIn);
+
+          arr[0] += alphabet.indexOf(str.charAt(i++));
+
+          for (j = 0; j < arr.length; j++) {
+
+            if (arr[j] > baseOut - 1) {
+              if (arr[j + 1] == null) arr[j + 1] = 0;
+              arr[j + 1] += arr[j] / baseOut | 0;
+              arr[j] %= baseOut;
+            }
+          }
+        }
+
+        return arr.reverse();
+      }
+
+      // Convert a numeric string of baseIn to a numeric string of baseOut.
+      // If the caller is toString, we are converting from base 10 to baseOut.
+      // If the caller is BigNumber, we are converting from baseIn to base 10.
+      return function (str, baseIn, baseOut, sign, callerIsToString) {
+        var alphabet, d, e, k, r, x, xc, y,
+          i = str.indexOf('.'),
+          dp = DECIMAL_PLACES,
+          rm = ROUNDING_MODE;
+
+        // Non-integer.
+        if (i >= 0) {
+          k = POW_PRECISION;
+
+          // Unlimited precision.
+          POW_PRECISION = 0;
+          str = str.replace('.', '');
+          y = new BigNumber(baseIn);
+          x = y.pow(str.length - i);
+          POW_PRECISION = k;
+
+          // Convert str as if an integer, then restore the fraction part by dividing the
+          // result by its base raised to a power.
+
+          y.c = toBaseOut(toFixedPoint(coeffToString(x.c), x.e, '0'),
+           10, baseOut, decimal);
+          y.e = y.c.length;
+        }
+
+        // Convert the number as integer.
+
+        xc = toBaseOut(str, baseIn, baseOut, callerIsToString
+         ? (alphabet = ALPHABET, decimal)
+         : (alphabet = decimal, ALPHABET));
+
+        // xc now represents str as an integer and converted to baseOut. e is the exponent.
+        e = k = xc.length;
+
+        // Remove trailing zeros.
+        for (; xc[--k] == 0; xc.pop());
+
+        // Zero?
+        if (!xc[0]) return alphabet.charAt(0);
+
+        // Does str represent an integer? If so, no need for the division.
+        if (i < 0) {
+          --e;
+        } else {
+          x.c = xc;
+          x.e = e;
+
+          // The sign is needed for correct rounding.
+          x.s = sign;
+          x = div(x, y, dp, rm, baseOut);
+          xc = x.c;
+          r = x.r;
+          e = x.e;
+        }
+
+        // xc now represents str converted to baseOut.
+
+        // THe index of the rounding digit.
+        d = e + dp + 1;
+
+        // The rounding digit: the digit to the right of the digit that may be rounded up.
+        i = xc[d];
+
+        // Look at the rounding digits and mode to determine whether to round up.
+
+        k = baseOut / 2;
+        r = r || d < 0 || xc[d + 1] != null;
+
+        r = rm < 4 ? (i != null || r) && (rm == 0 || rm == (x.s < 0 ? 3 : 2))
+              : i > k || i == k &&(rm == 4 || r || rm == 6 && xc[d - 1] & 1 ||
+               rm == (x.s < 0 ? 8 : 7));
+
+        // If the index of the rounding digit is not greater than zero, or xc represents
+        // zero, then the result of the base conversion is zero or, if rounding up, a value
+        // such as 0.00001.
+        if (d < 1 || !xc[0]) {
+
+          // 1^-dp or 0
+          str = r ? toFixedPoint(alphabet.charAt(1), -dp, alphabet.charAt(0)) : alphabet.charAt(0);
+        } else {
+
+          // Truncate xc to the required number of decimal places.
+          xc.length = d;
+
+          // Round up?
+          if (r) {
+
+            // Rounding up may mean the previous digit has to be rounded up and so on.
+            for (--baseOut; ++xc[--d] > baseOut;) {
+              xc[d] = 0;
+
+              if (!d) {
+                ++e;
+                xc = [1].concat(xc);
+              }
+            }
+          }
+
+          // Determine trailing zeros.
+          for (k = xc.length; !xc[--k];);
+
+          // E.g. [4, 11, 15] becomes 4bf.
+          for (i = 0, str = ''; i <= k; str += alphabet.charAt(xc[i++]));
+
+          // Add leading zeros, decimal point and trailing zeros as required.
+          str = toFixedPoint(str, e, alphabet.charAt(0));
+        }
+
+        // The caller will add the sign.
+        return str;
+      };
+    })();
+
+
+    // Perform division in the specified base. Called by div and convertBase.
+    div = (function () {
+
+      // Assume non-zero x and k.
+      function multiply(x, k, base) {
+        var m, temp, xlo, xhi,
+          carry = 0,
+          i = x.length,
+          klo = k % SQRT_BASE,
+          khi = k / SQRT_BASE | 0;
+
+        for (x = x.slice(); i--;) {
+          xlo = x[i] % SQRT_BASE;
+          xhi = x[i] / SQRT_BASE | 0;
+          m = khi * xlo + xhi * klo;
+          temp = klo * xlo + ((m % SQRT_BASE) * SQRT_BASE) + carry;
+          carry = (temp / base | 0) + (m / SQRT_BASE | 0) + khi * xhi;
+          x[i] = temp % base;
+        }
+
+        if (carry) x = [carry].concat(x);
+
+        return x;
+      }
+
+      function compare(a, b, aL, bL) {
+        var i, cmp;
+
+        if (aL != bL) {
+          cmp = aL > bL ? 1 : -1;
+        } else {
+
+          for (i = cmp = 0; i < aL; i++) {
+
+            if (a[i] != b[i]) {
+              cmp = a[i] > b[i] ? 1 : -1;
+              break;
+            }
+          }
+        }
+
+        return cmp;
+      }
+
+      function subtract(a, b, aL, base) {
+        var i = 0;
+
+        // Subtract b from a.
+        for (; aL--;) {
+          a[aL] -= i;
+          i = a[aL] < b[aL] ? 1 : 0;
+          a[aL] = i * base + a[aL] - b[aL];
+        }
+
+        // Remove leading zeros.
+        for (; !a[0] && a.length > 1; a.splice(0, 1));
+      }
+
+      // x: dividend, y: divisor.
+      return function (x, y, dp, rm, base) {
+        var cmp, e, i, more, n, prod, prodL, q, qc, rem, remL, rem0, xi, xL, yc0,
+          yL, yz,
+          s = x.s == y.s ? 1 : -1,
+          xc = x.c,
+          yc = y.c;
+
+        // Either NaN, Infinity or 0?
+        if (!xc || !xc[0] || !yc || !yc[0]) {
+
+          return new BigNumber(
+
+           // Return NaN if either NaN, or both Infinity or 0.
+           !x.s || !y.s || (xc ? yc && xc[0] == yc[0] : !yc) ? NaN :
+
+            // Return ±0 if x is ±0 or y is ±Infinity, or return ±Infinity as y is ±0.
+            xc && xc[0] == 0 || !yc ? s * 0 : s / 0
+         );
+        }
+
+        q = new BigNumber(s);
+        qc = q.c = [];
+        e = x.e - y.e;
+        s = dp + e + 1;
+
+        if (!base) {
+          base = BASE;
+          e = bitFloor(x.e / LOG_BASE) - bitFloor(y.e / LOG_BASE);
+          s = s / LOG_BASE | 0;
+        }
+
+        // Result exponent may be one less then the current value of e.
+        // The coefficients of the BigNumbers from convertBase may have trailing zeros.
+        for (i = 0; yc[i] == (xc[i] || 0); i++);
+
+        if (yc[i] > (xc[i] || 0)) e--;
+
+        if (s < 0) {
+          qc.push(1);
+          more = true;
+        } else {
+          xL = xc.length;
+          yL = yc.length;
+          i = 0;
+          s += 2;
+
+          // Normalise xc and yc so highest order digit of yc is >= base / 2.
+
+          n = mathfloor(base / (yc[0] + 1));
+
+          // Not necessary, but to handle odd bases where yc[0] == (base / 2) - 1.
+          // if (n > 1 || n++ == 1 && yc[0] < base / 2) {
+          if (n > 1) {
+            yc = multiply(yc, n, base);
+            xc = multiply(xc, n, base);
+            yL = yc.length;
+            xL = xc.length;
+          }
+
+          xi = yL;
+          rem = xc.slice(0, yL);
+          remL = rem.length;
+
+          // Add zeros to make remainder as long as divisor.
+          for (; remL < yL; rem[remL++] = 0);
+          yz = yc.slice();
+          yz = [0].concat(yz);
+          yc0 = yc[0];
+          if (yc[1] >= base / 2) yc0++;
+          // Not necessary, but to prevent trial digit n > base, when using base 3.
+          // else if (base == 3 && yc0 == 1) yc0 = 1 + 1e-15;
+
+          do {
+            n = 0;
+
+            // Compare divisor and remainder.
+            cmp = compare(yc, rem, yL, remL);
+
+            // If divisor < remainder.
+            if (cmp < 0) {
+
+              // Calculate trial digit, n.
+
+              rem0 = rem[0];
+              if (yL != remL) rem0 = rem0 * base + (rem[1] || 0);
+
+              // n is how many times the divisor goes into the current remainder.
+              n = mathfloor(rem0 / yc0);
+
+              //  Algorithm:
+              //  product = divisor multiplied by trial digit (n).
+              //  Compare product and remainder.
+              //  If product is greater than remainder:
+              //    Subtract divisor from product, decrement trial digit.
+              //  Subtract product from remainder.
+              //  If product was less than remainder at the last compare:
+              //    Compare new remainder and divisor.
+              //    If remainder is greater than divisor:
+              //      Subtract divisor from remainder, increment trial digit.
+
+              if (n > 1) {
+
+                // n may be > base only when base is 3.
+                if (n >= base) n = base - 1;
+
+                // product = divisor * trial digit.
+                prod = multiply(yc, n, base);
+                prodL = prod.length;
+                remL = rem.length;
+
+                // Compare product and remainder.
+                // If product > remainder then trial digit n too high.
+                // n is 1 too high about 5% of the time, and is not known to have
+                // ever been more than 1 too high.
+                while (compare(prod, rem, prodL, remL) == 1) {
+                  n--;
+
+                  // Subtract divisor from product.
+                  subtract(prod, yL < prodL ? yz : yc, prodL, base);
+                  prodL = prod.length;
+                  cmp = 1;
+                }
+              } else {
+
+                // n is 0 or 1, cmp is -1.
+                // If n is 0, there is no need to compare yc and rem again below,
+                // so change cmp to 1 to avoid it.
+                // If n is 1, leave cmp as -1, so yc and rem are compared again.
+                if (n == 0) {
+
+                  // divisor < remainder, so n must be at least 1.
+                  cmp = n = 1;
+                }
+
+                // product = divisor
+                prod = yc.slice();
+                prodL = prod.length;
+              }
+
+              if (prodL < remL) prod = [0].concat(prod);
+
+              // Subtract product from remainder.
+              subtract(rem, prod, remL, base);
+              remL = rem.length;
+
+               // If product was < remainder.
+              if (cmp == -1) {
+
+                // Compare divisor and new remainder.
+                // If divisor < new remainder, subtract divisor from remainder.
+                // Trial digit n too low.
+                // n is 1 too low about 5% of the time, and very rarely 2 too low.
+                while (compare(yc, rem, yL, remL) < 1) {
+                  n++;
+
+                  // Subtract divisor from remainder.
+                  subtract(rem, yL < remL ? yz : yc, remL, base);
+                  remL = rem.length;
+                }
+              }
+            } else if (cmp === 0) {
+              n++;
+              rem = [0];
+            } // else cmp === 1 and n will be 0
+
+            // Add the next digit, n, to the result array.
+            qc[i++] = n;
+
+            // Update the remainder.
+            if (rem[0]) {
+              rem[remL++] = xc[xi] || 0;
+            } else {
+              rem = [xc[xi]];
+              remL = 1;
+            }
+          } while ((xi++ < xL || rem[0] != null) && s--);
+
+          more = rem[0] != null;
+
+          // Leading zero?
+          if (!qc[0]) qc.splice(0, 1);
+        }
+
+        if (base == BASE) {
+
+          // To calculate q.e, first get the number of digits of qc[0].
+          for (i = 1, s = qc[0]; s >= 10; s /= 10, i++);
+
+          round(q, dp + (q.e = i + e * LOG_BASE - 1) + 1, rm, more);
+
+        // Caller is convertBase.
+        } else {
+          q.e = e;
+          q.r = +more;
+        }
+
+        return q;
+      };
+    })();
+
+
+    /*
+     * Return a string representing the value of BigNumber n in fixed-point or exponential
+     * notation rounded to the specified decimal places or significant digits.
+     *
+     * n: a BigNumber.
+     * i: the index of the last digit required (i.e. the digit that may be rounded up).
+     * rm: the rounding mode.
+     * id: 1 (toExponential) or 2 (toPrecision).
+     */
+    function format(n, i, rm, id) {
+      var c0, e, ne, len, str;
+
+      if (rm == null) rm = ROUNDING_MODE;
+      else intCheck(rm, 0, 8);
+
+      if (!n.c) return n.toString();
+
+      c0 = n.c[0];
+      ne = n.e;
+
+      if (i == null) {
+        str = coeffToString(n.c);
+        str = id == 1 || id == 2 && (ne <= TO_EXP_NEG || ne >= TO_EXP_POS)
+         ? toExponential(str, ne)
+         : toFixedPoint(str, ne, '0');
+      } else {
+        n = round(new BigNumber(n), i, rm);
+
+        // n.e may have changed if the value was rounded up.
+        e = n.e;
+
+        str = coeffToString(n.c);
+        len = str.length;
+
+        // toPrecision returns exponential notation if the number of significant digits
+        // specified is less than the number of digits necessary to represent the integer
+        // part of the value in fixed-point notation.
+
+        // Exponential notation.
+        if (id == 1 || id == 2 && (i <= e || e <= TO_EXP_NEG)) {
+
+          // Append zeros?
+          for (; len < i; str += '0', len++);
+          str = toExponential(str, e);
+
+        // Fixed-point notation.
+        } else {
+          i -= ne;
+          str = toFixedPoint(str, e, '0');
+
+          // Append zeros?
+          if (e + 1 > len) {
+            if (--i > 0) for (str += '.'; i--; str += '0');
+          } else {
+            i += e - len;
+            if (i > 0) {
+              if (e + 1 == len) str += '.';
+              for (; i--; str += '0');
+            }
+          }
+        }
+      }
+
+      return n.s < 0 && c0 ? '-' + str : str;
+    }
+
+
+    // Handle BigNumber.max and BigNumber.min.
+    // If any number is NaN, return NaN.
+    function maxOrMin(args, n) {
+      var k, y,
+        i = 1,
+        x = new BigNumber(args[0]);
+
+      for (; i < args.length; i++) {
+        y = new BigNumber(args[i]);
+        if (!y.s || (k = compare(x, y)) === n || k === 0 && x.s === n) {
+          x = y;
+        }
+      }
+
+      return x;
+    }
+
+
+    /*
+     * Strip trailing zeros, calculate base 10 exponent and check against MIN_EXP and MAX_EXP.
+     * Called by minus, plus and times.
+     */
+    function normalise(n, c, e) {
+      var i = 1,
+        j = c.length;
+
+       // Remove trailing zeros.
+      for (; !c[--j]; c.pop());
+
+      // Calculate the base 10 exponent. First get the number of digits of c[0].
+      for (j = c[0]; j >= 10; j /= 10, i++);
+
+      // Overflow?
+      if ((e = i + e * LOG_BASE - 1) > MAX_EXP) {
+
+        // Infinity.
+        n.c = n.e = null;
+
+      // Underflow?
+      } else if (e < MIN_EXP) {
+
+        // Zero.
+        n.c = [n.e = 0];
+      } else {
+        n.e = e;
+        n.c = c;
+      }
+
+      return n;
+    }
+
+
+    // Handle values that fail the validity test in BigNumber.
+    parseNumeric = (function () {
+      var basePrefix = /^(-?)0([xbo])(?=\w[\w.]*$)/i,
+        dotAfter = /^([^.]+)\.$/,
+        dotBefore = /^\.([^.]+)$/,
+        isInfinityOrNaN = /^-?(Infinity|NaN)$/,
+        whitespaceOrPlus = /^\s*\+(?=[\w.])|^\s+|\s+$/g;
+
+      return function (x, str, isNum, b) {
+        var base,
+          s = isNum ? str : str.replace(whitespaceOrPlus, '');
+
+        // No exception on ±Infinity or NaN.
+        if (isInfinityOrNaN.test(s)) {
+          x.s = isNaN(s) ? null : s < 0 ? -1 : 1;
+        } else {
+          if (!isNum) {
+
+            // basePrefix = /^(-?)0([xbo])(?=\w[\w.]*$)/i
+            s = s.replace(basePrefix, function (m, p1, p2) {
+              base = (p2 = p2.toLowerCase()) == 'x' ? 16 : p2 == 'b' ? 2 : 8;
+              return !b || b == base ? p1 : m;
+            });
+
+            if (b) {
+              base = b;
+
+              // E.g. '1.' to '1', '.1' to '0.1'
+              s = s.replace(dotAfter, '$1').replace(dotBefore, '0.$1');
+            }
+
+            if (str != s) return new BigNumber(s, base);
+          }
+
+          // '[BigNumber Error] Not a number: {n}'
+          // '[BigNumber Error] Not a base {b} number: {n}'
+          if (BigNumber.DEBUG) {
+            throw Error
+              (bignumberError + 'Not a' + (b ? ' base ' + b : '') + ' number: ' + str);
+          }
+
+          // NaN
+          x.s = null;
+        }
+
+        x.c = x.e = null;
+      }
+    })();
+
+
+    /*
+     * Round x to sd significant digits using rounding mode rm. Check for over/under-flow.
+     * If r is truthy, it is known that there are more digits after the rounding digit.
+     */
+    function round(x, sd, rm, r) {
+      var d, i, j, k, n, ni, rd,
+        xc = x.c,
+        pows10 = POWS_TEN;
+
+      // if x is not Infinity or NaN...
+      if (xc) {
+
+        // rd is the rounding digit, i.e. the digit after the digit that may be rounded up.
+        // n is a base 1e14 number, the value of the element of array x.c containing rd.
+        // ni is the index of n within x.c.
+        // d is the number of digits of n.
+        // i is the index of rd within n including leading zeros.
+        // j is the actual index of rd within n (if < 0, rd is a leading zero).
+        out: {
+
+          // Get the number of digits of the first element of xc.
+          for (d = 1, k = xc[0]; k >= 10; k /= 10, d++);
+          i = sd - d;
+
+          // If the rounding digit is in the first element of xc...
+          if (i < 0) {
+            i += LOG_BASE;
+            j = sd;
+            n = xc[ni = 0];
+
+            // Get the rounding digit at index j of n.
+            rd = mathfloor(n / pows10[d - j - 1] % 10);
+          } else {
+            ni = mathceil((i + 1) / LOG_BASE);
+
+            if (ni >= xc.length) {
+
+              if (r) {
+
+                // Needed by sqrt.
+                for (; xc.length <= ni; xc.push(0));
+                n = rd = 0;
+                d = 1;
+                i %= LOG_BASE;
+                j = i - LOG_BASE + 1;
+              } else {
+                break out;
+              }
+            } else {
+              n = k = xc[ni];
+
+              // Get the number of digits of n.
+              for (d = 1; k >= 10; k /= 10, d++);
+
+              // Get the index of rd within n.
+              i %= LOG_BASE;
+
+              // Get the index of rd within n, adjusted for leading zeros.
+              // The number of leading zeros of n is given by LOG_BASE - d.
+              j = i - LOG_BASE + d;
+
+              // Get the rounding digit at index j of n.
+              rd = j < 0 ? 0 : mathfloor(n / pows10[d - j - 1] % 10);
+            }
+          }
+
+          r = r || sd < 0 ||
+
+          // Are there any non-zero digits after the rounding digit?
+          // The expression  n % pows10[d - j - 1]  returns all digits of n to the right
+          // of the digit at j, e.g. if n is 908714 and j is 2, the expression gives 714.
+           xc[ni + 1] != null || (j < 0 ? n : n % pows10[d - j - 1]);
+
+          r = rm < 4
+           ? (rd || r) && (rm == 0 || rm == (x.s < 0 ? 3 : 2))
+           : rd > 5 || rd == 5 && (rm == 4 || r || rm == 6 &&
+
+            // Check whether the digit to the left of the rounding digit is odd.
+            ((i > 0 ? j > 0 ? n / pows10[d - j] : 0 : xc[ni - 1]) % 10) & 1 ||
+             rm == (x.s < 0 ? 8 : 7));
+
+          if (sd < 1 || !xc[0]) {
+            xc.length = 0;
+
+            if (r) {
+
+              // Convert sd to decimal places.
+              sd -= x.e + 1;
+
+              // 1, 0.1, 0.01, 0.001, 0.0001 etc.
+              xc[0] = pows10[(LOG_BASE - sd % LOG_BASE) % LOG_BASE];
+              x.e = -sd || 0;
+            } else {
+
+              // Zero.
+              xc[0] = x.e = 0;
+            }
+
+            return x;
+          }
+
+          // Remove excess digits.
+          if (i == 0) {
+            xc.length = ni;
+            k = 1;
+            ni--;
+          } else {
+            xc.length = ni + 1;
+            k = pows10[LOG_BASE - i];
+
+            // E.g. 56700 becomes 56000 if 7 is the rounding digit.
+            // j > 0 means i > number of leading zeros of n.
+            xc[ni] = j > 0 ? mathfloor(n / pows10[d - j] % pows10[j]) * k : 0;
+          }
+
+          // Round up?
+          if (r) {
+
+            for (; ;) {
+
+              // If the digit to be rounded up is in the first element of xc...
+              if (ni == 0) {
+
+                // i will be the length of xc[0] before k is added.
+                for (i = 1, j = xc[0]; j >= 10; j /= 10, i++);
+                j = xc[0] += k;
+                for (k = 1; j >= 10; j /= 10, k++);
+
+                // if i != k the length has increased.
+                if (i != k) {
+                  x.e++;
+                  if (xc[0] == BASE) xc[0] = 1;
+                }
+
+                break;
+              } else {
+                xc[ni] += k;
+                if (xc[ni] != BASE) break;
+                xc[ni--] = 0;
+                k = 1;
+              }
+            }
+          }
+
+          // Remove trailing zeros.
+          for (i = xc.length; xc[--i] === 0; xc.pop());
+        }
+
+        // Overflow? Infinity.
+        if (x.e > MAX_EXP) {
+          x.c = x.e = null;
+
+        // Underflow? Zero.
+        } else if (x.e < MIN_EXP) {
+          x.c = [x.e = 0];
+        }
+      }
+
+      return x;
+    }
+
+
+    function valueOf(n) {
+      var str,
+        e = n.e;
+
+      if (e === null) return n.toString();
+
+      str = coeffToString(n.c);
+
+      str = e <= TO_EXP_NEG || e >= TO_EXP_POS
+        ? toExponential(str, e)
+        : toFixedPoint(str, e, '0');
+
+      return n.s < 0 ? '-' + str : str;
+    }
+
+
+    // PROTOTYPE/INSTANCE METHODS
+
+
+    /*
+     * Return a new BigNumber whose value is the absolute value of this BigNumber.
+     */
+    P.absoluteValue = P.abs = function () {
+      var x = new BigNumber(this);
+      if (x.s < 0) x.s = 1;
+      return x;
+    };
+
+
+    /*
+     * Return
+     *   1 if the value of this BigNumber is greater than the value of BigNumber(y, b),
+     *   -1 if the value of this BigNumber is less than the value of BigNumber(y, b),
+     *   0 if they have the same value,
+     *   or null if the value of either is NaN.
+     */
+    P.comparedTo = function (y, b) {
+      return compare(this, new BigNumber(y, b));
+    };
+
+
+    /*
+     * If dp is undefined or null or true or false, return the number of decimal places of the
+     * value of this BigNumber, or null if the value of this BigNumber is ±Infinity or NaN.
+     *
+     * Otherwise, if dp is a number, return a new BigNumber whose value is the value of this
+     * BigNumber rounded to a maximum of dp decimal places using rounding mode rm, or
+     * ROUNDING_MODE if rm is omitted.
+     *
+     * [dp] {number} Decimal places: integer, 0 to MAX inclusive.
+     * [rm] {number} Rounding mode. Integer, 0 to 8 inclusive.
+     *
+     * '[BigNumber Error] Argument {not a primitive number|not an integer|out of range}: {dp|rm}'
+     */
+    P.decimalPlaces = P.dp = function (dp, rm) {
+      var c, n, v,
+        x = this;
+
+      if (dp != null) {
+        intCheck(dp, 0, MAX);
+        if (rm == null) rm = ROUNDING_MODE;
+        else intCheck(rm, 0, 8);
+
+        return round(new BigNumber(x), dp + x.e + 1, rm);
+      }
+
+      if (!(c = x.c)) return null;
+      n = ((v = c.length - 1) - bitFloor(this.e / LOG_BASE)) * LOG_BASE;
+
+      // Subtract the number of trailing zeros of the last number.
+      if (v = c[v]) for (; v % 10 == 0; v /= 10, n--);
+      if (n < 0) n = 0;
+
+      return n;
+    };
+
+
+    /*
+     *  n / 0 = I
+     *  n / N = N
+     *  n / I = 0
+     *  0 / n = 0
+     *  0 / 0 = N
+     *  0 / N = N
+     *  0 / I = 0
+     *  N / n = N
+     *  N / 0 = N
+     *  N / N = N
+     *  N / I = N
+     *  I / n = I
+     *  I / 0 = I
+     *  I / N = N
+     *  I / I = N
+     *
+     * Return a new BigNumber whose value is the value of this BigNumber divided by the value of
+     * BigNumber(y, b), rounded according to DECIMAL_PLACES and ROUNDING_MODE.
+     */
+    P.dividedBy = P.div = function (y, b) {
+      return div(this, new BigNumber(y, b), DECIMAL_PLACES, ROUNDING_MODE);
+    };
+
+
+    /*
+     * Return a new BigNumber whose value is the integer part of dividing the value of this
+     * BigNumber by the value of BigNumber(y, b).
+     */
+    P.dividedToIntegerBy = P.idiv = function (y, b) {
+      return div(this, new BigNumber(y, b), 0, 1);
+    };
+
+
+    /*
+     * Return a BigNumber whose value is the value of this BigNumber exponentiated by n.
+     *
+     * If m is present, return the result modulo m.
+     * If n is negative round according to DECIMAL_PLACES and ROUNDING_MODE.
+     * If POW_PRECISION is non-zero and m is not present, round to POW_PRECISION using ROUNDING_MODE.
+     *
+     * The modular power operation works efficiently when x, n, and m are integers, otherwise it
+     * is equivalent to calculating x.exponentiatedBy(n).modulo(m) with a POW_PRECISION of 0.
+     *
+     * n {number|string|BigNumber} The exponent. An integer.
+     * [m] {number|string|BigNumber} The modulus.
+     *
+     * '[BigNumber Error] Exponent not an integer: {n}'
+     */
+    P.exponentiatedBy = P.pow = function (n, m) {
+      var half, isModExp, i, k, more, nIsBig, nIsNeg, nIsOdd, y,
+        x = this;
+
+      n = new BigNumber(n);
+
+      // Allow NaN and ±Infinity, but not other non-integers.
+      if (n.c && !n.isInteger()) {
+        throw Error
+          (bignumberError + 'Exponent not an integer: ' + valueOf(n));
+      }
+
+      if (m != null) m = new BigNumber(m);
+
+      // Exponent of MAX_SAFE_INTEGER is 15.
+      nIsBig = n.e > 14;
+
+      // If x is NaN, ±Infinity, ±0 or ±1, or n is ±Infinity, NaN or ±0.
+      if (!x.c || !x.c[0] || x.c[0] == 1 && !x.e && x.c.length == 1 || !n.c || !n.c[0]) {
+
+        // The sign of the result of pow when x is negative depends on the evenness of n.
+        // If +n overflows to ±Infinity, the evenness of n would be not be known.
+        y = new BigNumber(Math.pow(+valueOf(x), nIsBig ? n.s * (2 - isOdd(n)) : +valueOf(n)));
+        return m ? y.mod(m) : y;
+      }
+
+      nIsNeg = n.s < 0;
+
+      if (m) {
+
+        // x % m returns NaN if abs(m) is zero, or m is NaN.
+        if (m.c ? !m.c[0] : !m.s) return new BigNumber(NaN);
+
+        isModExp = !nIsNeg && x.isInteger() && m.isInteger();
+
+        if (isModExp) x = x.mod(m);
+
+      // Overflow to ±Infinity: >=2**1e10 or >=1.0000024**1e15.
+      // Underflow to ±0: <=0.79**1e10 or <=0.9999975**1e15.
+      } else if (n.e > 9 && (x.e > 0 || x.e < -1 || (x.e == 0
+        // [1, 240000000]
+        ? x.c[0] > 1 || nIsBig && x.c[1] >= 24e7
+        // [80000000000000]  [99999750000000]
+        : x.c[0] < 8e13 || nIsBig && x.c[0] <= 9999975e7))) {
+
+        // If x is negative and n is odd, k = -0, else k = 0.
+        k = x.s < 0 && isOdd(n) ? -0 : 0;
+
+        // If x >= 1, k = ±Infinity.
+        if (x.e > -1) k = 1 / k;
+
+        // If n is negative return ±0, else return ±Infinity.
+        return new BigNumber(nIsNeg ? 1 / k : k);
+
+      } else if (POW_PRECISION) {
+
+        // Truncating each coefficient array to a length of k after each multiplication
+        // equates to truncating significant digits to POW_PRECISION + [28, 41],
+        // i.e. there will be a minimum of 28 guard digits retained.
+        k = mathceil(POW_PRECISION / LOG_BASE + 2);
+      }
+
+      if (nIsBig) {
+        half = new BigNumber(0.5);
+        if (nIsNeg) n.s = 1;
+        nIsOdd = isOdd(n);
+      } else {
+        i = Math.abs(+valueOf(n));
+        nIsOdd = i % 2;
+      }
+
+      y = new BigNumber(ONE);
+
+      // Performs 54 loop iterations for n of 9007199254740991.
+      for (; ;) {
+
+        if (nIsOdd) {
+          y = y.times(x);
+          if (!y.c) break;
+
+          if (k) {
+            if (y.c.length > k) y.c.length = k;
+          } else if (isModExp) {
+            y = y.mod(m);    //y = y.minus(div(y, m, 0, MODULO_MODE).times(m));
+          }
+        }
+
+        if (i) {
+          i = mathfloor(i / 2);
+          if (i === 0) break;
+          nIsOdd = i % 2;
+        } else {
+          n = n.times(half);
+          round(n, n.e + 1, 1);
+
+          if (n.e > 14) {
+            nIsOdd = isOdd(n);
+          } else {
+            i = +valueOf(n);
+            if (i === 0) break;
+            nIsOdd = i % 2;
+          }
+        }
+
+        x = x.times(x);
+
+        if (k) {
+          if (x.c && x.c.length > k) x.c.length = k;
+        } else if (isModExp) {
+          x = x.mod(m);    //x = x.minus(div(x, m, 0, MODULO_MODE).times(m));
+        }
+      }
+
+      if (isModExp) return y;
+      if (nIsNeg) y = ONE.div(y);
+
+      return m ? y.mod(m) : k ? round(y, POW_PRECISION, ROUNDING_MODE, more) : y;
+    };
+
+
+    /*
+     * Return a new BigNumber whose value is the value of this BigNumber rounded to an integer
+     * using rounding mode rm, or ROUNDING_MODE if rm is omitted.
+     *
+     * [rm] {number} Rounding mode. Integer, 0 to 8 inclusive.
+     *
+     * '[BigNumber Error] Argument {not a primitive number|not an integer|out of range}: {rm}'
+     */
+    P.integerValue = function (rm) {
+      var n = new BigNumber(this);
+      if (rm == null) rm = ROUNDING_MODE;
+      else intCheck(rm, 0, 8);
+      return round(n, n.e + 1, rm);
+    };
+
+
+    /*
+     * Return true if the value of this BigNumber is equal to the value of BigNumber(y, b),
+     * otherwise return false.
+     */
+    P.isEqualTo = P.eq = function (y, b) {
+      return compare(this, new BigNumber(y, b)) === 0;
+    };
+
+
+    /*
+     * Return true if the value of this BigNumber is a finite number, otherwise return false.
+     */
+    P.isFinite = function () {
+      return !!this.c;
+    };
+
+
+    /*
+     * Return true if the value of this BigNumber is greater than the value of BigNumber(y, b),
+     * otherwise return false.
+     */
+    P.isGreaterThan = P.gt = function (y, b) {
+      return compare(this, new BigNumber(y, b)) > 0;
+    };
+
+
+    /*
+     * Return true if the value of this BigNumber is greater than or equal to the value of
+     * BigNumber(y, b), otherwise return false.
+     */
+    P.isGreaterThanOrEqualTo = P.gte = function (y, b) {
+      return (b = compare(this, new BigNumber(y, b))) === 1 || b === 0;
+
+    };
+
+
+    /*
+     * Return true if the value of this BigNumber is an integer, otherwise return false.
+     */
+    P.isInteger = function () {
+      return !!this.c && bitFloor(this.e / LOG_BASE) > this.c.length - 2;
+    };
+
+
+    /*
+     * Return true if the value of this BigNumber is less than the value of BigNumber(y, b),
+     * otherwise return false.
+     */
+    P.isLessThan = P.lt = function (y, b) {
+      return compare(this, new BigNumber(y, b)) < 0;
+    };
+
+
+    /*
+     * Return true if the value of this BigNumber is less than or equal to the value of
+     * BigNumber(y, b), otherwise return false.
+     */
+    P.isLessThanOrEqualTo = P.lte = function (y, b) {
+      return (b = compare(this, new BigNumber(y, b))) === -1 || b === 0;
+    };
+
+
+    /*
+     * Return true if the value of this BigNumber is NaN, otherwise return false.
+     */
+    P.isNaN = function () {
+      return !this.s;
+    };
+
+
+    /*
+     * Return true if the value of this BigNumber is negative, otherwise return false.
+     */
+    P.isNegative = function () {
+      return this.s < 0;
+    };
+
+
+    /*
+     * Return true if the value of this BigNumber is positive, otherwise return false.
+     */
+    P.isPositive = function () {
+      return this.s > 0;
+    };
+
+
+    /*
+     * Return true if the value of this BigNumber is 0 or -0, otherwise return false.
+     */
+    P.isZero = function () {
+      return !!this.c && this.c[0] == 0;
+    };
+
+
+    /*
+     *  n - 0 = n
+     *  n - N = N
+     *  n - I = -I
+     *  0 - n = -n
+     *  0 - 0 = 0
+     *  0 - N = N
+     *  0 - I = -I
+     *  N - n = N
+     *  N - 0 = N
+     *  N - N = N
+     *  N - I = N
+     *  I - n = I
+     *  I - 0 = I
+     *  I - N = N
+     *  I - I = N
+     *
+     * Return a new BigNumber whose value is the value of this BigNumber minus the value of
+     * BigNumber(y, b).
+     */
+    P.minus = function (y, b) {
+      var i, j, t, xLTy,
+        x = this,
+        a = x.s;
+
+      y = new BigNumber(y, b);
+      b = y.s;
+
+      // Either NaN?
+      if (!a || !b) return new BigNumber(NaN);
+
+      // Signs differ?
+      if (a != b) {
+        y.s = -b;
+        return x.plus(y);
+      }
+
+      var xe = x.e / LOG_BASE,
+        ye = y.e / LOG_BASE,
+        xc = x.c,
+        yc = y.c;
+
+      if (!xe || !ye) {
+
+        // Either Infinity?
+        if (!xc || !yc) return xc ? (y.s = -b, y) : new BigNumber(yc ? x : NaN);
+
+        // Either zero?
+        if (!xc[0] || !yc[0]) {
+
+          // Return y if y is non-zero, x if x is non-zero, or zero if both are zero.
+          return yc[0] ? (y.s = -b, y) : new BigNumber(xc[0] ? x :
+
+           // IEEE 754 (2008) 6.3: n - n = -0 when rounding to -Infinity
+           ROUNDING_MODE == 3 ? -0 : 0);
+        }
+      }
+
+      xe = bitFloor(xe);
+      ye = bitFloor(ye);
+      xc = xc.slice();
+
+      // Determine which is the bigger number.
+      if (a = xe - ye) {
+
+        if (xLTy = a < 0) {
+          a = -a;
+          t = xc;
+        } else {
+          ye = xe;
+          t = yc;
+        }
+
+        t.reverse();
+
+        // Prepend zeros to equalise exponents.
+        for (b = a; b--; t.push(0));
+        t.reverse();
+      } else {
+
+        // Exponents equal. Check digit by digit.
+        j = (xLTy = (a = xc.length) < (b = yc.length)) ? a : b;
+
+        for (a = b = 0; b < j; b++) {
+
+          if (xc[b] != yc[b]) {
+            xLTy = xc[b] < yc[b];
+            break;
+          }
+        }
+      }
+
+      // x < y? Point xc to the array of the bigger number.
+      if (xLTy) {
+        t = xc;
+        xc = yc;
+        yc = t;
+        y.s = -y.s;
+      }
+
+      b = (j = yc.length) - (i = xc.length);
+
+      // Append zeros to xc if shorter.
+      // No need to add zeros to yc if shorter as subtract only needs to start at yc.length.
+      if (b > 0) for (; b--; xc[i++] = 0);
+      b = BASE - 1;
+
+      // Subtract yc from xc.
+      for (; j > a;) {
+
+        if (xc[--j] < yc[j]) {
+          for (i = j; i && !xc[--i]; xc[i] = b);
+          --xc[i];
+          xc[j] += BASE;
+        }
+
+        xc[j] -= yc[j];
+      }
+
+      // Remove leading zeros and adjust exponent accordingly.
+      for (; xc[0] == 0; xc.splice(0, 1), --ye);
+
+      // Zero?
+      if (!xc[0]) {
+
+        // Following IEEE 754 (2008) 6.3,
+        // n - n = +0  but  n - n = -0  when rounding towards -Infinity.
+        y.s = ROUNDING_MODE == 3 ? -1 : 1;
+        y.c = [y.e = 0];
+        return y;
+      }
+
+      // No need to check for Infinity as +x - +y != Infinity && -x - -y != Infinity
+      // for finite x and y.
+      return normalise(y, xc, ye);
+    };
+
+
+    /*
+     *   n % 0 =  N
+     *   n % N =  N
+     *   n % I =  n
+     *   0 % n =  0
+     *  -0 % n = -0
+     *   0 % 0 =  N
+     *   0 % N =  N
+     *   0 % I =  0
+     *   N % n =  N
+     *   N % 0 =  N
+     *   N % N =  N
+     *   N % I =  N
+     *   I % n =  N
+     *   I % 0 =  N
+     *   I % N =  N
+     *   I % I =  N
+     *
+     * Return a new BigNumber whose value is the value of this BigNumber modulo the value of
+     * BigNumber(y, b). The result depends on the value of MODULO_MODE.
+     */
+    P.modulo = P.mod = function (y, b) {
+      var q, s,
+        x = this;
+
+      y = new BigNumber(y, b);
+
+      // Return NaN if x is Infinity or NaN, or y is NaN or zero.
+      if (!x.c || !y.s || y.c && !y.c[0]) {
+        return new BigNumber(NaN);
+
+      // Return x if y is Infinity or x is zero.
+      } else if (!y.c || x.c && !x.c[0]) {
+        return new BigNumber(x);
+      }
+
+      if (MODULO_MODE == 9) {
+
+        // Euclidian division: q = sign(y) * floor(x / abs(y))
+        // r = x - qy    where  0 <= r < abs(y)
+        s = y.s;
+        y.s = 1;
+        q = div(x, y, 0, 3);
+        y.s = s;
+        q.s *= s;
+      } else {
+        q = div(x, y, 0, MODULO_MODE);
+      }
+
+      y = x.minus(q.times(y));
+
+      // To match JavaScript %, ensure sign of zero is sign of dividend.
+      if (!y.c[0] && MODULO_MODE == 1) y.s = x.s;
+
+      return y;
+    };
+
+
+    /*
+     *  n * 0 = 0
+     *  n * N = N
+     *  n * I = I
+     *  0 * n = 0
+     *  0 * 0 = 0
+     *  0 * N = N
+     *  0 * I = N
+     *  N * n = N
+     *  N * 0 = N
+     *  N * N = N
+     *  N * I = N
+     *  I * n = I
+     *  I * 0 = N
+     *  I * N = N
+     *  I * I = I
+     *
+     * Return a new BigNumber whose value is the value of this BigNumber multiplied by the value
+     * of BigNumber(y, b).
+     */
+    P.multipliedBy = P.times = function (y, b) {
+      var c, e, i, j, k, m, xcL, xlo, xhi, ycL, ylo, yhi, zc,
+        base, sqrtBase,
+        x = this,
+        xc = x.c,
+        yc = (y = new BigNumber(y, b)).c;
+
+      // Either NaN, ±Infinity or ±0?
+      if (!xc || !yc || !xc[0] || !yc[0]) {
+
+        // Return NaN if either is NaN, or one is 0 and the other is Infinity.
+        if (!x.s || !y.s || xc && !xc[0] && !yc || yc && !yc[0] && !xc) {
+          y.c = y.e = y.s = null;
+        } else {
+          y.s *= x.s;
+
+          // Return ±Infinity if either is ±Infinity.
+          if (!xc || !yc) {
+            y.c = y.e = null;
+
+          // Return ±0 if either is ±0.
+          } else {
+            y.c = [0];
+            y.e = 0;
+          }
+        }
+
+        return y;
+      }
+
+      e = bitFloor(x.e / LOG_BASE) + bitFloor(y.e / LOG_BASE);
+      y.s *= x.s;
+      xcL = xc.length;
+      ycL = yc.length;
+
+      // Ensure xc points to longer array and xcL to its length.
+      if (xcL < ycL) {
+        zc = xc;
+        xc = yc;
+        yc = zc;
+        i = xcL;
+        xcL = ycL;
+        ycL = i;
+      }
+
+      // Initialise the result array with zeros.
+      for (i = xcL + ycL, zc = []; i--; zc.push(0));
+
+      base = BASE;
+      sqrtBase = SQRT_BASE;
+
+      for (i = ycL; --i >= 0;) {
+        c = 0;
+        ylo = yc[i] % sqrtBase;
+        yhi = yc[i] / sqrtBase | 0;
+
+        for (k = xcL, j = i + k; j > i;) {
+          xlo = xc[--k] % sqrtBase;
+          xhi = xc[k] / sqrtBase | 0;
+          m = yhi * xlo + xhi * ylo;
+          xlo = ylo * xlo + ((m % sqrtBase) * sqrtBase) + zc[j] + c;
+          c = (xlo / base | 0) + (m / sqrtBase | 0) + yhi * xhi;
+          zc[j--] = xlo % base;
+        }
+
+        zc[j] = c;
+      }
+
+      if (c) {
+        ++e;
+      } else {
+        zc.splice(0, 1);
+      }
+
+      return normalise(y, zc, e);
+    };
+
+
+    /*
+     * Return a new BigNumber whose value is the value of this BigNumber negated,
+     * i.e. multiplied by -1.
+     */
+    P.negated = function () {
+      var x = new BigNumber(this);
+      x.s = -x.s || null;
+      return x;
+    };
+
+
+    /*
+     *  n + 0 = n
+     *  n + N = N
+     *  n + I = I
+     *  0 + n = n
+     *  0 + 0 = 0
+     *  0 + N = N
+     *  0 + I = I
+     *  N + n = N
+     *  N + 0 = N
+     *  N + N = N
+     *  N + I = N
+     *  I + n = I
+     *  I + 0 = I
+     *  I + N = N
+     *  I + I = I
+     *
+     * Return a new BigNumber whose value is the value of this BigNumber plus the value of
+     * BigNumber(y, b).
+     */
+    P.plus = function (y, b) {
+      var t,
+        x = this,
+        a = x.s;
+
+      y = new BigNumber(y, b);
+      b = y.s;
+
+      // Either NaN?
+      if (!a || !b) return new BigNumber(NaN);
+
+      // Signs differ?
+       if (a != b) {
+        y.s = -b;
+        return x.minus(y);
+      }
+
+      var xe = x.e / LOG_BASE,
+        ye = y.e / LOG_BASE,
+        xc = x.c,
+        yc = y.c;
+
+      if (!xe || !ye) {
+
+        // Return ±Infinity if either ±Infinity.
+        if (!xc || !yc) return new BigNumber(a / 0);
+
+        // Either zero?
+        // Return y if y is non-zero, x if x is non-zero, or zero if both are zero.
+        if (!xc[0] || !yc[0]) return yc[0] ? y : new BigNumber(xc[0] ? x : a * 0);
+      }
+
+      xe = bitFloor(xe);
+      ye = bitFloor(ye);
+      xc = xc.slice();
+
+      // Prepend zeros to equalise exponents. Faster to use reverse then do unshifts.
+      if (a = xe - ye) {
+        if (a > 0) {
+          ye = xe;
+          t = yc;
+        } else {
+          a = -a;
+          t = xc;
+        }
+
+        t.reverse();
+        for (; a--; t.push(0));
+        t.reverse();
+      }
+
+      a = xc.length;
+      b = yc.length;
+
+      // Point xc to the longer array, and b to the shorter length.
+      if (a - b < 0) {
+        t = yc;
+        yc = xc;
+        xc = t;
+        b = a;
+      }
+
+      // Only start adding at yc.length - 1 as the further digits of xc can be ignored.
+      for (a = 0; b;) {
+        a = (xc[--b] = xc[b] + yc[b] + a) / BASE | 0;
+        xc[b] = BASE === xc[b] ? 0 : xc[b] % BASE;
+      }
+
+      if (a) {
+        xc = [a].concat(xc);
+        ++ye;
+      }
+
+      // No need to check for zero, as +x + +y != 0 && -x + -y != 0
+      // ye = MAX_EXP + 1 possible
+      return normalise(y, xc, ye);
+    };
+
+
+    /*
+     * If sd is undefined or null or true or false, return the number of significant digits of
+     * the value of this BigNumber, or null if the value of this BigNumber is ±Infinity or NaN.
+     * If sd is true include integer-part trailing zeros in the count.
+     *
+     * Otherwise, if sd is a number, return a new BigNumber whose value is the value of this
+     * BigNumber rounded to a maximum of sd significant digits using rounding mode rm, or
+     * ROUNDING_MODE if rm is omitted.
+     *
+     * sd {number|boolean} number: significant digits: integer, 1 to MAX inclusive.
+     *                     boolean: whether to count integer-part trailing zeros: true or false.
+     * [rm] {number} Rounding mode. Integer, 0 to 8 inclusive.
+     *
+     * '[BigNumber Error] Argument {not a primitive number|not an integer|out of range}: {sd|rm}'
+     */
+    P.precision = P.sd = function (sd, rm) {
+      var c, n, v,
+        x = this;
+
+      if (sd != null && sd !== !!sd) {
+        intCheck(sd, 1, MAX);
+        if (rm == null) rm = ROUNDING_MODE;
+        else intCheck(rm, 0, 8);
+
+        return round(new BigNumber(x), sd, rm);
+      }
+
+      if (!(c = x.c)) return null;
+      v = c.length - 1;
+      n = v * LOG_BASE + 1;
+
+      if (v = c[v]) {
+
+        // Subtract the number of trailing zeros of the last element.
+        for (; v % 10 == 0; v /= 10, n--);
+
+        // Add the number of digits of the first element.
+        for (v = c[0]; v >= 10; v /= 10, n++);
+      }
+
+      if (sd && x.e + 1 > n) n = x.e + 1;
+
+      return n;
+    };
+
+
+    /*
+     * Return a new BigNumber whose value is the value of this BigNumber shifted by k places
+     * (powers of 10). Shift to the right if n > 0, and to the left if n < 0.
+     *
+     * k {number} Integer, -MAX_SAFE_INTEGER to MAX_SAFE_INTEGER inclusive.
+     *
+     * '[BigNumber Error] Argument {not a primitive number|not an integer|out of range}: {k}'
+     */
+    P.shiftedBy = function (k) {
+      intCheck(k, -MAX_SAFE_INTEGER, MAX_SAFE_INTEGER);
+      return this.times('1e' + k);
+    };
+
+
+    /*
+     *  sqrt(-n) =  N
+     *  sqrt(N) =  N
+     *  sqrt(-I) =  N
+     *  sqrt(I) =  I
+     *  sqrt(0) =  0
+     *  sqrt(-0) = -0
+     *
+     * Return a new BigNumber whose value is the square root of the value of this BigNumber,
+     * rounded according to DECIMAL_PLACES and ROUNDING_MODE.
+     */
+    P.squareRoot = P.sqrt = function () {
+      var m, n, r, rep, t,
+        x = this,
+        c = x.c,
+        s = x.s,
+        e = x.e,
+        dp = DECIMAL_PLACES + 4,
+        half = new BigNumber('0.5');
+
+      // Negative/NaN/Infinity/zero?
+      if (s !== 1 || !c || !c[0]) {
+        return new BigNumber(!s || s < 0 && (!c || c[0]) ? NaN : c ? x : 1 / 0);
+      }
+
+      // Initial estimate.
+      s = Math.sqrt(+valueOf(x));
+
+      // Math.sqrt underflow/overflow?
+      // Pass x to Math.sqrt as integer, then adjust the exponent of the result.
+      if (s == 0 || s == 1 / 0) {
+        n = coeffToString(c);
+        if ((n.length + e) % 2 == 0) n += '0';
+        s = Math.sqrt(+n);
+        e = bitFloor((e + 1) / 2) - (e < 0 || e % 2);
+
+        if (s == 1 / 0) {
+          n = '5e' + e;
+        } else {
+          n = s.toExponential();
+          n = n.slice(0, n.indexOf('e') + 1) + e;
+        }
+
+        r = new BigNumber(n);
+      } else {
+        r = new BigNumber(s + '');
+      }
+
+      // Check for zero.
+      // r could be zero if MIN_EXP is changed after the this value was created.
+      // This would cause a division by zero (x/t) and hence Infinity below, which would cause
+      // coeffToString to throw.
+      if (r.c[0]) {
+        e = r.e;
+        s = e + dp;
+        if (s < 3) s = 0;
+
+        // Newton-Raphson iteration.
+        for (; ;) {
+          t = r;
+          r = half.times(t.plus(div(x, t, dp, 1)));
+
+          if (coeffToString(t.c).slice(0, s) === (n = coeffToString(r.c)).slice(0, s)) {
+
+            // The exponent of r may here be one less than the final result exponent,
+            // e.g 0.0009999 (e-4) --> 0.001 (e-3), so adjust s so the rounding digits
+            // are indexed correctly.
+            if (r.e < e) --s;
+            n = n.slice(s - 3, s + 1);
+
+            // The 4th rounding digit may be in error by -1 so if the 4 rounding digits
+            // are 9999 or 4999 (i.e. approaching a rounding boundary) continue the
+            // iteration.
+            if (n == '9999' || !rep && n == '4999') {
+
+              // On the first iteration only, check to see if rounding up gives the
+              // exact result as the nines may infinitely repeat.
+              if (!rep) {
+                round(t, t.e + DECIMAL_PLACES + 2, 0);
+
+                if (t.times(t).eq(x)) {
+                  r = t;
+                  break;
+                }
+              }
+
+              dp += 4;
+              s += 4;
+              rep = 1;
+            } else {
+
+              // If rounding digits are null, 0{0,4} or 50{0,3}, check for exact
+              // result. If not, then there are further digits and m will be truthy.
+              if (!+n || !+n.slice(1) && n.charAt(0) == '5') {
+
+                // Truncate to the first rounding digit.
+                round(r, r.e + DECIMAL_PLACES + 2, 1);
+                m = !r.times(r).eq(x);
+              }
+
+              break;
+            }
+          }
+        }
+      }
+
+      return round(r, r.e + DECIMAL_PLACES + 1, ROUNDING_MODE, m);
+    };
+
+
+    /*
+     * Return a string representing the value of this BigNumber in exponential notation and
+     * rounded using ROUNDING_MODE to dp fixed decimal places.
+     *
+     * [dp] {number} Decimal places. Integer, 0 to MAX inclusive.
+     * [rm] {number} Rounding mode. Integer, 0 to 8 inclusive.
+     *
+     * '[BigNumber Error] Argument {not a primitive number|not an integer|out of range}: {dp|rm}'
+     */
+    P.toExponential = function (dp, rm) {
+      if (dp != null) {
+        intCheck(dp, 0, MAX);
+        dp++;
+      }
+      return format(this, dp, rm, 1);
+    };
+
+
+    /*
+     * Return a string representing the value of this BigNumber in fixed-point notation rounding
+     * to dp fixed decimal places using rounding mode rm, or ROUNDING_MODE if rm is omitted.
+     *
+     * Note: as with JavaScript's number type, (-0).toFixed(0) is '0',
+     * but e.g. (-0.00001).toFixed(0) is '-0'.
+     *
+     * [dp] {number} Decimal places. Integer, 0 to MAX inclusive.
+     * [rm] {number} Rounding mode. Integer, 0 to 8 inclusive.
+     *
+     * '[BigNumber Error] Argument {not a primitive number|not an integer|out of range}: {dp|rm}'
+     */
+    P.toFixed = function (dp, rm) {
+      if (dp != null) {
+        intCheck(dp, 0, MAX);
+        dp = dp + this.e + 1;
+      }
+      return format(this, dp, rm);
+    };
+
+
+    /*
+     * Return a string representing the value of this BigNumber in fixed-point notation rounded
+     * using rm or ROUNDING_MODE to dp decimal places, and formatted according to the properties
+     * of the format or FORMAT object (see BigNumber.set).
+     *
+     * The formatting object may contain some or all of the properties shown below.
+     *
+     * FORMAT = {
+     *   prefix: '',
+     *   groupSize: 3,
+     *   secondaryGroupSize: 0,
+     *   groupSeparator: ',',
+     *   decimalSeparator: '.',
+     *   fractionGroupSize: 0,
+     *   fractionGroupSeparator: '\xA0',      // non-breaking space
+     *   suffix: ''
+     * };
+     *
+     * [dp] {number} Decimal places. Integer, 0 to MAX inclusive.
+     * [rm] {number} Rounding mode. Integer, 0 to 8 inclusive.
+     * [format] {object} Formatting options. See FORMAT pbject above.
+     *
+     * '[BigNumber Error] Argument {not a primitive number|not an integer|out of range}: {dp|rm}'
+     * '[BigNumber Error] Argument not an object: {format}'
+     */
+    P.toFormat = function (dp, rm, format) {
+      var str,
+        x = this;
+
+      if (format == null) {
+        if (dp != null && rm && typeof rm == 'object') {
+          format = rm;
+          rm = null;
+        } else if (dp && typeof dp == 'object') {
+          format = dp;
+          dp = rm = null;
+        } else {
+          format = FORMAT;
+        }
+      } else if (typeof format != 'object') {
+        throw Error
+          (bignumberError + 'Argument not an object: ' + format);
+      }
+
+      str = x.toFixed(dp, rm);
+
+      if (x.c) {
+        var i,
+          arr = str.split('.'),
+          g1 = +format.groupSize,
+          g2 = +format.secondaryGroupSize,
+          groupSeparator = format.groupSeparator || '',
+          intPart = arr[0],
+          fractionPart = arr[1],
+          isNeg = x.s < 0,
+          intDigits = isNeg ? intPart.slice(1) : intPart,
+          len = intDigits.length;
+
+        if (g2) {
+          i = g1;
+          g1 = g2;
+          g2 = i;
+          len -= i;
+        }
+
+        if (g1 > 0 && len > 0) {
+          i = len % g1 || g1;
+          intPart = intDigits.substr(0, i);
+          for (; i < len; i += g1) intPart += groupSeparator + intDigits.substr(i, g1);
+          if (g2 > 0) intPart += groupSeparator + intDigits.slice(i);
+          if (isNeg) intPart = '-' + intPart;
+        }
+
+        str = fractionPart
+         ? intPart + (format.decimalSeparator || '') + ((g2 = +format.fractionGroupSize)
+          ? fractionPart.replace(new RegExp('\\d{' + g2 + '}\\B', 'g'),
+           '$&' + (format.fractionGroupSeparator || ''))
+          : fractionPart)
+         : intPart;
+      }
+
+      return (format.prefix || '') + str + (format.suffix || '');
+    };
+
+
+    /*
+     * Return an array of two BigNumbers representing the value of this BigNumber as a simple
+     * fraction with an integer numerator and an integer denominator.
+     * The denominator will be a positive non-zero value less than or equal to the specified
+     * maximum denominator. If a maximum denominator is not specified, the denominator will be
+     * the lowest value necessary to represent the number exactly.
+     *
+     * [md] {number|string|BigNumber} Integer >= 1, or Infinity. The maximum denominator.
+     *
+     * '[BigNumber Error] Argument {not an integer|out of range} : {md}'
+     */
+    P.toFraction = function (md) {
+      var d, d0, d1, d2, e, exp, n, n0, n1, q, r, s,
+        x = this,
+        xc = x.c;
+
+      if (md != null) {
+        n = new BigNumber(md);
+
+        // Throw if md is less than one or is not an integer, unless it is Infinity.
+        if (!n.isInteger() && (n.c || n.s !== 1) || n.lt(ONE)) {
+          throw Error
+            (bignumberError + 'Argument ' +
+              (n.isInteger() ? 'out of range: ' : 'not an integer: ') + valueOf(n));
+        }
+      }
+
+      if (!xc) return new BigNumber(x);
+
+      d = new BigNumber(ONE);
+      n1 = d0 = new BigNumber(ONE);
+      d1 = n0 = new BigNumber(ONE);
+      s = coeffToString(xc);
+
+      // Determine initial denominator.
+      // d is a power of 10 and the minimum max denominator that specifies the value exactly.
+      e = d.e = s.length - x.e - 1;
+      d.c[0] = POWS_TEN[(exp = e % LOG_BASE) < 0 ? LOG_BASE + exp : exp];
+      md = !md || n.comparedTo(d) > 0 ? (e > 0 ? d : n1) : n;
+
+      exp = MAX_EXP;
+      MAX_EXP = 1 / 0;
+      n = new BigNumber(s);
+
+      // n0 = d1 = 0
+      n0.c[0] = 0;
+
+      for (; ;)  {
+        q = div(n, d, 0, 1);
+        d2 = d0.plus(q.times(d1));
+        if (d2.comparedTo(md) == 1) break;
+        d0 = d1;
+        d1 = d2;
+        n1 = n0.plus(q.times(d2 = n1));
+        n0 = d2;
+        d = n.minus(q.times(d2 = d));
+        n = d2;
+      }
+
+      d2 = div(md.minus(d0), d1, 0, 1);
+      n0 = n0.plus(d2.times(n1));
+      d0 = d0.plus(d2.times(d1));
+      n0.s = n1.s = x.s;
+      e = e * 2;
+
+      // Determine which fraction is closer to x, n0/d0 or n1/d1
+      r = div(n1, d1, e, ROUNDING_MODE).minus(x).abs().comparedTo(
+          div(n0, d0, e, ROUNDING_MODE).minus(x).abs()) < 1 ? [n1, d1] : [n0, d0];
+
+      MAX_EXP = exp;
+
+      return r;
+    };
+
+
+    /*
+     * Return the value of this BigNumber converted to a number primitive.
+     */
+    P.toNumber = function () {
+      return +valueOf(this);
+    };
+
+
+    /*
+     * Return a string representing the value of this BigNumber rounded to sd significant digits
+     * using rounding mode rm or ROUNDING_MODE. If sd is less than the number of digits
+     * necessary to represent the integer part of the value in fixed-point notation, then use
+     * exponential notation.
+     *
+     * [sd] {number} Significant digits. Integer, 1 to MAX inclusive.
+     * [rm] {number} Rounding mode. Integer, 0 to 8 inclusive.
+     *
+     * '[BigNumber Error] Argument {not a primitive number|not an integer|out of range}: {sd|rm}'
+     */
+    P.toPrecision = function (sd, rm) {
+      if (sd != null) intCheck(sd, 1, MAX);
+      return format(this, sd, rm, 2);
+    };
+
+
+    /*
+     * Return a string representing the value of this BigNumber in base b, or base 10 if b is
+     * omitted. If a base is specified, including base 10, round according to DECIMAL_PLACES and
+     * ROUNDING_MODE. If a base is not specified, and this BigNumber has a positive exponent
+     * that is equal to or greater than TO_EXP_POS, or a negative exponent equal to or less than
+     * TO_EXP_NEG, return exponential notation.
+     *
+     * [b] {number} Integer, 2 to ALPHABET.length inclusive.
+     *
+     * '[BigNumber Error] Base {not a primitive number|not an integer|out of range}: {b}'
+     */
+    P.toString = function (b) {
+      var str,
+        n = this,
+        s = n.s,
+        e = n.e;
+
+      // Infinity or NaN?
+      if (e === null) {
+        if (s) {
+          str = 'Infinity';
+          if (s < 0) str = '-' + str;
+        } else {
+          str = 'NaN';
+        }
+      } else {
+        if (b == null) {
+          str = e <= TO_EXP_NEG || e >= TO_EXP_POS
+           ? toExponential(coeffToString(n.c), e)
+           : toFixedPoint(coeffToString(n.c), e, '0');
+        } else if (b === 10 && alphabetHasNormalDecimalDigits) {
+          n = round(new BigNumber(n), DECIMAL_PLACES + e + 1, ROUNDING_MODE);
+          str = toFixedPoint(coeffToString(n.c), n.e, '0');
+        } else {
+          intCheck(b, 2, ALPHABET.length, 'Base');
+          str = convertBase(toFixedPoint(coeffToString(n.c), e, '0'), 10, b, s, true);
+        }
+
+        if (s < 0 && n.c[0]) str = '-' + str;
+      }
+
+      return str;
+    };
+
+
+    /*
+     * Return as toString, but do not accept a base argument, and include the minus sign for
+     * negative zero.
+     */
+    P.valueOf = P.toJSON = function () {
+      return valueOf(this);
+    };
+
+
+    P._isBigNumber = true;
+
+    if (configObject != null) BigNumber.set(configObject);
+
+    return BigNumber;
+  }
+
+
+  // PRIVATE HELPER FUNCTIONS
+
+  // These functions don't need access to variables,
+  // e.g. DECIMAL_PLACES, in the scope of the `clone` function above.
+
+
+  function bitFloor(n) {
+    var i = n | 0;
+    return n > 0 || n === i ? i : i - 1;
+  }
+
+
+  // Return a coefficient array as a string of base 10 digits.
+  function coeffToString(a) {
+    var s, z,
+      i = 1,
+      j = a.length,
+      r = a[0] + '';
+
+    for (; i < j;) {
+      s = a[i++] + '';
+      z = LOG_BASE - s.length;
+      for (; z--; s = '0' + s);
+      r += s;
+    }
+
+    // Determine trailing zeros.
+    for (j = r.length; r.charCodeAt(--j) === 48;);
+
+    return r.slice(0, j + 1 || 1);
+  }
+
+
+  // Compare the value of BigNumbers x and y.
+  function compare(x, y) {
+    var a, b,
+      xc = x.c,
+      yc = y.c,
+      i = x.s,
+      j = y.s,
+      k = x.e,
+      l = y.e;
+
+    // Either NaN?
+    if (!i || !j) return null;
+
+    a = xc && !xc[0];
+    b = yc && !yc[0];
+
+    // Either zero?
+    if (a || b) return a ? b ? 0 : -j : i;
+
+    // Signs differ?
+    if (i != j) return i;
+
+    a = i < 0;
+    b = k == l;
+
+    // Either Infinity?
+    if (!xc || !yc) return b ? 0 : !xc ^ a ? 1 : -1;
+
+    // Compare exponents.
+    if (!b) return k > l ^ a ? 1 : -1;
+
+    j = (k = xc.length) < (l = yc.length) ? k : l;
+
+    // Compare digit by digit.
+    for (i = 0; i < j; i++) if (xc[i] != yc[i]) return xc[i] > yc[i] ^ a ? 1 : -1;
+
+    // Compare lengths.
+    return k == l ? 0 : k > l ^ a ? 1 : -1;
+  }
+
+
+  /*
+   * Check that n is a primitive number, an integer, and in range, otherwise throw.
+   */
+  function intCheck(n, min, max, name) {
+    if (n < min || n > max || n !== mathfloor(n)) {
+      throw Error
+       (bignumberError + (name || 'Argument') + (typeof n == 'number'
+         ? n < min || n > max ? ' out of range: ' : ' not an integer: '
+         : ' not a primitive number: ') + String(n));
+    }
+  }
+
+
+  // Assumes finite n.
+  function isOdd(n) {
+    var k = n.c.length - 1;
+    return bitFloor(n.e / LOG_BASE) == k && n.c[k] % 2 != 0;
+  }
+
+
+  function toExponential(str, e) {
+    return (str.length > 1 ? str.charAt(0) + '.' + str.slice(1) : str) +
+     (e < 0 ? 'e' : 'e+') + e;
+  }
+
+
+  function toFixedPoint(str, e, z) {
+    var len, zs;
+
+    // Negative exponent?
+    if (e < 0) {
+
+      // Prepend zeros.
+      for (zs = z + '.'; ++e; zs += z);
+      str = zs + str;
+
+    // Positive exponent
+    } else {
+      len = str.length;
+
+      // Append zeros.
+      if (++e > len) {
+        for (zs = z, e -= len; --e; zs += z);
+        str += zs;
+      } else if (e < len) {
+        str = str.slice(0, e) + '.' + str.slice(e);
+      }
+    }
+
+    return str;
+  }
+
+
+  // EXPORT
+
+
+  BigNumber = clone();
+  BigNumber['default'] = BigNumber.BigNumber = BigNumber;
+
+  // AMD.
+  if (typeof define == 'function' && define.amd) {
+    define(function () { return BigNumber; });
+
+  // Node.js and other environments that support module.exports.
+  } else if ( true && module.exports) {
+    module.exports = BigNumber;
+
+  // Browser.
+  } else {
+    if (!globalObject) {
+      globalObject = typeof self != 'undefined' && self ? self : window;
+    }
+
+    globalObject.BigNumber = BigNumber;
+  }
+})(this);
+
+
+/***/ }),
+
+/***/ 9239:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+/*jshint node:true */
+
+var Buffer = (__nccwpck_require__(4300).Buffer); // browserify
+var SlowBuffer = (__nccwpck_require__(4300).SlowBuffer);
+
+module.exports = bufferEq;
+
+function bufferEq(a, b) {
+
+  // shortcutting on type is necessary for correctness
+  if (!Buffer.isBuffer(a) || !Buffer.isBuffer(b)) {
+    return false;
+  }
+
+  // buffer sizes should be well-known information, so despite this
+  // shortcutting, it doesn't leak any information about the *contents* of the
+  // buffers.
+  if (a.length !== b.length) {
+    return false;
+  }
+
+  var c = 0;
+  for (var i = 0; i < a.length; i++) {
+    /*jshint bitwise:false */
+    c |= a[i] ^ b[i]; // XOR
+  }
+  return c === 0;
+}
+
+bufferEq.install = function() {
+  Buffer.prototype.equal = SlowBuffer.prototype.equal = function equal(that) {
+    return bufferEq(this, that);
+  };
+};
+
+var origBufEqual = Buffer.prototype.equal;
+var origSlowBufEqual = SlowBuffer.prototype.equal;
+bufferEq.restore = function() {
+  Buffer.prototype.equal = origBufEqual;
+  SlowBuffer.prototype.equal = origSlowBufEqual;
+};
+
+
+/***/ }),
+
+/***/ 8222:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+/* eslint-env browser */
+
+/**
+ * This is the web browser implementation of `debug()`.
+ */
+
+exports.formatArgs = formatArgs;
+exports.save = save;
+exports.load = load;
+exports.useColors = useColors;
+exports.storage = localstorage();
+exports.destroy = (() => {
+	let warned = false;
+
+	return () => {
+		if (!warned) {
+			warned = true;
+			console.warn('Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.');
+		}
+	};
+})();
+
+/**
+ * Colors.
+ */
+
+exports.colors = [
+	'#0000CC',
+	'#0000FF',
+	'#0033CC',
+	'#0033FF',
+	'#0066CC',
+	'#0066FF',
+	'#0099CC',
+	'#0099FF',
+	'#00CC00',
+	'#00CC33',
+	'#00CC66',
+	'#00CC99',
+	'#00CCCC',
+	'#00CCFF',
+	'#3300CC',
+	'#3300FF',
+	'#3333CC',
+	'#3333FF',
+	'#3366CC',
+	'#3366FF',
+	'#3399CC',
+	'#3399FF',
+	'#33CC00',
+	'#33CC33',
+	'#33CC66',
+	'#33CC99',
+	'#33CCCC',
+	'#33CCFF',
+	'#6600CC',
+	'#6600FF',
+	'#6633CC',
+	'#6633FF',
+	'#66CC00',
+	'#66CC33',
+	'#9900CC',
+	'#9900FF',
+	'#9933CC',
+	'#9933FF',
+	'#99CC00',
+	'#99CC33',
+	'#CC0000',
+	'#CC0033',
+	'#CC0066',
+	'#CC0099',
+	'#CC00CC',
+	'#CC00FF',
+	'#CC3300',
+	'#CC3333',
+	'#CC3366',
+	'#CC3399',
+	'#CC33CC',
+	'#CC33FF',
+	'#CC6600',
+	'#CC6633',
+	'#CC9900',
+	'#CC9933',
+	'#CCCC00',
+	'#CCCC33',
+	'#FF0000',
+	'#FF0033',
+	'#FF0066',
+	'#FF0099',
+	'#FF00CC',
+	'#FF00FF',
+	'#FF3300',
+	'#FF3333',
+	'#FF3366',
+	'#FF3399',
+	'#FF33CC',
+	'#FF33FF',
+	'#FF6600',
+	'#FF6633',
+	'#FF9900',
+	'#FF9933',
+	'#FFCC00',
+	'#FFCC33'
+];
+
+/**
+ * Currently only WebKit-based Web Inspectors, Firefox >= v31,
+ * and the Firebug extension (any Firefox version) are known
+ * to support "%c" CSS customizations.
+ *
+ * TODO: add a `localStorage` variable to explicitly enable/disable colors
+ */
+
+// eslint-disable-next-line complexity
+function useColors() {
+	// NB: In an Electron preload script, document will be defined but not fully
+	// initialized. Since we know we're in Chrome, we'll just detect this case
+	// explicitly
+	if (typeof window !== 'undefined' && window.process && (window.process.type === 'renderer' || window.process.__nwjs)) {
+		return true;
+	}
+
+	// Internet Explorer and Edge do not support colors.
+	if (typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/(edge|trident)\/(\d+)/)) {
+		return false;
+	}
+
+	let m;
+
+	// Is webkit? http://stackoverflow.com/a/16459606/376773
+	// document is undefined in react-native: https://github.com/facebook/react-native/pull/1632
+	return (typeof document !== 'undefined' && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance) ||
+		// Is firebug? http://stackoverflow.com/a/398120/376773
+		(typeof window !== 'undefined' && window.console && (window.console.firebug || (window.console.exception && window.console.table))) ||
+		// Is firefox >= v31?
+		// https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
+		(typeof navigator !== 'undefined' && navigator.userAgent && (m = navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/)) && parseInt(m[1], 10) >= 31) ||
+		// Double check webkit in userAgent just in case we are in a worker
+		(typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/));
+}
+
+/**
+ * Colorize log arguments if enabled.
+ *
+ * @api public
+ */
+
+function formatArgs(args) {
+	args[0] = (this.useColors ? '%c' : '') +
+		this.namespace +
+		(this.useColors ? ' %c' : ' ') +
+		args[0] +
+		(this.useColors ? '%c ' : ' ') +
+		'+' + module.exports.humanize(this.diff);
+
+	if (!this.useColors) {
+		return;
+	}
+
+	const c = 'color: ' + this.color;
+	args.splice(1, 0, c, 'color: inherit');
+
+	// The final "%c" is somewhat tricky, because there could be other
+	// arguments passed either before or after the %c, so we need to
+	// figure out the correct index to insert the CSS into
+	let index = 0;
+	let lastC = 0;
+	args[0].replace(/%[a-zA-Z%]/g, match => {
+		if (match === '%%') {
+			return;
+		}
+		index++;
+		if (match === '%c') {
+			// We only are interested in the *last* %c
+			// (the user may have provided their own)
+			lastC = index;
+		}
+	});
+
+	args.splice(lastC, 0, c);
+}
+
+/**
+ * Invokes `console.debug()` when available.
+ * No-op when `console.debug` is not a "function".
+ * If `console.debug` is not available, falls back
+ * to `console.log`.
+ *
+ * @api public
+ */
+exports.log = console.debug || console.log || (() => {});
+
+/**
+ * Save `namespaces`.
+ *
+ * @param {String} namespaces
+ * @api private
+ */
+function save(namespaces) {
+	try {
+		if (namespaces) {
+			exports.storage.setItem('debug', namespaces);
+		} else {
+			exports.storage.removeItem('debug');
+		}
+	} catch (error) {
+		// Swallow
+		// XXX (@Qix-) should we be logging these?
+	}
+}
+
+/**
+ * Load `namespaces`.
+ *
+ * @return {String} returns the previously persisted debug modes
+ * @api private
+ */
+function load() {
+	let r;
+	try {
+		r = exports.storage.getItem('debug');
+	} catch (error) {
+		// Swallow
+		// XXX (@Qix-) should we be logging these?
+	}
+
+	// If debug isn't set in LS, and we're in Electron, try to load $DEBUG
+	if (!r && typeof process !== 'undefined' && 'env' in process) {
+		r = process.env.DEBUG;
+	}
+
+	return r;
+}
+
+/**
+ * Localstorage attempts to return the localstorage.
+ *
+ * This is necessary because safari throws
+ * when a user disables cookies/localstorage
+ * and you attempt to access it.
+ *
+ * @return {LocalStorage}
+ * @api private
+ */
+
+function localstorage() {
+	try {
+		// TVMLKit (Apple TV JS Runtime) does not have a window object, just localStorage in the global context
+		// The Browser also has localStorage in the global context.
+		return localStorage;
+	} catch (error) {
+		// Swallow
+		// XXX (@Qix-) should we be logging these?
+	}
+}
+
+module.exports = __nccwpck_require__(6243)(exports);
+
+const {formatters} = module.exports;
+
+/**
+ * Map %j to `JSON.stringify()`, since no Web Inspectors do that by default.
+ */
+
+formatters.j = function (v) {
+	try {
+		return JSON.stringify(v);
+	} catch (error) {
+		return '[UnexpectedJSONParseError]: ' + error.message;
+	}
+};
+
+
+/***/ }),
+
+/***/ 6243:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+
+/**
+ * This is the common logic for both the Node.js and web browser
+ * implementations of `debug()`.
+ */
+
+function setup(env) {
+	createDebug.debug = createDebug;
+	createDebug.default = createDebug;
+	createDebug.coerce = coerce;
+	createDebug.disable = disable;
+	createDebug.enable = enable;
+	createDebug.enabled = enabled;
+	createDebug.humanize = __nccwpck_require__(900);
+	createDebug.destroy = destroy;
+
+	Object.keys(env).forEach(key => {
+		createDebug[key] = env[key];
+	});
+
+	/**
+	* The currently active debug mode names, and names to skip.
+	*/
+
+	createDebug.names = [];
+	createDebug.skips = [];
+
+	/**
+	* Map of special "%n" handling functions, for the debug "format" argument.
+	*
+	* Valid key names are a single, lower or upper-case letter, i.e. "n" and "N".
+	*/
+	createDebug.formatters = {};
+
+	/**
+	* Selects a color for a debug namespace
+	* @param {String} namespace The namespace string for the debug instance to be colored
+	* @return {Number|String} An ANSI color code for the given namespace
+	* @api private
+	*/
+	function selectColor(namespace) {
+		let hash = 0;
+
+		for (let i = 0; i < namespace.length; i++) {
+			hash = ((hash << 5) - hash) + namespace.charCodeAt(i);
+			hash |= 0; // Convert to 32bit integer
+		}
+
+		return createDebug.colors[Math.abs(hash) % createDebug.colors.length];
+	}
+	createDebug.selectColor = selectColor;
+
+	/**
+	* Create a debugger with the given `namespace`.
+	*
+	* @param {String} namespace
+	* @return {Function}
+	* @api public
+	*/
+	function createDebug(namespace) {
+		let prevTime;
+		let enableOverride = null;
+		let namespacesCache;
+		let enabledCache;
+
+		function debug(...args) {
+			// Disabled?
+			if (!debug.enabled) {
+				return;
+			}
+
+			const self = debug;
+
+			// Set `diff` timestamp
+			const curr = Number(new Date());
+			const ms = curr - (prevTime || curr);
+			self.diff = ms;
+			self.prev = prevTime;
+			self.curr = curr;
+			prevTime = curr;
+
+			args[0] = createDebug.coerce(args[0]);
+
+			if (typeof args[0] !== 'string') {
+				// Anything else let's inspect with %O
+				args.unshift('%O');
+			}
+
+			// Apply any `formatters` transformations
+			let index = 0;
+			args[0] = args[0].replace(/%([a-zA-Z%])/g, (match, format) => {
+				// If we encounter an escaped % then don't increase the array index
+				if (match === '%%') {
+					return '%';
+				}
+				index++;
+				const formatter = createDebug.formatters[format];
+				if (typeof formatter === 'function') {
+					const val = args[index];
+					match = formatter.call(self, val);
+
+					// Now we need to remove `args[index]` since it's inlined in the `format`
+					args.splice(index, 1);
+					index--;
+				}
+				return match;
+			});
+
+			// Apply env-specific formatting (colors, etc.)
+			createDebug.formatArgs.call(self, args);
+
+			const logFn = self.log || createDebug.log;
+			logFn.apply(self, args);
+		}
+
+		debug.namespace = namespace;
+		debug.useColors = createDebug.useColors();
+		debug.color = createDebug.selectColor(namespace);
+		debug.extend = extend;
+		debug.destroy = createDebug.destroy; // XXX Temporary. Will be removed in the next major release.
+
+		Object.defineProperty(debug, 'enabled', {
+			enumerable: true,
+			configurable: false,
+			get: () => {
+				if (enableOverride !== null) {
+					return enableOverride;
+				}
+				if (namespacesCache !== createDebug.namespaces) {
+					namespacesCache = createDebug.namespaces;
+					enabledCache = createDebug.enabled(namespace);
+				}
+
+				return enabledCache;
+			},
+			set: v => {
+				enableOverride = v;
+			}
+		});
+
+		// Env-specific initialization logic for debug instances
+		if (typeof createDebug.init === 'function') {
+			createDebug.init(debug);
+		}
+
+		return debug;
+	}
+
+	function extend(namespace, delimiter) {
+		const newDebug = createDebug(this.namespace + (typeof delimiter === 'undefined' ? ':' : delimiter) + namespace);
+		newDebug.log = this.log;
+		return newDebug;
+	}
+
+	/**
+	* Enables a debug mode by namespaces. This can include modes
+	* separated by a colon and wildcards.
+	*
+	* @param {String} namespaces
+	* @api public
+	*/
+	function enable(namespaces) {
+		createDebug.save(namespaces);
+		createDebug.namespaces = namespaces;
+
+		createDebug.names = [];
+		createDebug.skips = [];
+
+		let i;
+		const split = (typeof namespaces === 'string' ? namespaces : '').split(/[\s,]+/);
+		const len = split.length;
+
+		for (i = 0; i < len; i++) {
+			if (!split[i]) {
+				// ignore empty strings
+				continue;
+			}
+
+			namespaces = split[i].replace(/\*/g, '.*?');
+
+			if (namespaces[0] === '-') {
+				createDebug.skips.push(new RegExp('^' + namespaces.slice(1) + '$'));
+			} else {
+				createDebug.names.push(new RegExp('^' + namespaces + '$'));
+			}
+		}
+	}
+
+	/**
+	* Disable debug output.
+	*
+	* @return {String} namespaces
+	* @api public
+	*/
+	function disable() {
+		const namespaces = [
+			...createDebug.names.map(toNamespace),
+			...createDebug.skips.map(toNamespace).map(namespace => '-' + namespace)
+		].join(',');
+		createDebug.enable('');
+		return namespaces;
+	}
+
+	/**
+	* Returns true if the given mode name is enabled, false otherwise.
+	*
+	* @param {String} name
+	* @return {Boolean}
+	* @api public
+	*/
+	function enabled(name) {
+		if (name[name.length - 1] === '*') {
+			return true;
+		}
+
+		let i;
+		let len;
+
+		for (i = 0, len = createDebug.skips.length; i < len; i++) {
+			if (createDebug.skips[i].test(name)) {
+				return false;
+			}
+		}
+
+		for (i = 0, len = createDebug.names.length; i < len; i++) {
+			if (createDebug.names[i].test(name)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	* Convert regexp to namespace
+	*
+	* @param {RegExp} regxep
+	* @return {String} namespace
+	* @api private
+	*/
+	function toNamespace(regexp) {
+		return regexp.toString()
+			.substring(2, regexp.toString().length - 2)
+			.replace(/\.\*\?$/, '*');
+	}
+
+	/**
+	* Coerce `val`.
+	*
+	* @param {Mixed} val
+	* @return {Mixed}
+	* @api private
+	*/
+	function coerce(val) {
+		if (val instanceof Error) {
+			return val.stack || val.message;
+		}
+		return val;
+	}
+
+	/**
+	* XXX DO NOT USE. This is a temporary stub function.
+	* XXX It WILL be removed in the next major release.
+	*/
+	function destroy() {
+		console.warn('Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.');
+	}
+
+	createDebug.enable(createDebug.load());
+
+	return createDebug;
+}
+
+module.exports = setup;
+
+
+/***/ }),
+
+/***/ 8237:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+/**
+ * Detect Electron renderer / nwjs process, which is node, but we should
+ * treat as a browser.
+ */
+
+if (typeof process === 'undefined' || process.type === 'renderer' || process.browser === true || process.__nwjs) {
+	module.exports = __nccwpck_require__(8222);
+} else {
+	module.exports = __nccwpck_require__(4874);
+}
+
+
+/***/ }),
+
+/***/ 4874:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+/**
+ * Module dependencies.
+ */
+
+const tty = __nccwpck_require__(6224);
+const util = __nccwpck_require__(3837);
+
+/**
+ * This is the Node.js implementation of `debug()`.
+ */
+
+exports.init = init;
+exports.log = log;
+exports.formatArgs = formatArgs;
+exports.save = save;
+exports.load = load;
+exports.useColors = useColors;
+exports.destroy = util.deprecate(
+	() => {},
+	'Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.'
+);
+
+/**
+ * Colors.
+ */
+
+exports.colors = [6, 2, 3, 4, 5, 1];
+
+try {
+	// Optional dependency (as in, doesn't need to be installed, NOT like optionalDependencies in package.json)
+	// eslint-disable-next-line import/no-extraneous-dependencies
+	const supportsColor = __nccwpck_require__(9318);
+
+	if (supportsColor && (supportsColor.stderr || supportsColor).level >= 2) {
+		exports.colors = [
+			20,
+			21,
+			26,
+			27,
+			32,
+			33,
+			38,
+			39,
+			40,
+			41,
+			42,
+			43,
+			44,
+			45,
+			56,
+			57,
+			62,
+			63,
+			68,
+			69,
+			74,
+			75,
+			76,
+			77,
+			78,
+			79,
+			80,
+			81,
+			92,
+			93,
+			98,
+			99,
+			112,
+			113,
+			128,
+			129,
+			134,
+			135,
+			148,
+			149,
+			160,
+			161,
+			162,
+			163,
+			164,
+			165,
+			166,
+			167,
+			168,
+			169,
+			170,
+			171,
+			172,
+			173,
+			178,
+			179,
+			184,
+			185,
+			196,
+			197,
+			198,
+			199,
+			200,
+			201,
+			202,
+			203,
+			204,
+			205,
+			206,
+			207,
+			208,
+			209,
+			214,
+			215,
+			220,
+			221
+		];
+	}
+} catch (error) {
+	// Swallow - we only care if `supports-color` is available; it doesn't have to be.
+}
+
+/**
+ * Build up the default `inspectOpts` object from the environment variables.
+ *
+ *   $ DEBUG_COLORS=no DEBUG_DEPTH=10 DEBUG_SHOW_HIDDEN=enabled node script.js
+ */
+
+exports.inspectOpts = Object.keys(process.env).filter(key => {
+	return /^debug_/i.test(key);
+}).reduce((obj, key) => {
+	// Camel-case
+	const prop = key
+		.substring(6)
+		.toLowerCase()
+		.replace(/_([a-z])/g, (_, k) => {
+			return k.toUpperCase();
+		});
+
+	// Coerce string value into JS value
+	let val = process.env[key];
+	if (/^(yes|on|true|enabled)$/i.test(val)) {
+		val = true;
+	} else if (/^(no|off|false|disabled)$/i.test(val)) {
+		val = false;
+	} else if (val === 'null') {
+		val = null;
+	} else {
+		val = Number(val);
+	}
+
+	obj[prop] = val;
+	return obj;
+}, {});
+
+/**
+ * Is stdout a TTY? Colored output is enabled when `true`.
+ */
+
+function useColors() {
+	return 'colors' in exports.inspectOpts ?
+		Boolean(exports.inspectOpts.colors) :
+		tty.isatty(process.stderr.fd);
+}
+
+/**
+ * Adds ANSI color escape codes if enabled.
+ *
+ * @api public
+ */
+
+function formatArgs(args) {
+	const {namespace: name, useColors} = this;
+
+	if (useColors) {
+		const c = this.color;
+		const colorCode = '\u001B[3' + (c < 8 ? c : '8;5;' + c);
+		const prefix = `  ${colorCode};1m${name} \u001B[0m`;
+
+		args[0] = prefix + args[0].split('\n').join('\n' + prefix);
+		args.push(colorCode + 'm+' + module.exports.humanize(this.diff) + '\u001B[0m');
+	} else {
+		args[0] = getDate() + name + ' ' + args[0];
+	}
+}
+
+function getDate() {
+	if (exports.inspectOpts.hideDate) {
+		return '';
+	}
+	return new Date().toISOString() + ' ';
+}
+
+/**
+ * Invokes `util.formatWithOptions()` with the specified arguments and writes to stderr.
+ */
+
+function log(...args) {
+	return process.stderr.write(util.formatWithOptions(exports.inspectOpts, ...args) + '\n');
+}
+
+/**
+ * Save `namespaces`.
+ *
+ * @param {String} namespaces
+ * @api private
+ */
+function save(namespaces) {
+	if (namespaces) {
+		process.env.DEBUG = namespaces;
+	} else {
+		// If you set a process.env field to null or undefined, it gets cast to the
+		// string 'null' or 'undefined'. Just delete instead.
+		delete process.env.DEBUG;
+	}
+}
+
+/**
+ * Load `namespaces`.
+ *
+ * @return {String} returns the previously persisted debug modes
+ * @api private
+ */
+
+function load() {
+	return process.env.DEBUG;
+}
+
+/**
+ * Init logic for `debug` instances.
+ *
+ * Create a new `inspectOpts` object in case `useColors` is set
+ * differently for a particular `debug` instance.
+ */
+
+function init(debug) {
+	debug.inspectOpts = {};
+
+	const keys = Object.keys(exports.inspectOpts);
+	for (let i = 0; i < keys.length; i++) {
+		debug.inspectOpts[keys[i]] = exports.inspectOpts[keys[i]];
+	}
+}
+
+module.exports = __nccwpck_require__(6243)(exports);
+
+const {formatters} = module.exports;
+
+/**
+ * Map %o to `util.inspect()`, all on a single line.
+ */
+
+formatters.o = function (v) {
+	this.inspectOpts.colors = this.useColors;
+	return util.inspect(v, this.inspectOpts)
+		.split('\n')
+		.map(str => str.trim())
+		.join(' ');
+};
+
+/**
+ * Map %O to `util.inspect()`, allowing multiple lines if needed.
+ */
+
+formatters.O = function (v) {
+	this.inspectOpts.colors = this.useColors;
+	return util.inspect(v, this.inspectOpts);
+};
+
+
+/***/ }),
+
 /***/ 8932:
 /***/ ((__unused_webpack_module, exports) => {
 
@@ -9596,6 +13829,8894 @@ class Deprecation extends Error {
 
 exports.Deprecation = Deprecation;
 
+
+/***/ }),
+
+/***/ 1728:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+
+
+var Buffer = (__nccwpck_require__(1867).Buffer);
+
+var getParamBytesForAlg = __nccwpck_require__(528);
+
+var MAX_OCTET = 0x80,
+	CLASS_UNIVERSAL = 0,
+	PRIMITIVE_BIT = 0x20,
+	TAG_SEQ = 0x10,
+	TAG_INT = 0x02,
+	ENCODED_TAG_SEQ = (TAG_SEQ | PRIMITIVE_BIT) | (CLASS_UNIVERSAL << 6),
+	ENCODED_TAG_INT = TAG_INT | (CLASS_UNIVERSAL << 6);
+
+function base64Url(base64) {
+	return base64
+		.replace(/=/g, '')
+		.replace(/\+/g, '-')
+		.replace(/\//g, '_');
+}
+
+function signatureAsBuffer(signature) {
+	if (Buffer.isBuffer(signature)) {
+		return signature;
+	} else if ('string' === typeof signature) {
+		return Buffer.from(signature, 'base64');
+	}
+
+	throw new TypeError('ECDSA signature must be a Base64 string or a Buffer');
+}
+
+function derToJose(signature, alg) {
+	signature = signatureAsBuffer(signature);
+	var paramBytes = getParamBytesForAlg(alg);
+
+	// the DER encoded param should at most be the param size, plus a padding
+	// zero, since due to being a signed integer
+	var maxEncodedParamLength = paramBytes + 1;
+
+	var inputLength = signature.length;
+
+	var offset = 0;
+	if (signature[offset++] !== ENCODED_TAG_SEQ) {
+		throw new Error('Could not find expected "seq"');
+	}
+
+	var seqLength = signature[offset++];
+	if (seqLength === (MAX_OCTET | 1)) {
+		seqLength = signature[offset++];
+	}
+
+	if (inputLength - offset < seqLength) {
+		throw new Error('"seq" specified length of "' + seqLength + '", only "' + (inputLength - offset) + '" remaining');
+	}
+
+	if (signature[offset++] !== ENCODED_TAG_INT) {
+		throw new Error('Could not find expected "int" for "r"');
+	}
+
+	var rLength = signature[offset++];
+
+	if (inputLength - offset - 2 < rLength) {
+		throw new Error('"r" specified length of "' + rLength + '", only "' + (inputLength - offset - 2) + '" available');
+	}
+
+	if (maxEncodedParamLength < rLength) {
+		throw new Error('"r" specified length of "' + rLength + '", max of "' + maxEncodedParamLength + '" is acceptable');
+	}
+
+	var rOffset = offset;
+	offset += rLength;
+
+	if (signature[offset++] !== ENCODED_TAG_INT) {
+		throw new Error('Could not find expected "int" for "s"');
+	}
+
+	var sLength = signature[offset++];
+
+	if (inputLength - offset !== sLength) {
+		throw new Error('"s" specified length of "' + sLength + '", expected "' + (inputLength - offset) + '"');
+	}
+
+	if (maxEncodedParamLength < sLength) {
+		throw new Error('"s" specified length of "' + sLength + '", max of "' + maxEncodedParamLength + '" is acceptable');
+	}
+
+	var sOffset = offset;
+	offset += sLength;
+
+	if (offset !== inputLength) {
+		throw new Error('Expected to consume entire buffer, but "' + (inputLength - offset) + '" bytes remain');
+	}
+
+	var rPadding = paramBytes - rLength,
+		sPadding = paramBytes - sLength;
+
+	var dst = Buffer.allocUnsafe(rPadding + rLength + sPadding + sLength);
+
+	for (offset = 0; offset < rPadding; ++offset) {
+		dst[offset] = 0;
+	}
+	signature.copy(dst, offset, rOffset + Math.max(-rPadding, 0), rOffset + rLength);
+
+	offset = paramBytes;
+
+	for (var o = offset; offset < o + sPadding; ++offset) {
+		dst[offset] = 0;
+	}
+	signature.copy(dst, offset, sOffset + Math.max(-sPadding, 0), sOffset + sLength);
+
+	dst = dst.toString('base64');
+	dst = base64Url(dst);
+
+	return dst;
+}
+
+function countPadding(buf, start, stop) {
+	var padding = 0;
+	while (start + padding < stop && buf[start + padding] === 0) {
+		++padding;
+	}
+
+	var needsSign = buf[start + padding] >= MAX_OCTET;
+	if (needsSign) {
+		--padding;
+	}
+
+	return padding;
+}
+
+function joseToDer(signature, alg) {
+	signature = signatureAsBuffer(signature);
+	var paramBytes = getParamBytesForAlg(alg);
+
+	var signatureBytes = signature.length;
+	if (signatureBytes !== paramBytes * 2) {
+		throw new TypeError('"' + alg + '" signatures must be "' + paramBytes * 2 + '" bytes, saw "' + signatureBytes + '"');
+	}
+
+	var rPadding = countPadding(signature, 0, paramBytes);
+	var sPadding = countPadding(signature, paramBytes, signature.length);
+	var rLength = paramBytes - rPadding;
+	var sLength = paramBytes - sPadding;
+
+	var rsBytes = 1 + 1 + rLength + 1 + 1 + sLength;
+
+	var shortLength = rsBytes < MAX_OCTET;
+
+	var dst = Buffer.allocUnsafe((shortLength ? 2 : 3) + rsBytes);
+
+	var offset = 0;
+	dst[offset++] = ENCODED_TAG_SEQ;
+	if (shortLength) {
+		// Bit 8 has value "0"
+		// bits 7-1 give the length.
+		dst[offset++] = rsBytes;
+	} else {
+		// Bit 8 of first octet has value "1"
+		// bits 7-1 give the number of additional length octets.
+		dst[offset++] = MAX_OCTET	| 1;
+		// length, base 256
+		dst[offset++] = rsBytes & 0xff;
+	}
+	dst[offset++] = ENCODED_TAG_INT;
+	dst[offset++] = rLength;
+	if (rPadding < 0) {
+		dst[offset++] = 0;
+		offset += signature.copy(dst, offset, 0, paramBytes);
+	} else {
+		offset += signature.copy(dst, offset, rPadding, paramBytes);
+	}
+	dst[offset++] = ENCODED_TAG_INT;
+	dst[offset++] = sLength;
+	if (sPadding < 0) {
+		dst[offset++] = 0;
+		signature.copy(dst, offset, paramBytes);
+	} else {
+		signature.copy(dst, offset, paramBytes + sPadding);
+	}
+
+	return dst;
+}
+
+module.exports = {
+	derToJose: derToJose,
+	joseToDer: joseToDer
+};
+
+
+/***/ }),
+
+/***/ 528:
+/***/ ((module) => {
+
+
+
+function getParamSize(keySize) {
+	var result = ((keySize / 8) | 0) + (keySize % 8 === 0 ? 0 : 1);
+	return result;
+}
+
+var paramBytesForAlg = {
+	ES256: getParamSize(256),
+	ES384: getParamSize(384),
+	ES512: getParamSize(521)
+};
+
+function getParamBytesForAlg(alg) {
+	var paramBytes = paramBytesForAlg[alg];
+	if (paramBytes) {
+		return paramBytes;
+	}
+
+	throw new Error('Unknown algorithm "' + alg + '"');
+}
+
+module.exports = getParamBytesForAlg;
+
+
+/***/ }),
+
+/***/ 8171:
+/***/ ((module) => {
+
+
+
+var hasOwn = Object.prototype.hasOwnProperty;
+var toStr = Object.prototype.toString;
+var defineProperty = Object.defineProperty;
+var gOPD = Object.getOwnPropertyDescriptor;
+
+var isArray = function isArray(arr) {
+	if (typeof Array.isArray === 'function') {
+		return Array.isArray(arr);
+	}
+
+	return toStr.call(arr) === '[object Array]';
+};
+
+var isPlainObject = function isPlainObject(obj) {
+	if (!obj || toStr.call(obj) !== '[object Object]') {
+		return false;
+	}
+
+	var hasOwnConstructor = hasOwn.call(obj, 'constructor');
+	var hasIsPrototypeOf = obj.constructor && obj.constructor.prototype && hasOwn.call(obj.constructor.prototype, 'isPrototypeOf');
+	// Not own constructor property must be Object
+	if (obj.constructor && !hasOwnConstructor && !hasIsPrototypeOf) {
+		return false;
+	}
+
+	// Own properties are enumerated firstly, so to speed up,
+	// if last one is own, then all properties are own.
+	var key;
+	for (key in obj) { /**/ }
+
+	return typeof key === 'undefined' || hasOwn.call(obj, key);
+};
+
+// If name is '__proto__', and Object.defineProperty is available, define __proto__ as an own property on target
+var setProperty = function setProperty(target, options) {
+	if (defineProperty && options.name === '__proto__') {
+		defineProperty(target, options.name, {
+			enumerable: true,
+			configurable: true,
+			value: options.newValue,
+			writable: true
+		});
+	} else {
+		target[options.name] = options.newValue;
+	}
+};
+
+// Return undefined instead of __proto__ if '__proto__' is not an own property
+var getProperty = function getProperty(obj, name) {
+	if (name === '__proto__') {
+		if (!hasOwn.call(obj, name)) {
+			return void 0;
+		} else if (gOPD) {
+			// In early versions of node, obj['__proto__'] is buggy when obj has
+			// __proto__ as an own property. Object.getOwnPropertyDescriptor() works.
+			return gOPD(obj, name).value;
+		}
+	}
+
+	return obj[name];
+};
+
+module.exports = function extend() {
+	var options, name, src, copy, copyIsArray, clone;
+	var target = arguments[0];
+	var i = 1;
+	var length = arguments.length;
+	var deep = false;
+
+	// Handle a deep copy situation
+	if (typeof target === 'boolean') {
+		deep = target;
+		target = arguments[1] || {};
+		// skip the boolean and the target
+		i = 2;
+	}
+	if (target == null || (typeof target !== 'object' && typeof target !== 'function')) {
+		target = {};
+	}
+
+	for (; i < length; ++i) {
+		options = arguments[i];
+		// Only deal with non-null/undefined values
+		if (options != null) {
+			// Extend the base object
+			for (name in options) {
+				src = getProperty(target, name);
+				copy = getProperty(options, name);
+
+				// Prevent never-ending loop
+				if (target !== copy) {
+					// Recurse if we're merging plain objects or arrays
+					if (deep && copy && (isPlainObject(copy) || (copyIsArray = isArray(copy)))) {
+						if (copyIsArray) {
+							copyIsArray = false;
+							clone = src && isArray(src) ? src : [];
+						} else {
+							clone = src && isPlainObject(src) ? src : {};
+						}
+
+						// Never move original objects, clone them
+						setProperty(target, { name: name, newValue: extend(deep, clone, copy) });
+
+					// Don't bring in undefined values
+					} else if (typeof copy !== 'undefined') {
+						setProperty(target, { name: name, newValue: copy });
+					}
+				}
+			}
+		}
+	}
+
+	// Return the modified object
+	return target;
+};
+
+
+/***/ }),
+
+/***/ 6129:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+
+// Copyright 2018 Google LLC
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+var _a;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GaxiosError = exports.GAXIOS_ERROR_SYMBOL = void 0;
+exports.defaultErrorRedactor = defaultErrorRedactor;
+const url_1 = __nccwpck_require__(7310);
+const util_1 = __nccwpck_require__(1980);
+const extend_1 = __importDefault(__nccwpck_require__(8171));
+/**
+ * Support `instanceof` operator for `GaxiosError`s in different versions of this library.
+ *
+ * @see {@link GaxiosError[Symbol.hasInstance]}
+ */
+exports.GAXIOS_ERROR_SYMBOL = Symbol.for(`${util_1.pkg.name}-gaxios-error`);
+/* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+class GaxiosError extends Error {
+    /**
+     * Support `instanceof` operator for `GaxiosError` across builds/duplicated files.
+     *
+     * @see {@link GAXIOS_ERROR_SYMBOL}
+     * @see {@link GaxiosError[GAXIOS_ERROR_SYMBOL]}
+     */
+    static [(_a = exports.GAXIOS_ERROR_SYMBOL, Symbol.hasInstance)](instance) {
+        if (instance &&
+            typeof instance === 'object' &&
+            exports.GAXIOS_ERROR_SYMBOL in instance &&
+            instance[exports.GAXIOS_ERROR_SYMBOL] === util_1.pkg.version) {
+            return true;
+        }
+        // fallback to native
+        return Function.prototype[Symbol.hasInstance].call(GaxiosError, instance);
+    }
+    constructor(message, config, response, error) {
+        var _b;
+        super(message);
+        this.config = config;
+        this.response = response;
+        this.error = error;
+        /**
+         * Support `instanceof` operator for `GaxiosError` across builds/duplicated files.
+         *
+         * @see {@link GAXIOS_ERROR_SYMBOL}
+         * @see {@link GaxiosError[Symbol.hasInstance]}
+         * @see {@link https://github.com/microsoft/TypeScript/issues/13965#issuecomment-278570200}
+         * @see {@link https://stackoverflow.com/questions/46618852/require-and-instanceof}
+         * @see {@link https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Function/@@hasInstance#reverting_to_default_instanceof_behavior}
+         */
+        this[_a] = util_1.pkg.version;
+        // deep-copy config as we do not want to mutate
+        // the existing config for future retries/use
+        this.config = (0, extend_1.default)(true, {}, config);
+        if (this.response) {
+            this.response.config = (0, extend_1.default)(true, {}, this.response.config);
+        }
+        if (this.response) {
+            try {
+                this.response.data = translateData(this.config.responseType, (_b = this.response) === null || _b === void 0 ? void 0 : _b.data);
+            }
+            catch (_c) {
+                // best effort - don't throw an error within an error
+                // we could set `this.response.config.responseType = 'unknown'`, but
+                // that would mutate future calls with this config object.
+            }
+            this.status = this.response.status;
+        }
+        if (error && 'code' in error && error.code) {
+            this.code = error.code;
+        }
+        if (config.errorRedactor) {
+            config.errorRedactor({
+                config: this.config,
+                response: this.response,
+            });
+        }
+    }
+}
+exports.GaxiosError = GaxiosError;
+function translateData(responseType, data) {
+    switch (responseType) {
+        case 'stream':
+            return data;
+        case 'json':
+            return JSON.parse(JSON.stringify(data));
+        case 'arraybuffer':
+            return JSON.parse(Buffer.from(data).toString('utf8'));
+        case 'blob':
+            return JSON.parse(data.text());
+        default:
+            return data;
+    }
+}
+/**
+ * An experimental error redactor.
+ *
+ * @param config Config to potentially redact properties of
+ * @param response Config to potentially redact properties of
+ *
+ * @experimental
+ */
+function defaultErrorRedactor(data) {
+    const REDACT = '<<REDACTED> - See `errorRedactor` option in `gaxios` for configuration>.';
+    function redactHeaders(headers) {
+        if (!headers)
+            return;
+        for (const key of Object.keys(headers)) {
+            // any casing of `Authentication`
+            if (/^authentication$/i.test(key)) {
+                headers[key] = REDACT;
+            }
+            // any casing of `Authorization`
+            if (/^authorization$/i.test(key)) {
+                headers[key] = REDACT;
+            }
+            // anything containing secret, such as 'client secret'
+            if (/secret/i.test(key)) {
+                headers[key] = REDACT;
+            }
+        }
+    }
+    function redactString(obj, key) {
+        if (typeof obj === 'object' &&
+            obj !== null &&
+            typeof obj[key] === 'string') {
+            const text = obj[key];
+            if (/grant_type=/i.test(text) ||
+                /assertion=/i.test(text) ||
+                /secret/i.test(text)) {
+                obj[key] = REDACT;
+            }
+        }
+    }
+    function redactObject(obj) {
+        if (typeof obj === 'object' && obj !== null) {
+            if ('grant_type' in obj) {
+                obj['grant_type'] = REDACT;
+            }
+            if ('assertion' in obj) {
+                obj['assertion'] = REDACT;
+            }
+            if ('client_secret' in obj) {
+                obj['client_secret'] = REDACT;
+            }
+        }
+    }
+    if (data.config) {
+        redactHeaders(data.config.headers);
+        redactString(data.config, 'data');
+        redactObject(data.config.data);
+        redactString(data.config, 'body');
+        redactObject(data.config.body);
+        try {
+            const url = new url_1.URL('', data.config.url);
+            if (url.searchParams.has('token')) {
+                url.searchParams.set('token', REDACT);
+            }
+            if (url.searchParams.has('client_secret')) {
+                url.searchParams.set('client_secret', REDACT);
+            }
+            data.config.url = url.toString();
+        }
+        catch (_b) {
+            // ignore error - no need to parse an invalid URL
+        }
+    }
+    if (data.response) {
+        defaultErrorRedactor({ config: data.response.config });
+        redactHeaders(data.response.headers);
+        redactString(data.response, 'data');
+        redactObject(data.response.data);
+    }
+    return data;
+}
+//# sourceMappingURL=common.js.map
+
+/***/ }),
+
+/***/ 8133:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+
+// Copyright 2018 Google LLC
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (receiver, state, kind, f) {
+    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
+    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
+    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
+};
+var __classPrivateFieldSet = (this && this.__classPrivateFieldSet) || function (receiver, state, value, kind, f) {
+    if (kind === "m") throw new TypeError("Private method is not writable");
+    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a setter");
+    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
+    return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+var _Gaxios_instances, _a, _Gaxios_urlMayUseProxy, _Gaxios_applyRequestInterceptors, _Gaxios_applyResponseInterceptors, _Gaxios_prepareRequest, _Gaxios_proxyAgent, _Gaxios_getProxyAgent;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.Gaxios = void 0;
+const extend_1 = __importDefault(__nccwpck_require__(8171));
+const https_1 = __nccwpck_require__(5687);
+const node_fetch_1 = __importDefault(__nccwpck_require__(467));
+const querystring_1 = __importDefault(__nccwpck_require__(3477));
+const is_stream_1 = __importDefault(__nccwpck_require__(1554));
+const url_1 = __nccwpck_require__(7310);
+const common_1 = __nccwpck_require__(6129);
+const retry_1 = __nccwpck_require__(1052);
+const stream_1 = __nccwpck_require__(2781);
+const uuid_1 = __nccwpck_require__(5840);
+const interceptor_1 = __nccwpck_require__(4309);
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const fetch = hasFetch() ? window.fetch : node_fetch_1.default;
+function hasWindow() {
+    return typeof window !== 'undefined' && !!window;
+}
+function hasFetch() {
+    return hasWindow() && !!window.fetch;
+}
+function hasBuffer() {
+    return typeof Buffer !== 'undefined';
+}
+function hasHeader(options, header) {
+    return !!getHeader(options, header);
+}
+function getHeader(options, header) {
+    header = header.toLowerCase();
+    for (const key of Object.keys((options === null || options === void 0 ? void 0 : options.headers) || {})) {
+        if (header === key.toLowerCase()) {
+            return options.headers[key];
+        }
+    }
+    return undefined;
+}
+class Gaxios {
+    /**
+     * The Gaxios class is responsible for making HTTP requests.
+     * @param defaults The default set of options to be used for this instance.
+     */
+    constructor(defaults) {
+        _Gaxios_instances.add(this);
+        this.agentCache = new Map();
+        this.defaults = defaults || {};
+        this.interceptors = {
+            request: new interceptor_1.GaxiosInterceptorManager(),
+            response: new interceptor_1.GaxiosInterceptorManager(),
+        };
+    }
+    /**
+     * Perform an HTTP request with the given options.
+     * @param opts Set of HTTP options that will be used for this HTTP request.
+     */
+    async request(opts = {}) {
+        opts = await __classPrivateFieldGet(this, _Gaxios_instances, "m", _Gaxios_prepareRequest).call(this, opts);
+        opts = await __classPrivateFieldGet(this, _Gaxios_instances, "m", _Gaxios_applyRequestInterceptors).call(this, opts);
+        return __classPrivateFieldGet(this, _Gaxios_instances, "m", _Gaxios_applyResponseInterceptors).call(this, this._request(opts));
+    }
+    async _defaultAdapter(opts) {
+        const fetchImpl = opts.fetchImplementation || fetch;
+        const res = (await fetchImpl(opts.url, opts));
+        const data = await this.getResponseData(opts, res);
+        return this.translateResponse(opts, res, data);
+    }
+    /**
+     * Internal, retryable version of the `request` method.
+     * @param opts Set of HTTP options that will be used for this HTTP request.
+     */
+    async _request(opts = {}) {
+        var _b;
+        try {
+            let translatedResponse;
+            if (opts.adapter) {
+                translatedResponse = await opts.adapter(opts, this._defaultAdapter.bind(this));
+            }
+            else {
+                translatedResponse = await this._defaultAdapter(opts);
+            }
+            if (!opts.validateStatus(translatedResponse.status)) {
+                if (opts.responseType === 'stream') {
+                    let response = '';
+                    await new Promise(resolve => {
+                        (translatedResponse === null || translatedResponse === void 0 ? void 0 : translatedResponse.data).on('data', chunk => {
+                            response += chunk;
+                        });
+                        (translatedResponse === null || translatedResponse === void 0 ? void 0 : translatedResponse.data).on('end', resolve);
+                    });
+                    translatedResponse.data = response;
+                }
+                throw new common_1.GaxiosError(`Request failed with status code ${translatedResponse.status}`, opts, translatedResponse);
+            }
+            return translatedResponse;
+        }
+        catch (e) {
+            const err = e instanceof common_1.GaxiosError
+                ? e
+                : new common_1.GaxiosError(e.message, opts, undefined, e);
+            const { shouldRetry, config } = await (0, retry_1.getRetryConfig)(err);
+            if (shouldRetry && config) {
+                err.config.retryConfig.currentRetryAttempt =
+                    config.retryConfig.currentRetryAttempt;
+                // The error's config could be redacted - therefore we only want to
+                // copy the retry state over to the existing config
+                opts.retryConfig = (_b = err.config) === null || _b === void 0 ? void 0 : _b.retryConfig;
+                return this._request(opts);
+            }
+            throw err;
+        }
+    }
+    async getResponseData(opts, res) {
+        switch (opts.responseType) {
+            case 'stream':
+                return res.body;
+            case 'json': {
+                let data = await res.text();
+                try {
+                    data = JSON.parse(data);
+                }
+                catch (_b) {
+                    // continue
+                }
+                return data;
+            }
+            case 'arraybuffer':
+                return res.arrayBuffer();
+            case 'blob':
+                return res.blob();
+            case 'text':
+                return res.text();
+            default:
+                return this.getResponseDataFromContentType(res);
+        }
+    }
+    /**
+     * By default, throw for any non-2xx status code
+     * @param status status code from the HTTP response
+     */
+    validateStatus(status) {
+        return status >= 200 && status < 300;
+    }
+    /**
+     * Encode a set of key/value pars into a querystring format (?foo=bar&baz=boo)
+     * @param params key value pars to encode
+     */
+    paramsSerializer(params) {
+        return querystring_1.default.stringify(params);
+    }
+    translateResponse(opts, res, data) {
+        // headers need to be converted from a map to an obj
+        const headers = {};
+        res.headers.forEach((value, key) => {
+            headers[key] = value;
+        });
+        return {
+            config: opts,
+            data: data,
+            headers,
+            status: res.status,
+            statusText: res.statusText,
+            // XMLHttpRequestLike
+            request: {
+                responseURL: res.url,
+            },
+        };
+    }
+    /**
+     * Attempts to parse a response by looking at the Content-Type header.
+     * @param {FetchResponse} response the HTTP response.
+     * @returns {Promise<any>} a promise that resolves to the response data.
+     */
+    async getResponseDataFromContentType(response) {
+        let contentType = response.headers.get('Content-Type');
+        if (contentType === null) {
+            // Maintain existing functionality by calling text()
+            return response.text();
+        }
+        contentType = contentType.toLowerCase();
+        if (contentType.includes('application/json')) {
+            let data = await response.text();
+            try {
+                data = JSON.parse(data);
+            }
+            catch (_b) {
+                // continue
+            }
+            return data;
+        }
+        else if (contentType.match(/^text\//)) {
+            return response.text();
+        }
+        else {
+            // If the content type is something not easily handled, just return the raw data (blob)
+            return response.blob();
+        }
+    }
+    /**
+     * Creates an async generator that yields the pieces of a multipart/related request body.
+     * This implementation follows the spec: https://www.ietf.org/rfc/rfc2387.txt. However, recursive
+     * multipart/related requests are not currently supported.
+     *
+     * @param {GaxioMultipartOptions[]} multipartOptions the pieces to turn into a multipart/related body.
+     * @param {string} boundary the boundary string to be placed between each part.
+     */
+    async *getMultipartRequest(multipartOptions, boundary) {
+        const finale = `--${boundary}--`;
+        for (const currentPart of multipartOptions) {
+            const partContentType = currentPart.headers['Content-Type'] || 'application/octet-stream';
+            const preamble = `--${boundary}\r\nContent-Type: ${partContentType}\r\n\r\n`;
+            yield preamble;
+            if (typeof currentPart.content === 'string') {
+                yield currentPart.content;
+            }
+            else {
+                yield* currentPart.content;
+            }
+            yield '\r\n';
+        }
+        yield finale;
+    }
+}
+exports.Gaxios = Gaxios;
+_a = Gaxios, _Gaxios_instances = new WeakSet(), _Gaxios_urlMayUseProxy = function _Gaxios_urlMayUseProxy(url, noProxy = []) {
+    var _b, _c;
+    const candidate = new url_1.URL(url);
+    const noProxyList = [...noProxy];
+    const noProxyEnvList = ((_c = ((_b = process.env.NO_PROXY) !== null && _b !== void 0 ? _b : process.env.no_proxy)) === null || _c === void 0 ? void 0 : _c.split(',')) || [];
+    for (const rule of noProxyEnvList) {
+        noProxyList.push(rule.trim());
+    }
+    for (const rule of noProxyList) {
+        // Match regex
+        if (rule instanceof RegExp) {
+            if (rule.test(candidate.toString())) {
+                return false;
+            }
+        }
+        // Match URL
+        else if (rule instanceof url_1.URL) {
+            if (rule.origin === candidate.origin) {
+                return false;
+            }
+        }
+        // Match string regex
+        else if (rule.startsWith('*.') || rule.startsWith('.')) {
+            const cleanedRule = rule.replace(/^\*\./, '.');
+            if (candidate.hostname.endsWith(cleanedRule)) {
+                return false;
+            }
+        }
+        // Basic string match
+        else if (rule === candidate.origin ||
+            rule === candidate.hostname ||
+            rule === candidate.href) {
+            return false;
+        }
+    }
+    return true;
+}, _Gaxios_applyRequestInterceptors = 
+/**
+ * Applies the request interceptors. The request interceptors are applied after the
+ * call to prepareRequest is completed.
+ *
+ * @param {GaxiosOptions} options The current set of options.
+ *
+ * @returns {Promise<GaxiosOptions>} Promise that resolves to the set of options or response after interceptors are applied.
+ */
+async function _Gaxios_applyRequestInterceptors(options) {
+    let promiseChain = Promise.resolve(options);
+    for (const interceptor of this.interceptors.request.values()) {
+        if (interceptor) {
+            promiseChain = promiseChain.then(interceptor.resolved, interceptor.rejected);
+        }
+    }
+    return promiseChain;
+}, _Gaxios_applyResponseInterceptors = 
+/**
+ * Applies the response interceptors. The response interceptors are applied after the
+ * call to request is made.
+ *
+ * @param {GaxiosOptions} options The current set of options.
+ *
+ * @returns {Promise<GaxiosOptions>} Promise that resolves to the set of options or response after interceptors are applied.
+ */
+async function _Gaxios_applyResponseInterceptors(response) {
+    let promiseChain = Promise.resolve(response);
+    for (const interceptor of this.interceptors.response.values()) {
+        if (interceptor) {
+            promiseChain = promiseChain.then(interceptor.resolved, interceptor.rejected);
+        }
+    }
+    return promiseChain;
+}, _Gaxios_prepareRequest = 
+/**
+ * Validates the options, merges them with defaults, and prepare request.
+ *
+ * @param options The original options passed from the client.
+ * @returns Prepared options, ready to make a request
+ */
+async function _Gaxios_prepareRequest(options) {
+    var _b, _c, _d, _e;
+    const opts = (0, extend_1.default)(true, {}, this.defaults, options);
+    if (!opts.url) {
+        throw new Error('URL is required.');
+    }
+    // baseUrl has been deprecated, remove in 2.0
+    const baseUrl = opts.baseUrl || opts.baseURL;
+    if (baseUrl) {
+        opts.url = baseUrl.toString() + opts.url;
+    }
+    opts.paramsSerializer = opts.paramsSerializer || this.paramsSerializer;
+    if (opts.params && Object.keys(opts.params).length > 0) {
+        let additionalQueryParams = opts.paramsSerializer(opts.params);
+        if (additionalQueryParams.startsWith('?')) {
+            additionalQueryParams = additionalQueryParams.slice(1);
+        }
+        const prefix = opts.url.toString().includes('?') ? '&' : '?';
+        opts.url = opts.url + prefix + additionalQueryParams;
+    }
+    if (typeof options.maxContentLength === 'number') {
+        opts.size = options.maxContentLength;
+    }
+    if (typeof options.maxRedirects === 'number') {
+        opts.follow = options.maxRedirects;
+    }
+    opts.headers = opts.headers || {};
+    if (opts.multipart === undefined && opts.data) {
+        const isFormData = typeof FormData === 'undefined'
+            ? false
+            : (opts === null || opts === void 0 ? void 0 : opts.data) instanceof FormData;
+        if (is_stream_1.default.readable(opts.data)) {
+            opts.body = opts.data;
+        }
+        else if (hasBuffer() && Buffer.isBuffer(opts.data)) {
+            // Do not attempt to JSON.stringify() a Buffer:
+            opts.body = opts.data;
+            if (!hasHeader(opts, 'Content-Type')) {
+                opts.headers['Content-Type'] = 'application/json';
+            }
+        }
+        else if (typeof opts.data === 'object') {
+            // If www-form-urlencoded content type has been set, but data is
+            // provided as an object, serialize the content using querystring:
+            if (!isFormData) {
+                if (getHeader(opts, 'content-type') ===
+                    'application/x-www-form-urlencoded') {
+                    opts.body = opts.paramsSerializer(opts.data);
+                }
+                else {
+                    // } else if (!(opts.data instanceof FormData)) {
+                    if (!hasHeader(opts, 'Content-Type')) {
+                        opts.headers['Content-Type'] = 'application/json';
+                    }
+                    opts.body = JSON.stringify(opts.data);
+                }
+            }
+        }
+        else {
+            opts.body = opts.data;
+        }
+    }
+    else if (opts.multipart && opts.multipart.length > 0) {
+        // note: once the minimum version reaches Node 16,
+        // this can be replaced with randomUUID() function from crypto
+        // and the dependency on UUID removed
+        const boundary = (0, uuid_1.v4)();
+        opts.headers['Content-Type'] = `multipart/related; boundary=${boundary}`;
+        const bodyStream = new stream_1.PassThrough();
+        opts.body = bodyStream;
+        (0, stream_1.pipeline)(this.getMultipartRequest(opts.multipart, boundary), bodyStream, () => { });
+    }
+    opts.validateStatus = opts.validateStatus || this.validateStatus;
+    opts.responseType = opts.responseType || 'unknown';
+    if (!opts.headers['Accept'] && opts.responseType === 'json') {
+        opts.headers['Accept'] = 'application/json';
+    }
+    opts.method = opts.method || 'GET';
+    const proxy = opts.proxy ||
+        ((_b = process === null || process === void 0 ? void 0 : process.env) === null || _b === void 0 ? void 0 : _b.HTTPS_PROXY) ||
+        ((_c = process === null || process === void 0 ? void 0 : process.env) === null || _c === void 0 ? void 0 : _c.https_proxy) ||
+        ((_d = process === null || process === void 0 ? void 0 : process.env) === null || _d === void 0 ? void 0 : _d.HTTP_PROXY) ||
+        ((_e = process === null || process === void 0 ? void 0 : process.env) === null || _e === void 0 ? void 0 : _e.http_proxy);
+    const urlMayUseProxy = __classPrivateFieldGet(this, _Gaxios_instances, "m", _Gaxios_urlMayUseProxy).call(this, opts.url, opts.noProxy);
+    if (opts.agent) {
+        // don't do any of the following options - use the user-provided agent.
+    }
+    else if (proxy && urlMayUseProxy) {
+        const HttpsProxyAgent = await __classPrivateFieldGet(_a, _a, "m", _Gaxios_getProxyAgent).call(_a);
+        if (this.agentCache.has(proxy)) {
+            opts.agent = this.agentCache.get(proxy);
+        }
+        else {
+            opts.agent = new HttpsProxyAgent(proxy, {
+                cert: opts.cert,
+                key: opts.key,
+            });
+            this.agentCache.set(proxy, opts.agent);
+        }
+    }
+    else if (opts.cert && opts.key) {
+        // Configure client for mTLS
+        if (this.agentCache.has(opts.key)) {
+            opts.agent = this.agentCache.get(opts.key);
+        }
+        else {
+            opts.agent = new https_1.Agent({
+                cert: opts.cert,
+                key: opts.key,
+            });
+            this.agentCache.set(opts.key, opts.agent);
+        }
+    }
+    if (typeof opts.errorRedactor !== 'function' &&
+        opts.errorRedactor !== false) {
+        opts.errorRedactor = common_1.defaultErrorRedactor;
+    }
+    return opts;
+}, _Gaxios_getProxyAgent = async function _Gaxios_getProxyAgent() {
+    __classPrivateFieldSet(this, _a, __classPrivateFieldGet(this, _a, "f", _Gaxios_proxyAgent) || (await Promise.resolve().then(() => __importStar(__nccwpck_require__(7219)))).HttpsProxyAgent, "f", _Gaxios_proxyAgent);
+    return __classPrivateFieldGet(this, _a, "f", _Gaxios_proxyAgent);
+};
+/**
+ * A cache for the lazily-loaded proxy agent.
+ *
+ * Should use {@link Gaxios[#getProxyAgent]} to retrieve.
+ */
+// using `import` to dynamically import the types here
+_Gaxios_proxyAgent = { value: void 0 };
+//# sourceMappingURL=gaxios.js.map
+
+/***/ }),
+
+/***/ 9555:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+
+// Copyright 2018 Google LLC
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.instance = exports.Gaxios = exports.GaxiosError = void 0;
+exports.request = request;
+const gaxios_1 = __nccwpck_require__(8133);
+Object.defineProperty(exports, "Gaxios", ({ enumerable: true, get: function () { return gaxios_1.Gaxios; } }));
+var common_1 = __nccwpck_require__(6129);
+Object.defineProperty(exports, "GaxiosError", ({ enumerable: true, get: function () { return common_1.GaxiosError; } }));
+__exportStar(__nccwpck_require__(4309), exports);
+/**
+ * The default instance used when the `request` method is directly
+ * invoked.
+ */
+exports.instance = new gaxios_1.Gaxios();
+/**
+ * Make an HTTP request using the given options.
+ * @param opts Options for the request
+ */
+async function request(opts) {
+    return exports.instance.request(opts);
+}
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 4309:
+/***/ ((__unused_webpack_module, exports) => {
+
+
+// Copyright 2024 Google LLC
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GaxiosInterceptorManager = void 0;
+/**
+ * Class to manage collections of GaxiosInterceptors for both requests and responses.
+ */
+class GaxiosInterceptorManager extends Set {
+}
+exports.GaxiosInterceptorManager = GaxiosInterceptorManager;
+//# sourceMappingURL=interceptor.js.map
+
+/***/ }),
+
+/***/ 1052:
+/***/ ((__unused_webpack_module, exports) => {
+
+
+// Copyright 2018 Google LLC
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.getRetryConfig = getRetryConfig;
+async function getRetryConfig(err) {
+    let config = getConfig(err);
+    if (!err || !err.config || (!config && !err.config.retry)) {
+        return { shouldRetry: false };
+    }
+    config = config || {};
+    config.currentRetryAttempt = config.currentRetryAttempt || 0;
+    config.retry =
+        config.retry === undefined || config.retry === null ? 3 : config.retry;
+    config.httpMethodsToRetry = config.httpMethodsToRetry || [
+        'GET',
+        'HEAD',
+        'PUT',
+        'OPTIONS',
+        'DELETE',
+    ];
+    config.noResponseRetries =
+        config.noResponseRetries === undefined || config.noResponseRetries === null
+            ? 2
+            : config.noResponseRetries;
+    config.retryDelayMultiplier = config.retryDelayMultiplier
+        ? config.retryDelayMultiplier
+        : 2;
+    config.timeOfFirstRequest = config.timeOfFirstRequest
+        ? config.timeOfFirstRequest
+        : Date.now();
+    config.totalTimeout = config.totalTimeout
+        ? config.totalTimeout
+        : Number.MAX_SAFE_INTEGER;
+    config.maxRetryDelay = config.maxRetryDelay
+        ? config.maxRetryDelay
+        : Number.MAX_SAFE_INTEGER;
+    // If this wasn't in the list of status codes where we want
+    // to automatically retry, return.
+    const retryRanges = [
+        // https://en.wikipedia.org/wiki/List_of_HTTP_status_codes
+        // 1xx - Retry (Informational, request still processing)
+        // 2xx - Do not retry (Success)
+        // 3xx - Do not retry (Redirect)
+        // 4xx - Do not retry (Client errors)
+        // 408 - Retry ("Request Timeout")
+        // 429 - Retry ("Too Many Requests")
+        // 5xx - Retry (Server errors)
+        [100, 199],
+        [408, 408],
+        [429, 429],
+        [500, 599],
+    ];
+    config.statusCodesToRetry = config.statusCodesToRetry || retryRanges;
+    // Put the config back into the err
+    err.config.retryConfig = config;
+    // Determine if we should retry the request
+    const shouldRetryFn = config.shouldRetry || shouldRetryRequest;
+    if (!(await shouldRetryFn(err))) {
+        return { shouldRetry: false, config: err.config };
+    }
+    const delay = getNextRetryDelay(config);
+    // We're going to retry!  Incremenent the counter.
+    err.config.retryConfig.currentRetryAttempt += 1;
+    // Create a promise that invokes the retry after the backOffDelay
+    const backoff = config.retryBackoff
+        ? config.retryBackoff(err, delay)
+        : new Promise(resolve => {
+            setTimeout(resolve, delay);
+        });
+    // Notify the user if they added an `onRetryAttempt` handler
+    if (config.onRetryAttempt) {
+        config.onRetryAttempt(err);
+    }
+    // Return the promise in which recalls Gaxios to retry the request
+    await backoff;
+    return { shouldRetry: true, config: err.config };
+}
+/**
+ * Determine based on config if we should retry the request.
+ * @param err The GaxiosError passed to the interceptor.
+ */
+function shouldRetryRequest(err) {
+    var _a;
+    const config = getConfig(err);
+    // node-fetch raises an AbortError if signaled:
+    // https://github.com/bitinn/node-fetch#request-cancellation-with-abortsignal
+    if (err.name === 'AbortError' || ((_a = err.error) === null || _a === void 0 ? void 0 : _a.name) === 'AbortError') {
+        return false;
+    }
+    // If there's no config, or retries are disabled, return.
+    if (!config || config.retry === 0) {
+        return false;
+    }
+    // Check if this error has no response (ETIMEDOUT, ENOTFOUND, etc)
+    if (!err.response &&
+        (config.currentRetryAttempt || 0) >= config.noResponseRetries) {
+        return false;
+    }
+    // Only retry with configured HttpMethods.
+    if (!err.config.method ||
+        config.httpMethodsToRetry.indexOf(err.config.method.toUpperCase()) < 0) {
+        return false;
+    }
+    // If this wasn't in the list of status codes where we want
+    // to automatically retry, return.
+    if (err.response && err.response.status) {
+        let isInRange = false;
+        for (const [min, max] of config.statusCodesToRetry) {
+            const status = err.response.status;
+            if (status >= min && status <= max) {
+                isInRange = true;
+                break;
+            }
+        }
+        if (!isInRange) {
+            return false;
+        }
+    }
+    // If we are out of retry attempts, return
+    config.currentRetryAttempt = config.currentRetryAttempt || 0;
+    if (config.currentRetryAttempt >= config.retry) {
+        return false;
+    }
+    return true;
+}
+/**
+ * Acquire the raxConfig object from an GaxiosError if available.
+ * @param err The Gaxios error with a config object.
+ */
+function getConfig(err) {
+    if (err && err.config && err.config.retryConfig) {
+        return err.config.retryConfig;
+    }
+    return;
+}
+/**
+ * Gets the delay to wait before the next retry.
+ *
+ * @param {RetryConfig} config The current set of retry options
+ * @returns {number} the amount of ms to wait before the next retry attempt.
+ */
+function getNextRetryDelay(config) {
+    var _a;
+    // Calculate time to wait with exponential backoff.
+    // If this is the first retry, look for a configured retryDelay.
+    const retryDelay = config.currentRetryAttempt ? 0 : (_a = config.retryDelay) !== null && _a !== void 0 ? _a : 100;
+    // Formula: retryDelay + ((retryDelayMultiplier^currentRetryAttempt - 1 / 2) * 1000)
+    const calculatedDelay = retryDelay +
+        ((Math.pow(config.retryDelayMultiplier, config.currentRetryAttempt) - 1) /
+            2) *
+            1000;
+    const maxAllowableDelay = config.totalTimeout - (Date.now() - config.timeOfFirstRequest);
+    return Math.min(calculatedDelay, maxAllowableDelay, config.maxRetryDelay);
+}
+//# sourceMappingURL=retry.js.map
+
+/***/ }),
+
+/***/ 1980:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2023 Google LLC
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.pkg = void 0;
+exports.pkg = __nccwpck_require__(6318);
+//# sourceMappingURL=util.js.map
+
+/***/ }),
+
+/***/ 1904:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+/**
+ * Copyright 2022 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.detectGCPResidency = exports.isGoogleComputeEngine = exports.isGoogleComputeEngineMACAddress = exports.isGoogleComputeEngineLinux = exports.isGoogleCloudServerless = exports.GCE_LINUX_BIOS_PATHS = void 0;
+const fs_1 = __nccwpck_require__(7147);
+const os_1 = __nccwpck_require__(2037);
+/**
+ * Known paths unique to Google Compute Engine Linux instances
+ */
+exports.GCE_LINUX_BIOS_PATHS = {
+    BIOS_DATE: '/sys/class/dmi/id/bios_date',
+    BIOS_VENDOR: '/sys/class/dmi/id/bios_vendor',
+};
+const GCE_MAC_ADDRESS_REGEX = /^42:01/;
+/**
+ * Determines if the process is running on a Google Cloud Serverless environment (Cloud Run or Cloud Functions instance).
+ *
+ * Uses the:
+ * - {@link https://cloud.google.com/run/docs/container-contract#env-vars Cloud Run environment variables}.
+ * - {@link https://cloud.google.com/functions/docs/env-var Cloud Functions environment variables}.
+ *
+ * @returns {boolean} `true` if the process is running on GCP serverless, `false` otherwise.
+ */
+function isGoogleCloudServerless() {
+    /**
+     * `CLOUD_RUN_JOB` is used for Cloud Run Jobs
+     * - See {@link https://cloud.google.com/run/docs/container-contract#env-vars Cloud Run environment variables}.
+     *
+     * `FUNCTION_NAME` is used in older Cloud Functions environments:
+     * - See {@link https://cloud.google.com/functions/docs/env-var Python 3.7 and Go 1.11}.
+     *
+     * `K_SERVICE` is used in Cloud Run and newer Cloud Functions environments:
+     * - See {@link https://cloud.google.com/run/docs/container-contract#env-vars Cloud Run environment variables}.
+     * - See {@link https://cloud.google.com/functions/docs/env-var Cloud Functions newer runtimes}.
+     */
+    const isGFEnvironment = process.env.CLOUD_RUN_JOB ||
+        process.env.FUNCTION_NAME ||
+        process.env.K_SERVICE;
+    return !!isGFEnvironment;
+}
+exports.isGoogleCloudServerless = isGoogleCloudServerless;
+/**
+ * Determines if the process is running on a Linux Google Compute Engine instance.
+ *
+ * @returns {boolean} `true` if the process is running on Linux GCE, `false` otherwise.
+ */
+function isGoogleComputeEngineLinux() {
+    if ((0, os_1.platform)() !== 'linux')
+        return false;
+    try {
+        // ensure this file exist
+        (0, fs_1.statSync)(exports.GCE_LINUX_BIOS_PATHS.BIOS_DATE);
+        // ensure this file exist and matches
+        const biosVendor = (0, fs_1.readFileSync)(exports.GCE_LINUX_BIOS_PATHS.BIOS_VENDOR, 'utf8');
+        return /Google/.test(biosVendor);
+    }
+    catch (_a) {
+        return false;
+    }
+}
+exports.isGoogleComputeEngineLinux = isGoogleComputeEngineLinux;
+/**
+ * Determines if the process is running on a Google Compute Engine instance with a known
+ * MAC address.
+ *
+ * @returns {boolean} `true` if the process is running on GCE (as determined by MAC address), `false` otherwise.
+ */
+function isGoogleComputeEngineMACAddress() {
+    const interfaces = (0, os_1.networkInterfaces)();
+    for (const item of Object.values(interfaces)) {
+        if (!item)
+            continue;
+        for (const { mac } of item) {
+            if (GCE_MAC_ADDRESS_REGEX.test(mac)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+exports.isGoogleComputeEngineMACAddress = isGoogleComputeEngineMACAddress;
+/**
+ * Determines if the process is running on a Google Compute Engine instance.
+ *
+ * @returns {boolean} `true` if the process is running on GCE, `false` otherwise.
+ */
+function isGoogleComputeEngine() {
+    return isGoogleComputeEngineLinux() || isGoogleComputeEngineMACAddress();
+}
+exports.isGoogleComputeEngine = isGoogleComputeEngine;
+/**
+ * Determines if the process is running on Google Cloud Platform.
+ *
+ * @returns {boolean} `true` if the process is running on GCP, `false` otherwise.
+ */
+function detectGCPResidency() {
+    return isGoogleCloudServerless() || isGoogleComputeEngine();
+}
+exports.detectGCPResidency = detectGCPResidency;
+//# sourceMappingURL=gcp-residency.js.map
+
+/***/ }),
+
+/***/ 3563:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+
+/**
+ * Copyright 2018 Google LLC
+ *
+ * Distributed under MIT license.
+ * See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.requestTimeout = exports.setGCPResidency = exports.getGCPResidency = exports.gcpResidencyCache = exports.resetIsAvailableCache = exports.isAvailable = exports.bulk = exports.universe = exports.project = exports.instance = exports.METADATA_SERVER_DETECTION = exports.HEADERS = exports.HEADER_VALUE = exports.HEADER_NAME = exports.SECONDARY_HOST_ADDRESS = exports.HOST_ADDRESS = exports.BASE_PATH = void 0;
+const gaxios_1 = __nccwpck_require__(9555);
+const jsonBigint = __nccwpck_require__(5031);
+const gcp_residency_1 = __nccwpck_require__(1904);
+exports.BASE_PATH = '/computeMetadata/v1';
+exports.HOST_ADDRESS = 'http://169.254.169.254';
+exports.SECONDARY_HOST_ADDRESS = 'http://metadata.google.internal.';
+exports.HEADER_NAME = 'Metadata-Flavor';
+exports.HEADER_VALUE = 'Google';
+exports.HEADERS = Object.freeze({ [exports.HEADER_NAME]: exports.HEADER_VALUE });
+/**
+ * Metadata server detection override options.
+ *
+ * Available via `process.env.METADATA_SERVER_DETECTION`.
+ */
+exports.METADATA_SERVER_DETECTION = Object.freeze({
+    'assume-present': "don't try to ping the metadata server, but assume it's present",
+    none: "don't try to ping the metadata server, but don't try to use it either",
+    'bios-only': "treat the result of a BIOS probe as canonical (don't fall back to pinging)",
+    'ping-only': 'skip the BIOS probe, and go straight to pinging',
+});
+/**
+ * Returns the base URL while taking into account the GCE_METADATA_HOST
+ * environment variable if it exists.
+ *
+ * @returns The base URL, e.g., http://169.254.169.254/computeMetadata/v1.
+ */
+function getBaseUrl(baseUrl) {
+    if (!baseUrl) {
+        baseUrl =
+            process.env.GCE_METADATA_IP ||
+                process.env.GCE_METADATA_HOST ||
+                exports.HOST_ADDRESS;
+    }
+    // If no scheme is provided default to HTTP:
+    if (!/^https?:\/\//.test(baseUrl)) {
+        baseUrl = `http://${baseUrl}`;
+    }
+    return new URL(exports.BASE_PATH, baseUrl).href;
+}
+// Accepts an options object passed from the user to the API. In previous
+// versions of the API, it referred to a `Request` or an `Axios` request
+// options object.  Now it refers to an object with very limited property
+// names. This is here to help ensure users don't pass invalid options when
+// they  upgrade from 0.4 to 0.5 to 0.8.
+function validate(options) {
+    Object.keys(options).forEach(key => {
+        switch (key) {
+            case 'params':
+            case 'property':
+            case 'headers':
+                break;
+            case 'qs':
+                throw new Error("'qs' is not a valid configuration option. Please use 'params' instead.");
+            default:
+                throw new Error(`'${key}' is not a valid configuration option.`);
+        }
+    });
+}
+async function metadataAccessor(type, options = {}, noResponseRetries = 3, fastFail = false) {
+    let metadataKey = '';
+    let params = {};
+    let headers = {};
+    if (typeof type === 'object') {
+        const metadataAccessor = type;
+        metadataKey = metadataAccessor.metadataKey;
+        params = metadataAccessor.params || params;
+        headers = metadataAccessor.headers || headers;
+        noResponseRetries = metadataAccessor.noResponseRetries || noResponseRetries;
+        fastFail = metadataAccessor.fastFail || fastFail;
+    }
+    else {
+        metadataKey = type;
+    }
+    if (typeof options === 'string') {
+        metadataKey += `/${options}`;
+    }
+    else {
+        validate(options);
+        if (options.property) {
+            metadataKey += `/${options.property}`;
+        }
+        headers = options.headers || headers;
+        params = options.params || params;
+    }
+    try {
+        const requestMethod = fastFail ? fastFailMetadataRequest : gaxios_1.request;
+        const res = await requestMethod({
+            url: `${getBaseUrl()}/${metadataKey}`,
+            headers: { ...exports.HEADERS, ...headers },
+            retryConfig: { noResponseRetries },
+            params,
+            responseType: 'text',
+            timeout: requestTimeout(),
+        });
+        // NOTE: node.js converts all incoming headers to lower case.
+        if (res.headers[exports.HEADER_NAME.toLowerCase()] !== exports.HEADER_VALUE) {
+            throw new Error(`Invalid response from metadata service: incorrect ${exports.HEADER_NAME} header.`);
+        }
+        else if (!res.data) {
+            throw new Error('Invalid response from the metadata service');
+        }
+        if (typeof res.data === 'string') {
+            try {
+                return jsonBigint.parse(res.data);
+            }
+            catch (_a) {
+                /* ignore */
+            }
+        }
+        return res.data;
+    }
+    catch (e) {
+        const err = e;
+        if (err.response && err.response.status !== 200) {
+            err.message = `Unsuccessful response status code. ${err.message}`;
+        }
+        throw e;
+    }
+}
+async function fastFailMetadataRequest(options) {
+    const secondaryOptions = {
+        ...options,
+        url: options.url.replace(getBaseUrl(), getBaseUrl(exports.SECONDARY_HOST_ADDRESS)),
+    };
+    // We race a connection between DNS/IP to metadata server. There are a couple
+    // reasons for this:
+    //
+    // 1. the DNS is slow in some GCP environments; by checking both, we might
+    //    detect the runtime environment signficantly faster.
+    // 2. we can't just check the IP, which is tarpitted and slow to respond
+    //    on a user's local machine.
+    //
+    // Additional logic has been added to make sure that we don't create an
+    // unhandled rejection in scenarios where a failure happens sometime
+    // after a success.
+    //
+    // Note, however, if a failure happens prior to a success, a rejection should
+    // occur, this is for folks running locally.
+    //
+    let responded = false;
+    const r1 = (0, gaxios_1.request)(options)
+        .then(res => {
+        responded = true;
+        return res;
+    })
+        .catch(err => {
+        if (responded) {
+            return r2;
+        }
+        else {
+            responded = true;
+            throw err;
+        }
+    });
+    const r2 = (0, gaxios_1.request)(secondaryOptions)
+        .then(res => {
+        responded = true;
+        return res;
+    })
+        .catch(err => {
+        if (responded) {
+            return r1;
+        }
+        else {
+            responded = true;
+            throw err;
+        }
+    });
+    return Promise.race([r1, r2]);
+}
+/**
+ * Obtain metadata for the current GCE instance.
+ *
+ * @see {@link https://cloud.google.com/compute/docs/metadata/predefined-metadata-keys}
+ *
+ * @example
+ * ```
+ * const serviceAccount: {} = await instance('service-accounts/');
+ * const serviceAccountEmail: string = await instance('service-accounts/default/email');
+ * ```
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function instance(options) {
+    return metadataAccessor('instance', options);
+}
+exports.instance = instance;
+/**
+ * Obtain metadata for the current GCP project.
+ *
+ * @see {@link https://cloud.google.com/compute/docs/metadata/predefined-metadata-keys}
+ *
+ * @example
+ * ```
+ * const projectId: string = await project('project-id');
+ * const numericProjectId: number = await project('numeric-project-id');
+ * ```
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function project(options) {
+    return metadataAccessor('project', options);
+}
+exports.project = project;
+/**
+ * Obtain metadata for the current universe.
+ *
+ * @see {@link https://cloud.google.com/compute/docs/metadata/predefined-metadata-keys}
+ *
+ * @example
+ * ```
+ * const universeDomain: string = await universe('universe_domain');
+ * ```
+ */
+function universe(options) {
+    return metadataAccessor('universe', options);
+}
+exports.universe = universe;
+/**
+ * Retrieve metadata items in parallel.
+ *
+ * @see {@link https://cloud.google.com/compute/docs/metadata/predefined-metadata-keys}
+ *
+ * @example
+ * ```
+ * const data = await bulk([
+ *   {
+ *     metadataKey: 'instance',
+ *   },
+ *   {
+ *     metadataKey: 'project/project-id',
+ *   },
+ * ] as const);
+ *
+ * // data.instance;
+ * // data['project/project-id'];
+ * ```
+ *
+ * @param properties The metadata properties to retrieve
+ * @returns The metadata in `metadatakey:value` format
+ */
+async function bulk(properties) {
+    const r = {};
+    await Promise.all(properties.map(item => {
+        return (async () => {
+            const res = await metadataAccessor(item);
+            const key = item.metadataKey;
+            r[key] = res;
+        })();
+    }));
+    return r;
+}
+exports.bulk = bulk;
+/*
+ * How many times should we retry detecting GCP environment.
+ */
+function detectGCPAvailableRetries() {
+    return process.env.DETECT_GCP_RETRIES
+        ? Number(process.env.DETECT_GCP_RETRIES)
+        : 0;
+}
+let cachedIsAvailableResponse;
+/**
+ * Determine if the metadata server is currently available.
+ */
+async function isAvailable() {
+    if (process.env.METADATA_SERVER_DETECTION) {
+        const value = process.env.METADATA_SERVER_DETECTION.trim().toLocaleLowerCase();
+        if (!(value in exports.METADATA_SERVER_DETECTION)) {
+            throw new RangeError(`Unknown \`METADATA_SERVER_DETECTION\` env variable. Got \`${value}\`, but it should be \`${Object.keys(exports.METADATA_SERVER_DETECTION).join('`, `')}\`, or unset`);
+        }
+        switch (value) {
+            case 'assume-present':
+                return true;
+            case 'none':
+                return false;
+            case 'bios-only':
+                return getGCPResidency();
+            case 'ping-only':
+            // continue, we want to ping the server
+        }
+    }
+    try {
+        // If a user is instantiating several GCP libraries at the same time,
+        // this may result in multiple calls to isAvailable(), to detect the
+        // runtime environment. We use the same promise for each of these calls
+        // to reduce the network load.
+        if (cachedIsAvailableResponse === undefined) {
+            cachedIsAvailableResponse = metadataAccessor('instance', undefined, detectGCPAvailableRetries(), 
+            // If the default HOST_ADDRESS has been overridden, we should not
+            // make an effort to try SECONDARY_HOST_ADDRESS (as we are likely in
+            // a non-GCP environment):
+            !(process.env.GCE_METADATA_IP || process.env.GCE_METADATA_HOST));
+        }
+        await cachedIsAvailableResponse;
+        return true;
+    }
+    catch (e) {
+        const err = e;
+        if (process.env.DEBUG_AUTH) {
+            console.info(err);
+        }
+        if (err.type === 'request-timeout') {
+            // If running in a GCP environment, metadata endpoint should return
+            // within ms.
+            return false;
+        }
+        if (err.response && err.response.status === 404) {
+            return false;
+        }
+        else {
+            if (!(err.response && err.response.status === 404) &&
+                // A warning is emitted if we see an unexpected err.code, or err.code
+                // is not populated:
+                (!err.code ||
+                    ![
+                        'EHOSTDOWN',
+                        'EHOSTUNREACH',
+                        'ENETUNREACH',
+                        'ENOENT',
+                        'ENOTFOUND',
+                        'ECONNREFUSED',
+                    ].includes(err.code))) {
+                let code = 'UNKNOWN';
+                if (err.code)
+                    code = err.code;
+                process.emitWarning(`received unexpected error = ${err.message} code = ${code}`, 'MetadataLookupWarning');
+            }
+            // Failure to resolve the metadata service means that it is not available.
+            return false;
+        }
+    }
+}
+exports.isAvailable = isAvailable;
+/**
+ * reset the memoized isAvailable() lookup.
+ */
+function resetIsAvailableCache() {
+    cachedIsAvailableResponse = undefined;
+}
+exports.resetIsAvailableCache = resetIsAvailableCache;
+/**
+ * A cache for the detected GCP Residency.
+ */
+exports.gcpResidencyCache = null;
+/**
+ * Detects GCP Residency.
+ * Caches results to reduce costs for subsequent calls.
+ *
+ * @see setGCPResidency for setting
+ */
+function getGCPResidency() {
+    if (exports.gcpResidencyCache === null) {
+        setGCPResidency();
+    }
+    return exports.gcpResidencyCache;
+}
+exports.getGCPResidency = getGCPResidency;
+/**
+ * Sets the detected GCP Residency.
+ * Useful for forcing metadata server detection behavior.
+ *
+ * Set `null` to autodetect the environment (default behavior).
+ * @see getGCPResidency for getting
+ */
+function setGCPResidency(value = null) {
+    exports.gcpResidencyCache = value !== null ? value : (0, gcp_residency_1.detectGCPResidency)();
+}
+exports.setGCPResidency = setGCPResidency;
+/**
+ * Obtain the timeout for requests to the metadata server.
+ *
+ * In certain environments and conditions requests can take longer than
+ * the default timeout to complete. This function will determine the
+ * appropriate timeout based on the environment.
+ *
+ * @returns {number} a request timeout duration in milliseconds.
+ */
+function requestTimeout() {
+    return getGCPResidency() ? 0 : 3000;
+}
+exports.requestTimeout = requestTimeout;
+__exportStar(__nccwpck_require__(1904), exports);
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 4627:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2012 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.AuthClient = exports.DEFAULT_EAGER_REFRESH_THRESHOLD_MILLIS = exports.DEFAULT_UNIVERSE = void 0;
+const events_1 = __nccwpck_require__(2361);
+const gaxios_1 = __nccwpck_require__(9555);
+const transporters_1 = __nccwpck_require__(2649);
+const util_1 = __nccwpck_require__(8905);
+/**
+ * The default cloud universe
+ *
+ * @see {@link AuthJSONOptions.universe_domain}
+ */
+exports.DEFAULT_UNIVERSE = 'googleapis.com';
+/**
+ * The default {@link AuthClientOptions.eagerRefreshThresholdMillis}
+ */
+exports.DEFAULT_EAGER_REFRESH_THRESHOLD_MILLIS = 5 * 60 * 1000;
+class AuthClient extends events_1.EventEmitter {
+    constructor(opts = {}) {
+        var _a, _b, _c, _d, _e;
+        super();
+        this.credentials = {};
+        this.eagerRefreshThresholdMillis = exports.DEFAULT_EAGER_REFRESH_THRESHOLD_MILLIS;
+        this.forceRefreshOnFailure = false;
+        this.universeDomain = exports.DEFAULT_UNIVERSE;
+        const options = (0, util_1.originalOrCamelOptions)(opts);
+        // Shared auth options
+        this.apiKey = opts.apiKey;
+        this.projectId = (_a = options.get('project_id')) !== null && _a !== void 0 ? _a : null;
+        this.quotaProjectId = options.get('quota_project_id');
+        this.credentials = (_b = options.get('credentials')) !== null && _b !== void 0 ? _b : {};
+        this.universeDomain = (_c = options.get('universe_domain')) !== null && _c !== void 0 ? _c : exports.DEFAULT_UNIVERSE;
+        // Shared client options
+        this.transporter = (_d = opts.transporter) !== null && _d !== void 0 ? _d : new transporters_1.DefaultTransporter();
+        if (opts.transporterOptions) {
+            this.transporter.defaults = opts.transporterOptions;
+        }
+        if (opts.eagerRefreshThresholdMillis) {
+            this.eagerRefreshThresholdMillis = opts.eagerRefreshThresholdMillis;
+        }
+        this.forceRefreshOnFailure = (_e = opts.forceRefreshOnFailure) !== null && _e !== void 0 ? _e : false;
+    }
+    /**
+     * Return the {@link Gaxios `Gaxios`} instance from the {@link AuthClient.transporter}.
+     *
+     * @expiremental
+     */
+    get gaxios() {
+        if (this.transporter instanceof gaxios_1.Gaxios) {
+            return this.transporter;
+        }
+        else if (this.transporter instanceof transporters_1.DefaultTransporter) {
+            return this.transporter.instance;
+        }
+        else if ('instance' in this.transporter &&
+            this.transporter.instance instanceof gaxios_1.Gaxios) {
+            return this.transporter.instance;
+        }
+        return null;
+    }
+    /**
+     * Sets the auth credentials.
+     */
+    setCredentials(credentials) {
+        this.credentials = credentials;
+    }
+    /**
+     * Append additional headers, e.g., x-goog-user-project, shared across the
+     * classes inheriting AuthClient. This method should be used by any method
+     * that overrides getRequestMetadataAsync(), which is a shared helper for
+     * setting request information in both gRPC and HTTP API calls.
+     *
+     * @param headers object to append additional headers to.
+     */
+    addSharedMetadataHeaders(headers) {
+        // quota_project_id, stored in application_default_credentials.json, is set in
+        // the x-goog-user-project header, to indicate an alternate account for
+        // billing and quota:
+        if (!headers['x-goog-user-project'] && // don't override a value the user sets.
+            this.quotaProjectId) {
+            headers['x-goog-user-project'] = this.quotaProjectId;
+        }
+        return headers;
+    }
+    /**
+     * Retry config for Auth-related requests.
+     *
+     * @remarks
+     *
+     * This is not a part of the default {@link AuthClient.transporter transporter/gaxios}
+     * config as some downstream APIs would prefer if customers explicitly enable retries,
+     * such as GCS.
+     */
+    static get RETRY_CONFIG() {
+        return {
+            retry: true,
+            retryConfig: {
+                httpMethodsToRetry: ['GET', 'PUT', 'POST', 'HEAD', 'OPTIONS', 'DELETE'],
+            },
+        };
+    }
+}
+exports.AuthClient = AuthClient;
+
+
+/***/ }),
+
+/***/ 1569:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+
+// Copyright 2021 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (receiver, state, kind, f) {
+    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
+    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
+    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
+};
+var _a, _AwsClient_DEFAULT_AWS_REGIONAL_CREDENTIAL_VERIFICATION_URL;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.AwsClient = void 0;
+const awsrequestsigner_1 = __nccwpck_require__(1754);
+const baseexternalclient_1 = __nccwpck_require__(7391);
+const defaultawssecuritycredentialssupplier_1 = __nccwpck_require__(9799);
+const util_1 = __nccwpck_require__(8905);
+/**
+ * AWS external account client. This is used for AWS workloads, where
+ * AWS STS GetCallerIdentity serialized signed requests are exchanged for
+ * GCP access token.
+ */
+class AwsClient extends baseexternalclient_1.BaseExternalAccountClient {
+    /**
+     * Instantiates an AwsClient instance using the provided JSON
+     * object loaded from an external account credentials file.
+     * An error is thrown if the credential is not a valid AWS credential.
+     * @param options The external account options object typically loaded
+     *   from the external account JSON credential file.
+     * @param additionalOptions **DEPRECATED, all options are available in the
+     *   `options` parameter.** Optional additional behavior customization options.
+     *   These currently customize expiration threshold time and whether to retry
+     *   on 401/403 API request errors.
+     */
+    constructor(options, additionalOptions) {
+        super(options, additionalOptions);
+        const opts = (0, util_1.originalOrCamelOptions)(options);
+        const credentialSource = opts.get('credential_source');
+        const awsSecurityCredentialsSupplier = opts.get('aws_security_credentials_supplier');
+        // Validate credential sourcing configuration.
+        if (!credentialSource && !awsSecurityCredentialsSupplier) {
+            throw new Error('A credential source or AWS security credentials supplier must be specified.');
+        }
+        if (credentialSource && awsSecurityCredentialsSupplier) {
+            throw new Error('Only one of credential source or AWS security credentials supplier can be specified.');
+        }
+        if (awsSecurityCredentialsSupplier) {
+            this.awsSecurityCredentialsSupplier = awsSecurityCredentialsSupplier;
+            this.regionalCredVerificationUrl =
+                __classPrivateFieldGet(_a, _a, "f", _AwsClient_DEFAULT_AWS_REGIONAL_CREDENTIAL_VERIFICATION_URL);
+            this.credentialSourceType = 'programmatic';
+        }
+        else {
+            const credentialSourceOpts = (0, util_1.originalOrCamelOptions)(credentialSource);
+            this.environmentId = credentialSourceOpts.get('environment_id');
+            // This is only required if the AWS region is not available in the
+            // AWS_REGION or AWS_DEFAULT_REGION environment variables.
+            const regionUrl = credentialSourceOpts.get('region_url');
+            // This is only required if AWS security credentials are not available in
+            // environment variables.
+            const securityCredentialsUrl = credentialSourceOpts.get('url');
+            const imdsV2SessionTokenUrl = credentialSourceOpts.get('imdsv2_session_token_url');
+            this.awsSecurityCredentialsSupplier =
+                new defaultawssecuritycredentialssupplier_1.DefaultAwsSecurityCredentialsSupplier({
+                    regionUrl: regionUrl,
+                    securityCredentialsUrl: securityCredentialsUrl,
+                    imdsV2SessionTokenUrl: imdsV2SessionTokenUrl,
+                });
+            this.regionalCredVerificationUrl = credentialSourceOpts.get('regional_cred_verification_url');
+            this.credentialSourceType = 'aws';
+            // Data validators.
+            this.validateEnvironmentId();
+        }
+        this.awsRequestSigner = null;
+        this.region = '';
+    }
+    validateEnvironmentId() {
+        var _b;
+        const match = (_b = this.environmentId) === null || _b === void 0 ? void 0 : _b.match(/^(aws)(\d+)$/);
+        if (!match || !this.regionalCredVerificationUrl) {
+            throw new Error('No valid AWS "credential_source" provided');
+        }
+        else if (parseInt(match[2], 10) !== 1) {
+            throw new Error(`aws version "${match[2]}" is not supported in the current build.`);
+        }
+    }
+    /**
+     * Triggered when an external subject token is needed to be exchanged for a
+     * GCP access token via GCP STS endpoint. This will call the
+     * {@link AwsSecurityCredentialsSupplier} to retrieve an AWS region and AWS
+     * Security Credentials, then use them to create a signed AWS STS request that
+     * can be exchanged for a GCP access token.
+     * @return A promise that resolves with the external subject token.
+     */
+    async retrieveSubjectToken() {
+        // Initialize AWS request signer if not already initialized.
+        if (!this.awsRequestSigner) {
+            this.region = await this.awsSecurityCredentialsSupplier.getAwsRegion(this.supplierContext);
+            this.awsRequestSigner = new awsrequestsigner_1.AwsRequestSigner(async () => {
+                return this.awsSecurityCredentialsSupplier.getAwsSecurityCredentials(this.supplierContext);
+            }, this.region);
+        }
+        // Generate signed request to AWS STS GetCallerIdentity API.
+        // Use the required regional endpoint. Otherwise, the request will fail.
+        const options = await this.awsRequestSigner.getRequestOptions({
+            ..._a.RETRY_CONFIG,
+            url: this.regionalCredVerificationUrl.replace('{region}', this.region),
+            method: 'POST',
+        });
+        // The GCP STS endpoint expects the headers to be formatted as:
+        // [
+        //   {key: 'x-amz-date', value: '...'},
+        //   {key: 'Authorization', value: '...'},
+        //   ...
+        // ]
+        // And then serialized as:
+        // encodeURIComponent(JSON.stringify({
+        //   url: '...',
+        //   method: 'POST',
+        //   headers: [{key: 'x-amz-date', value: '...'}, ...]
+        // }))
+        const reformattedHeader = [];
+        const extendedHeaders = Object.assign({
+            // The full, canonical resource name of the workload identity pool
+            // provider, with or without the HTTPS prefix.
+            // Including this header as part of the signature is recommended to
+            // ensure data integrity.
+            'x-goog-cloud-target-resource': this.audience,
+        }, options.headers);
+        // Reformat header to GCP STS expected format.
+        for (const key in extendedHeaders) {
+            reformattedHeader.push({
+                key,
+                value: extendedHeaders[key],
+            });
+        }
+        // Serialize the reformatted signed request.
+        return encodeURIComponent(JSON.stringify({
+            url: options.url,
+            method: options.method,
+            headers: reformattedHeader,
+        }));
+    }
+}
+exports.AwsClient = AwsClient;
+_a = AwsClient;
+_AwsClient_DEFAULT_AWS_REGIONAL_CREDENTIAL_VERIFICATION_URL = { value: 'https://sts.{region}.amazonaws.com?Action=GetCallerIdentity&Version=2011-06-15' };
+/**
+ * @deprecated AWS client no validates the EC2 metadata address.
+ **/
+AwsClient.AWS_EC2_METADATA_IPV4_ADDRESS = '169.254.169.254';
+/**
+ * @deprecated AWS client no validates the EC2 metadata address.
+ **/
+AwsClient.AWS_EC2_METADATA_IPV6_ADDRESS = 'fd00:ec2::254';
+
+
+/***/ }),
+
+/***/ 1754:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2021 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.AwsRequestSigner = void 0;
+const crypto_1 = __nccwpck_require__(8043);
+/** AWS Signature Version 4 signing algorithm identifier.  */
+const AWS_ALGORITHM = 'AWS4-HMAC-SHA256';
+/**
+ * The termination string for the AWS credential scope value as defined in
+ * https://docs.aws.amazon.com/general/latest/gr/sigv4-create-string-to-sign.html
+ */
+const AWS_REQUEST_TYPE = 'aws4_request';
+/**
+ * Implements an AWS API request signer based on the AWS Signature Version 4
+ * signing process.
+ * https://docs.aws.amazon.com/general/latest/gr/signature-version-4.html
+ */
+class AwsRequestSigner {
+    /**
+     * Instantiates an AWS API request signer used to send authenticated signed
+     * requests to AWS APIs based on the AWS Signature Version 4 signing process.
+     * This also provides a mechanism to generate the signed request without
+     * sending it.
+     * @param getCredentials A mechanism to retrieve AWS security credentials
+     *   when needed.
+     * @param region The AWS region to use.
+     */
+    constructor(getCredentials, region) {
+        this.getCredentials = getCredentials;
+        this.region = region;
+        this.crypto = (0, crypto_1.createCrypto)();
+    }
+    /**
+     * Generates the signed request for the provided HTTP request for calling
+     * an AWS API. This follows the steps described at:
+     * https://docs.aws.amazon.com/general/latest/gr/sigv4_signing.html
+     * @param amzOptions The AWS request options that need to be signed.
+     * @return A promise that resolves with the GaxiosOptions containing the
+     *   signed HTTP request parameters.
+     */
+    async getRequestOptions(amzOptions) {
+        if (!amzOptions.url) {
+            throw new Error('"url" is required in "amzOptions"');
+        }
+        // Stringify JSON requests. This will be set in the request body of the
+        // generated signed request.
+        const requestPayloadData = typeof amzOptions.data === 'object'
+            ? JSON.stringify(amzOptions.data)
+            : amzOptions.data;
+        const url = amzOptions.url;
+        const method = amzOptions.method || 'GET';
+        const requestPayload = amzOptions.body || requestPayloadData;
+        const additionalAmzHeaders = amzOptions.headers;
+        const awsSecurityCredentials = await this.getCredentials();
+        const uri = new URL(url);
+        const headerMap = await generateAuthenticationHeaderMap({
+            crypto: this.crypto,
+            host: uri.host,
+            canonicalUri: uri.pathname,
+            canonicalQuerystring: uri.search.substr(1),
+            method,
+            region: this.region,
+            securityCredentials: awsSecurityCredentials,
+            requestPayload,
+            additionalAmzHeaders,
+        });
+        // Append additional optional headers, eg. X-Amz-Target, Content-Type, etc.
+        const headers = Object.assign(
+        // Add x-amz-date if available.
+        headerMap.amzDate ? { 'x-amz-date': headerMap.amzDate } : {}, {
+            Authorization: headerMap.authorizationHeader,
+            host: uri.host,
+        }, additionalAmzHeaders || {});
+        if (awsSecurityCredentials.token) {
+            Object.assign(headers, {
+                'x-amz-security-token': awsSecurityCredentials.token,
+            });
+        }
+        const awsSignedReq = {
+            url,
+            method: method,
+            headers,
+        };
+        if (typeof requestPayload !== 'undefined') {
+            awsSignedReq.body = requestPayload;
+        }
+        return awsSignedReq;
+    }
+}
+exports.AwsRequestSigner = AwsRequestSigner;
+/**
+ * Creates the HMAC-SHA256 hash of the provided message using the
+ * provided key.
+ *
+ * @param crypto The crypto instance used to facilitate cryptographic
+ *   operations.
+ * @param key The HMAC-SHA256 key to use.
+ * @param msg The message to hash.
+ * @return The computed hash bytes.
+ */
+async function sign(crypto, key, msg) {
+    return await crypto.signWithHmacSha256(key, msg);
+}
+/**
+ * Calculates the signing key used to calculate the signature for
+ * AWS Signature Version 4 based on:
+ * https://docs.aws.amazon.com/general/latest/gr/sigv4-calculate-signature.html
+ *
+ * @param crypto The crypto instance used to facilitate cryptographic
+ *   operations.
+ * @param key The AWS secret access key.
+ * @param dateStamp The '%Y%m%d' date format.
+ * @param region The AWS region.
+ * @param serviceName The AWS service name, eg. sts.
+ * @return The signing key bytes.
+ */
+async function getSigningKey(crypto, key, dateStamp, region, serviceName) {
+    const kDate = await sign(crypto, `AWS4${key}`, dateStamp);
+    const kRegion = await sign(crypto, kDate, region);
+    const kService = await sign(crypto, kRegion, serviceName);
+    const kSigning = await sign(crypto, kService, 'aws4_request');
+    return kSigning;
+}
+/**
+ * Generates the authentication header map needed for generating the AWS
+ * Signature Version 4 signed request.
+ *
+ * @param option The options needed to compute the authentication header map.
+ * @return The AWS authentication header map which constitutes of the following
+ *   components: amz-date, authorization header and canonical query string.
+ */
+async function generateAuthenticationHeaderMap(options) {
+    const additionalAmzHeaders = options.additionalAmzHeaders || {};
+    const requestPayload = options.requestPayload || '';
+    // iam.amazonaws.com host => iam service.
+    // sts.us-east-2.amazonaws.com => sts service.
+    const serviceName = options.host.split('.')[0];
+    const now = new Date();
+    // Format: '%Y%m%dT%H%M%SZ'.
+    const amzDate = now
+        .toISOString()
+        .replace(/[-:]/g, '')
+        .replace(/\.[0-9]+/, '');
+    // Format: '%Y%m%d'.
+    const dateStamp = now.toISOString().replace(/[-]/g, '').replace(/T.*/, '');
+    // Change all additional headers to be lower case.
+    const reformattedAdditionalAmzHeaders = {};
+    Object.keys(additionalAmzHeaders).forEach(key => {
+        reformattedAdditionalAmzHeaders[key.toLowerCase()] =
+            additionalAmzHeaders[key];
+    });
+    // Add AWS token if available.
+    if (options.securityCredentials.token) {
+        reformattedAdditionalAmzHeaders['x-amz-security-token'] =
+            options.securityCredentials.token;
+    }
+    // Header keys need to be sorted alphabetically.
+    const amzHeaders = Object.assign({
+        host: options.host,
+    }, 
+    // Previously the date was not fixed with x-amz- and could be provided manually.
+    // https://github.com/boto/botocore/blob/879f8440a4e9ace5d3cf145ce8b3d5e5ffb892ef/tests/unit/auth/aws4_testsuite/get-header-value-trim.req
+    reformattedAdditionalAmzHeaders.date ? {} : { 'x-amz-date': amzDate }, reformattedAdditionalAmzHeaders);
+    let canonicalHeaders = '';
+    const signedHeadersList = Object.keys(amzHeaders).sort();
+    signedHeadersList.forEach(key => {
+        canonicalHeaders += `${key}:${amzHeaders[key]}\n`;
+    });
+    const signedHeaders = signedHeadersList.join(';');
+    const payloadHash = await options.crypto.sha256DigestHex(requestPayload);
+    // https://docs.aws.amazon.com/general/latest/gr/sigv4-create-canonical-request.html
+    const canonicalRequest = `${options.method}\n` +
+        `${options.canonicalUri}\n` +
+        `${options.canonicalQuerystring}\n` +
+        `${canonicalHeaders}\n` +
+        `${signedHeaders}\n` +
+        `${payloadHash}`;
+    const credentialScope = `${dateStamp}/${options.region}/${serviceName}/${AWS_REQUEST_TYPE}`;
+    // https://docs.aws.amazon.com/general/latest/gr/sigv4-create-string-to-sign.html
+    const stringToSign = `${AWS_ALGORITHM}\n` +
+        `${amzDate}\n` +
+        `${credentialScope}\n` +
+        (await options.crypto.sha256DigestHex(canonicalRequest));
+    // https://docs.aws.amazon.com/general/latest/gr/sigv4-calculate-signature.html
+    const signingKey = await getSigningKey(options.crypto, options.securityCredentials.secretAccessKey, dateStamp, options.region, serviceName);
+    const signature = await sign(options.crypto, signingKey, stringToSign);
+    // https://docs.aws.amazon.com/general/latest/gr/sigv4-add-signature-to-request.html
+    const authorizationHeader = `${AWS_ALGORITHM} Credential=${options.securityCredentials.accessKeyId}/` +
+        `${credentialScope}, SignedHeaders=${signedHeaders}, ` +
+        `Signature=${(0, crypto_1.fromArrayBufferToHex)(signature)}`;
+    return {
+        // Do not return x-amz-date if date is available.
+        amzDate: reformattedAdditionalAmzHeaders.date ? undefined : amzDate,
+        authorizationHeader,
+        canonicalQuerystring: options.canonicalQuerystring,
+    };
+}
+
+
+/***/ }),
+
+/***/ 7391:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+
+// Copyright 2021 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (receiver, state, kind, f) {
+    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
+    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
+    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
+};
+var __classPrivateFieldSet = (this && this.__classPrivateFieldSet) || function (receiver, state, value, kind, f) {
+    if (kind === "m") throw new TypeError("Private method is not writable");
+    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a setter");
+    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
+    return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
+};
+var _BaseExternalAccountClient_instances, _BaseExternalAccountClient_pendingAccessToken, _BaseExternalAccountClient_internalRefreshAccessTokenAsync;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.BaseExternalAccountClient = exports.DEFAULT_UNIVERSE = exports.CLOUD_RESOURCE_MANAGER = exports.EXTERNAL_ACCOUNT_TYPE = exports.EXPIRATION_TIME_OFFSET = void 0;
+const stream = __nccwpck_require__(2781);
+const authclient_1 = __nccwpck_require__(4627);
+const sts = __nccwpck_require__(6308);
+const util_1 = __nccwpck_require__(8905);
+/**
+ * The required token exchange grant_type: rfc8693#section-2.1
+ */
+const STS_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:token-exchange';
+/**
+ * The requested token exchange requested_token_type: rfc8693#section-2.1
+ */
+const STS_REQUEST_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
+/** The default OAuth scope to request when none is provided. */
+const DEFAULT_OAUTH_SCOPE = 'https://www.googleapis.com/auth/cloud-platform';
+/** Default impersonated token lifespan in seconds.*/
+const DEFAULT_TOKEN_LIFESPAN = 3600;
+/**
+ * Offset to take into account network delays and server clock skews.
+ */
+exports.EXPIRATION_TIME_OFFSET = 5 * 60 * 1000;
+/**
+ * The credentials JSON file type for external account clients.
+ * There are 3 types of JSON configs:
+ * 1. authorized_user => Google end user credential
+ * 2. service_account => Google service account credential
+ * 3. external_Account => non-GCP service (eg. AWS, Azure, K8s)
+ */
+exports.EXTERNAL_ACCOUNT_TYPE = 'external_account';
+/**
+ * Cloud resource manager URL used to retrieve project information.
+ *
+ * @deprecated use {@link BaseExternalAccountClient.cloudResourceManagerURL} instead
+ **/
+exports.CLOUD_RESOURCE_MANAGER = 'https://cloudresourcemanager.googleapis.com/v1/projects/';
+/** The workforce audience pattern. */
+const WORKFORCE_AUDIENCE_PATTERN = '//iam\\.googleapis\\.com/locations/[^/]+/workforcePools/[^/]+/providers/.+';
+const DEFAULT_TOKEN_URL = 'https://sts.{universeDomain}/v1/token';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const pkg = __nccwpck_require__(1402);
+/**
+ * For backwards compatibility.
+ */
+var authclient_2 = __nccwpck_require__(4627);
+Object.defineProperty(exports, "DEFAULT_UNIVERSE", ({ enumerable: true, get: function () { return authclient_2.DEFAULT_UNIVERSE; } }));
+/**
+ * Base external account client. This is used to instantiate AuthClients for
+ * exchanging external account credentials for GCP access token and authorizing
+ * requests to GCP APIs.
+ * The base class implements common logic for exchanging various type of
+ * external credentials for GCP access token. The logic of determining and
+ * retrieving the external credential based on the environment and
+ * credential_source will be left for the subclasses.
+ */
+class BaseExternalAccountClient extends authclient_1.AuthClient {
+    /**
+     * Instantiate a BaseExternalAccountClient instance using the provided JSON
+     * object loaded from an external account credentials file.
+     * @param options The external account options object typically loaded
+     *   from the external account JSON credential file. The camelCased options
+     *   are aliases for the snake_cased options.
+     * @param additionalOptions **DEPRECATED, all options are available in the
+     *   `options` parameter.** Optional additional behavior customization options.
+     *   These currently customize expiration threshold time and whether to retry
+     *   on 401/403 API request errors.
+     */
+    constructor(options, additionalOptions) {
+        var _a;
+        super({ ...options, ...additionalOptions });
+        _BaseExternalAccountClient_instances.add(this);
+        /**
+         * A pending access token request. Used for concurrent calls.
+         */
+        _BaseExternalAccountClient_pendingAccessToken.set(this, null);
+        const opts = (0, util_1.originalOrCamelOptions)(options);
+        const type = opts.get('type');
+        if (type && type !== exports.EXTERNAL_ACCOUNT_TYPE) {
+            throw new Error(`Expected "${exports.EXTERNAL_ACCOUNT_TYPE}" type but ` +
+                `received "${options.type}"`);
+        }
+        const clientId = opts.get('client_id');
+        const clientSecret = opts.get('client_secret');
+        const tokenUrl = (_a = opts.get('token_url')) !== null && _a !== void 0 ? _a : DEFAULT_TOKEN_URL.replace('{universeDomain}', this.universeDomain);
+        const subjectTokenType = opts.get('subject_token_type');
+        const workforcePoolUserProject = opts.get('workforce_pool_user_project');
+        const serviceAccountImpersonationUrl = opts.get('service_account_impersonation_url');
+        const serviceAccountImpersonation = opts.get('service_account_impersonation');
+        const serviceAccountImpersonationLifetime = (0, util_1.originalOrCamelOptions)(serviceAccountImpersonation).get('token_lifetime_seconds');
+        this.cloudResourceManagerURL = new URL(opts.get('cloud_resource_manager_url') ||
+            `https://cloudresourcemanager.${this.universeDomain}/v1/projects/`);
+        if (clientId) {
+            this.clientAuth = {
+                confidentialClientType: 'basic',
+                clientId,
+                clientSecret,
+            };
+        }
+        this.stsCredential = new sts.StsCredentials(tokenUrl, this.clientAuth);
+        this.scopes = opts.get('scopes') || [DEFAULT_OAUTH_SCOPE];
+        this.cachedAccessToken = null;
+        this.audience = opts.get('audience');
+        this.subjectTokenType = subjectTokenType;
+        this.workforcePoolUserProject = workforcePoolUserProject;
+        const workforceAudiencePattern = new RegExp(WORKFORCE_AUDIENCE_PATTERN);
+        if (this.workforcePoolUserProject &&
+            !this.audience.match(workforceAudiencePattern)) {
+            throw new Error('workforcePoolUserProject should not be set for non-workforce pool ' +
+                'credentials.');
+        }
+        this.serviceAccountImpersonationUrl = serviceAccountImpersonationUrl;
+        this.serviceAccountImpersonationLifetime =
+            serviceAccountImpersonationLifetime;
+        if (this.serviceAccountImpersonationLifetime) {
+            this.configLifetimeRequested = true;
+        }
+        else {
+            this.configLifetimeRequested = false;
+            this.serviceAccountImpersonationLifetime = DEFAULT_TOKEN_LIFESPAN;
+        }
+        this.projectNumber = this.getProjectNumber(this.audience);
+        this.supplierContext = {
+            audience: this.audience,
+            subjectTokenType: this.subjectTokenType,
+            transporter: this.transporter,
+        };
+    }
+    /** The service account email to be impersonated, if available. */
+    getServiceAccountEmail() {
+        var _a;
+        if (this.serviceAccountImpersonationUrl) {
+            if (this.serviceAccountImpersonationUrl.length > 256) {
+                /**
+                 * Prevents DOS attacks.
+                 * @see {@link https://github.com/googleapis/google-auth-library-nodejs/security/code-scanning/84}
+                 **/
+                throw new RangeError(`URL is too long: ${this.serviceAccountImpersonationUrl}`);
+            }
+            // Parse email from URL. The formal looks as follows:
+            // https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/name@project-id.iam.gserviceaccount.com:generateAccessToken
+            const re = /serviceAccounts\/(?<email>[^:]+):generateAccessToken$/;
+            const result = re.exec(this.serviceAccountImpersonationUrl);
+            return ((_a = result === null || result === void 0 ? void 0 : result.groups) === null || _a === void 0 ? void 0 : _a.email) || null;
+        }
+        return null;
+    }
+    /**
+     * Provides a mechanism to inject GCP access tokens directly.
+     * When the provided credential expires, a new credential, using the
+     * external account options, is retrieved.
+     * @param credentials The Credentials object to set on the current client.
+     */
+    setCredentials(credentials) {
+        super.setCredentials(credentials);
+        this.cachedAccessToken = credentials;
+    }
+    /**
+     * @return A promise that resolves with the current GCP access token
+     *   response. If the current credential is expired, a new one is retrieved.
+     */
+    async getAccessToken() {
+        // If cached access token is unavailable or expired, force refresh.
+        if (!this.cachedAccessToken || this.isExpired(this.cachedAccessToken)) {
+            await this.refreshAccessTokenAsync();
+        }
+        // Return GCP access token in GetAccessTokenResponse format.
+        return {
+            token: this.cachedAccessToken.access_token,
+            res: this.cachedAccessToken.res,
+        };
+    }
+    /**
+     * The main authentication interface. It takes an optional url which when
+     * present is the endpoint being accessed, and returns a Promise which
+     * resolves with authorization header fields.
+     *
+     * The result has the form:
+     * { Authorization: 'Bearer <access_token_value>' }
+     */
+    async getRequestHeaders() {
+        const accessTokenResponse = await this.getAccessToken();
+        const headers = {
+            Authorization: `Bearer ${accessTokenResponse.token}`,
+        };
+        return this.addSharedMetadataHeaders(headers);
+    }
+    request(opts, callback) {
+        if (callback) {
+            this.requestAsync(opts).then(r => callback(null, r), e => {
+                return callback(e, e.response);
+            });
+        }
+        else {
+            return this.requestAsync(opts);
+        }
+    }
+    /**
+     * @return A promise that resolves with the project ID corresponding to the
+     *   current workload identity pool or current workforce pool if
+     *   determinable. For workforce pool credential, it returns the project ID
+     *   corresponding to the workforcePoolUserProject.
+     *   This is introduced to match the current pattern of using the Auth
+     *   library:
+     *   const projectId = await auth.getProjectId();
+     *   const url = `https://dns.googleapis.com/dns/v1/projects/${projectId}`;
+     *   const res = await client.request({ url });
+     *   The resource may not have permission
+     *   (resourcemanager.projects.get) to call this API or the required
+     *   scopes may not be selected:
+     *   https://cloud.google.com/resource-manager/reference/rest/v1/projects/get#authorization-scopes
+     */
+    async getProjectId() {
+        const projectNumber = this.projectNumber || this.workforcePoolUserProject;
+        if (this.projectId) {
+            // Return previously determined project ID.
+            return this.projectId;
+        }
+        else if (projectNumber) {
+            // Preferable not to use request() to avoid retrial policies.
+            const headers = await this.getRequestHeaders();
+            const response = await this.transporter.request({
+                ...BaseExternalAccountClient.RETRY_CONFIG,
+                headers,
+                url: `${this.cloudResourceManagerURL.toString()}${projectNumber}`,
+                responseType: 'json',
+            });
+            this.projectId = response.data.projectId;
+            return this.projectId;
+        }
+        return null;
+    }
+    /**
+     * Authenticates the provided HTTP request, processes it and resolves with the
+     * returned response.
+     * @param opts The HTTP request options.
+     * @param reAuthRetried Whether the current attempt is a retry after a failed attempt due to an auth failure.
+     * @return A promise that resolves with the successful response.
+     */
+    async requestAsync(opts, reAuthRetried = false) {
+        let response;
+        try {
+            const requestHeaders = await this.getRequestHeaders();
+            opts.headers = opts.headers || {};
+            if (requestHeaders && requestHeaders['x-goog-user-project']) {
+                opts.headers['x-goog-user-project'] =
+                    requestHeaders['x-goog-user-project'];
+            }
+            if (requestHeaders && requestHeaders.Authorization) {
+                opts.headers.Authorization = requestHeaders.Authorization;
+            }
+            response = await this.transporter.request(opts);
+        }
+        catch (e) {
+            const res = e.response;
+            if (res) {
+                const statusCode = res.status;
+                // Retry the request for metadata if the following criteria are true:
+                // - We haven't already retried.  It only makes sense to retry once.
+                // - The response was a 401 or a 403
+                // - The request didn't send a readableStream
+                // - forceRefreshOnFailure is true
+                const isReadableStream = res.config.data instanceof stream.Readable;
+                const isAuthErr = statusCode === 401 || statusCode === 403;
+                if (!reAuthRetried &&
+                    isAuthErr &&
+                    !isReadableStream &&
+                    this.forceRefreshOnFailure) {
+                    await this.refreshAccessTokenAsync();
+                    return await this.requestAsync(opts, true);
+                }
+            }
+            throw e;
+        }
+        return response;
+    }
+    /**
+     * Forces token refresh, even if unexpired tokens are currently cached.
+     * External credentials are exchanged for GCP access tokens via the token
+     * exchange endpoint and other settings provided in the client options
+     * object.
+     * If the service_account_impersonation_url is provided, an additional
+     * step to exchange the external account GCP access token for a service
+     * account impersonated token is performed.
+     * @return A promise that resolves with the fresh GCP access tokens.
+     */
+    async refreshAccessTokenAsync() {
+        // Use an existing access token request, or cache a new one
+        __classPrivateFieldSet(this, _BaseExternalAccountClient_pendingAccessToken, __classPrivateFieldGet(this, _BaseExternalAccountClient_pendingAccessToken, "f") || __classPrivateFieldGet(this, _BaseExternalAccountClient_instances, "m", _BaseExternalAccountClient_internalRefreshAccessTokenAsync).call(this), "f");
+        try {
+            return await __classPrivateFieldGet(this, _BaseExternalAccountClient_pendingAccessToken, "f");
+        }
+        finally {
+            // clear pending access token for future requests
+            __classPrivateFieldSet(this, _BaseExternalAccountClient_pendingAccessToken, null, "f");
+        }
+    }
+    /**
+     * Returns the workload identity pool project number if it is determinable
+     * from the audience resource name.
+     * @param audience The STS audience used to determine the project number.
+     * @return The project number associated with the workload identity pool, if
+     *   this can be determined from the STS audience field. Otherwise, null is
+     *   returned.
+     */
+    getProjectNumber(audience) {
+        // STS audience pattern:
+        // //iam.googleapis.com/projects/$PROJECT_NUMBER/locations/...
+        const match = audience.match(/\/projects\/([^/]+)/);
+        if (!match) {
+            return null;
+        }
+        return match[1];
+    }
+    /**
+     * Exchanges an external account GCP access token for a service
+     * account impersonated access token using iamcredentials
+     * GenerateAccessToken API.
+     * @param token The access token to exchange for a service account access
+     *   token.
+     * @return A promise that resolves with the service account impersonated
+     *   credentials response.
+     */
+    async getImpersonatedAccessToken(token) {
+        const opts = {
+            ...BaseExternalAccountClient.RETRY_CONFIG,
+            url: this.serviceAccountImpersonationUrl,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+            },
+            data: {
+                scope: this.getScopesArray(),
+                lifetime: this.serviceAccountImpersonationLifetime + 's',
+            },
+            responseType: 'json',
+        };
+        const response = await this.transporter.request(opts);
+        const successResponse = response.data;
+        return {
+            access_token: successResponse.accessToken,
+            // Convert from ISO format to timestamp.
+            expiry_date: new Date(successResponse.expireTime).getTime(),
+            res: response,
+        };
+    }
+    /**
+     * Returns whether the provided credentials are expired or not.
+     * If there is no expiry time, assumes the token is not expired or expiring.
+     * @param accessToken The credentials to check for expiration.
+     * @return Whether the credentials are expired or not.
+     */
+    isExpired(accessToken) {
+        const now = new Date().getTime();
+        return accessToken.expiry_date
+            ? now >= accessToken.expiry_date - this.eagerRefreshThresholdMillis
+            : false;
+    }
+    /**
+     * @return The list of scopes for the requested GCP access token.
+     */
+    getScopesArray() {
+        // Since scopes can be provided as string or array, the type should
+        // be normalized.
+        if (typeof this.scopes === 'string') {
+            return [this.scopes];
+        }
+        return this.scopes || [DEFAULT_OAUTH_SCOPE];
+    }
+    getMetricsHeaderValue() {
+        const nodeVersion = process.version.replace(/^v/, '');
+        const saImpersonation = this.serviceAccountImpersonationUrl !== undefined;
+        const credentialSourceType = this.credentialSourceType
+            ? this.credentialSourceType
+            : 'unknown';
+        return `gl-node/${nodeVersion} auth/${pkg.version} google-byoid-sdk source/${credentialSourceType} sa-impersonation/${saImpersonation} config-lifetime/${this.configLifetimeRequested}`;
+    }
+}
+exports.BaseExternalAccountClient = BaseExternalAccountClient;
+_BaseExternalAccountClient_pendingAccessToken = new WeakMap(), _BaseExternalAccountClient_instances = new WeakSet(), _BaseExternalAccountClient_internalRefreshAccessTokenAsync = async function _BaseExternalAccountClient_internalRefreshAccessTokenAsync() {
+    // Retrieve the external credential.
+    const subjectToken = await this.retrieveSubjectToken();
+    // Construct the STS credentials options.
+    const stsCredentialsOptions = {
+        grantType: STS_GRANT_TYPE,
+        audience: this.audience,
+        requestedTokenType: STS_REQUEST_TOKEN_TYPE,
+        subjectToken,
+        subjectTokenType: this.subjectTokenType,
+        // generateAccessToken requires the provided access token to have
+        // scopes:
+        // https://www.googleapis.com/auth/iam or
+        // https://www.googleapis.com/auth/cloud-platform
+        // The new service account access token scopes will match the user
+        // provided ones.
+        scope: this.serviceAccountImpersonationUrl
+            ? [DEFAULT_OAUTH_SCOPE]
+            : this.getScopesArray(),
+    };
+    // Exchange the external credentials for a GCP access token.
+    // Client auth is prioritized over passing the workforcePoolUserProject
+    // parameter for STS token exchange.
+    const additionalOptions = !this.clientAuth && this.workforcePoolUserProject
+        ? { userProject: this.workforcePoolUserProject }
+        : undefined;
+    const additionalHeaders = {
+        'x-goog-api-client': this.getMetricsHeaderValue(),
+    };
+    const stsResponse = await this.stsCredential.exchangeToken(stsCredentialsOptions, additionalHeaders, additionalOptions);
+    if (this.serviceAccountImpersonationUrl) {
+        this.cachedAccessToken = await this.getImpersonatedAccessToken(stsResponse.access_token);
+    }
+    else if (stsResponse.expires_in) {
+        // Save response in cached access token.
+        this.cachedAccessToken = {
+            access_token: stsResponse.access_token,
+            expiry_date: new Date().getTime() + stsResponse.expires_in * 1000,
+            res: stsResponse.res,
+        };
+    }
+    else {
+        // Save response in cached access token.
+        this.cachedAccessToken = {
+            access_token: stsResponse.access_token,
+            res: stsResponse.res,
+        };
+    }
+    // Save credentials.
+    this.credentials = {};
+    Object.assign(this.credentials, this.cachedAccessToken);
+    delete this.credentials.res;
+    // Trigger tokens event to notify external listeners.
+    this.emit('tokens', {
+        refresh_token: null,
+        expiry_date: this.cachedAccessToken.expiry_date,
+        access_token: this.cachedAccessToken.access_token,
+        token_type: 'Bearer',
+        id_token: null,
+    });
+    // Return the cached access token.
+    return this.cachedAccessToken;
+};
+
+
+/***/ }),
+
+/***/ 6875:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2013 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.Compute = void 0;
+const gaxios_1 = __nccwpck_require__(9555);
+const gcpMetadata = __nccwpck_require__(3563);
+const oauth2client_1 = __nccwpck_require__(3936);
+class Compute extends oauth2client_1.OAuth2Client {
+    /**
+     * Google Compute Engine service account credentials.
+     *
+     * Retrieve access token from the metadata server.
+     * See: https://cloud.google.com/compute/docs/access/authenticate-workloads#applications
+     */
+    constructor(options = {}) {
+        super(options);
+        // Start with an expired refresh token, which will automatically be
+        // refreshed before the first API call is made.
+        this.credentials = { expiry_date: 1, refresh_token: 'compute-placeholder' };
+        this.serviceAccountEmail = options.serviceAccountEmail || 'default';
+        this.scopes = Array.isArray(options.scopes)
+            ? options.scopes
+            : options.scopes
+                ? [options.scopes]
+                : [];
+    }
+    /**
+     * Refreshes the access token.
+     * @param refreshToken Unused parameter
+     */
+    async refreshTokenNoCache(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    refreshToken) {
+        const tokenPath = `service-accounts/${this.serviceAccountEmail}/token`;
+        let data;
+        try {
+            const instanceOptions = {
+                property: tokenPath,
+            };
+            if (this.scopes.length > 0) {
+                instanceOptions.params = {
+                    scopes: this.scopes.join(','),
+                };
+            }
+            data = await gcpMetadata.instance(instanceOptions);
+        }
+        catch (e) {
+            if (e instanceof gaxios_1.GaxiosError) {
+                e.message = `Could not refresh access token: ${e.message}`;
+                this.wrapError(e);
+            }
+            throw e;
+        }
+        const tokens = data;
+        if (data && data.expires_in) {
+            tokens.expiry_date = new Date().getTime() + data.expires_in * 1000;
+            delete tokens.expires_in;
+        }
+        this.emit('tokens', tokens);
+        return { tokens, res: null };
+    }
+    /**
+     * Fetches an ID token.
+     * @param targetAudience the audience for the fetched ID token.
+     */
+    async fetchIdToken(targetAudience) {
+        const idTokenPath = `service-accounts/${this.serviceAccountEmail}/identity` +
+            `?format=full&audience=${targetAudience}`;
+        let idToken;
+        try {
+            const instanceOptions = {
+                property: idTokenPath,
+            };
+            idToken = await gcpMetadata.instance(instanceOptions);
+        }
+        catch (e) {
+            if (e instanceof Error) {
+                e.message = `Could not fetch ID token: ${e.message}`;
+            }
+            throw e;
+        }
+        return idToken;
+    }
+    wrapError(e) {
+        const res = e.response;
+        if (res && res.status) {
+            e.status = res.status;
+            if (res.status === 403) {
+                e.message =
+                    'A Forbidden error was returned while attempting to retrieve an access ' +
+                        'token for the Compute Engine built-in service account. This may be because the Compute ' +
+                        'Engine instance does not have the correct permission scopes specified: ' +
+                        e.message;
+            }
+            else if (res.status === 404) {
+                e.message =
+                    'A Not Found error was returned while attempting to retrieve an access' +
+                        'token for the Compute Engine built-in service account. This may be because the Compute ' +
+                        'Engine instance does not have any permission scopes specified: ' +
+                        e.message;
+            }
+        }
+    }
+}
+exports.Compute = Compute;
+
+
+/***/ }),
+
+/***/ 9799:
+/***/ (function(__unused_webpack_module, exports) {
+
+
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (receiver, state, kind, f) {
+    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
+    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
+    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
+};
+var _DefaultAwsSecurityCredentialsSupplier_instances, _DefaultAwsSecurityCredentialsSupplier_getImdsV2SessionToken, _DefaultAwsSecurityCredentialsSupplier_getAwsRoleName, _DefaultAwsSecurityCredentialsSupplier_retrieveAwsSecurityCredentials, _DefaultAwsSecurityCredentialsSupplier_regionFromEnv_get, _DefaultAwsSecurityCredentialsSupplier_securityCredentialsFromEnv_get;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DefaultAwsSecurityCredentialsSupplier = void 0;
+/**
+ * Internal AWS security credentials supplier implementation used by {@link AwsClient}
+ * when a credential source is provided instead of a user defined supplier.
+ * The logic is summarized as:
+ * 1. If imdsv2_session_token_url is provided in the credential source, then
+ *    fetch the aws session token and include it in the headers of the
+ *    metadata requests. This is a requirement for IDMSv2 but optional
+ *    for IDMSv1.
+ * 2. Retrieve AWS region from availability-zone.
+ * 3a. Check AWS credentials in environment variables. If not found, get
+ *     from security-credentials endpoint.
+ * 3b. Get AWS credentials from security-credentials endpoint. In order
+ *     to retrieve this, the AWS role needs to be determined by calling
+ *     security-credentials endpoint without any argument. Then the
+ *     credentials can be retrieved via: security-credentials/role_name
+ * 4. Generate the signed request to AWS STS GetCallerIdentity action.
+ * 5. Inject x-goog-cloud-target-resource into header and serialize the
+ *    signed request. This will be the subject-token to pass to GCP STS.
+ */
+class DefaultAwsSecurityCredentialsSupplier {
+    /**
+     * Instantiates a new DefaultAwsSecurityCredentialsSupplier using information
+     * from the credential_source stored in the ADC file.
+     * @param opts The default aws security credentials supplier options object to
+     *   build the supplier with.
+     */
+    constructor(opts) {
+        _DefaultAwsSecurityCredentialsSupplier_instances.add(this);
+        this.regionUrl = opts.regionUrl;
+        this.securityCredentialsUrl = opts.securityCredentialsUrl;
+        this.imdsV2SessionTokenUrl = opts.imdsV2SessionTokenUrl;
+        this.additionalGaxiosOptions = opts.additionalGaxiosOptions;
+    }
+    /**
+     * Returns the active AWS region. This first checks to see if the region
+     * is available as an environment variable. If it is not, then the supplier
+     * will call the region URL.
+     * @param context {@link ExternalAccountSupplierContext} from the calling
+     *   {@link AwsClient}, contains the requested audience and subject token type
+     *   for the external account identity.
+     * @return A promise that resolves with the AWS region string.
+     */
+    async getAwsRegion(context) {
+        // Priority order for region determination:
+        // AWS_REGION > AWS_DEFAULT_REGION > metadata server.
+        if (__classPrivateFieldGet(this, _DefaultAwsSecurityCredentialsSupplier_instances, "a", _DefaultAwsSecurityCredentialsSupplier_regionFromEnv_get)) {
+            return __classPrivateFieldGet(this, _DefaultAwsSecurityCredentialsSupplier_instances, "a", _DefaultAwsSecurityCredentialsSupplier_regionFromEnv_get);
+        }
+        const metadataHeaders = {};
+        if (!__classPrivateFieldGet(this, _DefaultAwsSecurityCredentialsSupplier_instances, "a", _DefaultAwsSecurityCredentialsSupplier_regionFromEnv_get) && this.imdsV2SessionTokenUrl) {
+            metadataHeaders['x-aws-ec2-metadata-token'] =
+                await __classPrivateFieldGet(this, _DefaultAwsSecurityCredentialsSupplier_instances, "m", _DefaultAwsSecurityCredentialsSupplier_getImdsV2SessionToken).call(this, context.transporter);
+        }
+        if (!this.regionUrl) {
+            throw new Error('Unable to determine AWS region due to missing ' +
+                '"options.credential_source.region_url"');
+        }
+        const opts = {
+            ...this.additionalGaxiosOptions,
+            url: this.regionUrl,
+            method: 'GET',
+            responseType: 'text',
+            headers: metadataHeaders,
+        };
+        const response = await context.transporter.request(opts);
+        // Remove last character. For example, if us-east-2b is returned,
+        // the region would be us-east-2.
+        return response.data.substr(0, response.data.length - 1);
+    }
+    /**
+     * Returns AWS security credentials. This first checks to see if the credentials
+     * is available as environment variables. If it is not, then the supplier
+     * will call the security credentials URL.
+     * @param context {@link ExternalAccountSupplierContext} from the calling
+     *   {@link AwsClient}, contains the requested audience and subject token type
+     *   for the external account identity.
+     * @return A promise that resolves with the AWS security credentials.
+     */
+    async getAwsSecurityCredentials(context) {
+        // Check environment variables for permanent credentials first.
+        // https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html
+        if (__classPrivateFieldGet(this, _DefaultAwsSecurityCredentialsSupplier_instances, "a", _DefaultAwsSecurityCredentialsSupplier_securityCredentialsFromEnv_get)) {
+            return __classPrivateFieldGet(this, _DefaultAwsSecurityCredentialsSupplier_instances, "a", _DefaultAwsSecurityCredentialsSupplier_securityCredentialsFromEnv_get);
+        }
+        const metadataHeaders = {};
+        if (this.imdsV2SessionTokenUrl) {
+            metadataHeaders['x-aws-ec2-metadata-token'] =
+                await __classPrivateFieldGet(this, _DefaultAwsSecurityCredentialsSupplier_instances, "m", _DefaultAwsSecurityCredentialsSupplier_getImdsV2SessionToken).call(this, context.transporter);
+        }
+        // Since the role on a VM can change, we don't need to cache it.
+        const roleName = await __classPrivateFieldGet(this, _DefaultAwsSecurityCredentialsSupplier_instances, "m", _DefaultAwsSecurityCredentialsSupplier_getAwsRoleName).call(this, metadataHeaders, context.transporter);
+        // Temporary credentials typically last for several hours.
+        // Expiration is returned in response.
+        // Consider future optimization of this logic to cache AWS tokens
+        // until their natural expiration.
+        const awsCreds = await __classPrivateFieldGet(this, _DefaultAwsSecurityCredentialsSupplier_instances, "m", _DefaultAwsSecurityCredentialsSupplier_retrieveAwsSecurityCredentials).call(this, roleName, metadataHeaders, context.transporter);
+        return {
+            accessKeyId: awsCreds.AccessKeyId,
+            secretAccessKey: awsCreds.SecretAccessKey,
+            token: awsCreds.Token,
+        };
+    }
+}
+exports.DefaultAwsSecurityCredentialsSupplier = DefaultAwsSecurityCredentialsSupplier;
+_DefaultAwsSecurityCredentialsSupplier_instances = new WeakSet(), _DefaultAwsSecurityCredentialsSupplier_getImdsV2SessionToken = 
+/**
+ * @param transporter The transporter to use for requests.
+ * @return A promise that resolves with the IMDSv2 Session Token.
+ */
+async function _DefaultAwsSecurityCredentialsSupplier_getImdsV2SessionToken(transporter) {
+    const opts = {
+        ...this.additionalGaxiosOptions,
+        url: this.imdsV2SessionTokenUrl,
+        method: 'PUT',
+        responseType: 'text',
+        headers: { 'x-aws-ec2-metadata-token-ttl-seconds': '300' },
+    };
+    const response = await transporter.request(opts);
+    return response.data;
+}, _DefaultAwsSecurityCredentialsSupplier_getAwsRoleName = 
+/**
+ * @param headers The headers to be used in the metadata request.
+ * @param transporter The transporter to use for requests.
+ * @return A promise that resolves with the assigned role to the current
+ *   AWS VM. This is needed for calling the security-credentials endpoint.
+ */
+async function _DefaultAwsSecurityCredentialsSupplier_getAwsRoleName(headers, transporter) {
+    if (!this.securityCredentialsUrl) {
+        throw new Error('Unable to determine AWS role name due to missing ' +
+            '"options.credential_source.url"');
+    }
+    const opts = {
+        ...this.additionalGaxiosOptions,
+        url: this.securityCredentialsUrl,
+        method: 'GET',
+        responseType: 'text',
+        headers: headers,
+    };
+    const response = await transporter.request(opts);
+    return response.data;
+}, _DefaultAwsSecurityCredentialsSupplier_retrieveAwsSecurityCredentials = 
+/**
+ * Retrieves the temporary AWS credentials by calling the security-credentials
+ * endpoint as specified in the `credential_source` object.
+ * @param roleName The role attached to the current VM.
+ * @param headers The headers to be used in the metadata request.
+ * @param transporter The transporter to use for requests.
+ * @return A promise that resolves with the temporary AWS credentials
+ *   needed for creating the GetCallerIdentity signed request.
+ */
+async function _DefaultAwsSecurityCredentialsSupplier_retrieveAwsSecurityCredentials(roleName, headers, transporter) {
+    const response = await transporter.request({
+        ...this.additionalGaxiosOptions,
+        url: `${this.securityCredentialsUrl}/${roleName}`,
+        responseType: 'json',
+        headers: headers,
+    });
+    return response.data;
+}, _DefaultAwsSecurityCredentialsSupplier_regionFromEnv_get = function _DefaultAwsSecurityCredentialsSupplier_regionFromEnv_get() {
+    // The AWS region can be provided through AWS_REGION or AWS_DEFAULT_REGION.
+    // Only one is required.
+    return (process.env['AWS_REGION'] || process.env['AWS_DEFAULT_REGION'] || null);
+}, _DefaultAwsSecurityCredentialsSupplier_securityCredentialsFromEnv_get = function _DefaultAwsSecurityCredentialsSupplier_securityCredentialsFromEnv_get() {
+    // Both AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are required.
+    if (process.env['AWS_ACCESS_KEY_ID'] &&
+        process.env['AWS_SECRET_ACCESS_KEY']) {
+        return {
+            accessKeyId: process.env['AWS_ACCESS_KEY_ID'],
+            secretAccessKey: process.env['AWS_SECRET_ACCESS_KEY'],
+            token: process.env['AWS_SESSION_TOKEN'],
+        };
+    }
+    return null;
+};
+
+
+/***/ }),
+
+/***/ 6270:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2021 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DownscopedClient = exports.EXPIRATION_TIME_OFFSET = exports.MAX_ACCESS_BOUNDARY_RULES_COUNT = void 0;
+const stream = __nccwpck_require__(2781);
+const authclient_1 = __nccwpck_require__(4627);
+const sts = __nccwpck_require__(6308);
+/**
+ * The required token exchange grant_type: rfc8693#section-2.1
+ */
+const STS_GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:token-exchange';
+/**
+ * The requested token exchange requested_token_type: rfc8693#section-2.1
+ */
+const STS_REQUEST_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
+/**
+ * The requested token exchange subject_token_type: rfc8693#section-2.1
+ */
+const STS_SUBJECT_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:access_token';
+/**
+ * The maximum number of access boundary rules a Credential Access Boundary
+ * can contain.
+ */
+exports.MAX_ACCESS_BOUNDARY_RULES_COUNT = 10;
+/**
+ * Offset to take into account network delays and server clock skews.
+ */
+exports.EXPIRATION_TIME_OFFSET = 5 * 60 * 1000;
+/**
+ * Defines a set of Google credentials that are downscoped from an existing set
+ * of Google OAuth2 credentials. This is useful to restrict the Identity and
+ * Access Management (IAM) permissions that a short-lived credential can use.
+ * The common pattern of usage is to have a token broker with elevated access
+ * generate these downscoped credentials from higher access source credentials
+ * and pass the downscoped short-lived access tokens to a token consumer via
+ * some secure authenticated channel for limited access to Google Cloud Storage
+ * resources.
+ */
+class DownscopedClient extends authclient_1.AuthClient {
+    /**
+     * Instantiates a downscoped client object using the provided source
+     * AuthClient and credential access boundary rules.
+     * To downscope permissions of a source AuthClient, a Credential Access
+     * Boundary that specifies which resources the new credential can access, as
+     * well as an upper bound on the permissions that are available on each
+     * resource, has to be defined. A downscoped client can then be instantiated
+     * using the source AuthClient and the Credential Access Boundary.
+     * @param authClient The source AuthClient to be downscoped based on the
+     *   provided Credential Access Boundary rules.
+     * @param credentialAccessBoundary The Credential Access Boundary which
+     *   contains a list of access boundary rules. Each rule contains information
+     *   on the resource that the rule applies to, the upper bound of the
+     *   permissions that are available on that resource and an optional
+     *   condition to further restrict permissions.
+     * @param additionalOptions **DEPRECATED, set this in the provided `authClient`.**
+     *   Optional additional behavior customization options.
+     * @param quotaProjectId **DEPRECATED, set this in the provided `authClient`.**
+     *   Optional quota project id for setting up in the x-goog-user-project header.
+     */
+    constructor(authClient, credentialAccessBoundary, additionalOptions, quotaProjectId) {
+        super({ ...additionalOptions, quotaProjectId });
+        this.authClient = authClient;
+        this.credentialAccessBoundary = credentialAccessBoundary;
+        // Check 1-10 Access Boundary Rules are defined within Credential Access
+        // Boundary.
+        if (credentialAccessBoundary.accessBoundary.accessBoundaryRules.length === 0) {
+            throw new Error('At least one access boundary rule needs to be defined.');
+        }
+        else if (credentialAccessBoundary.accessBoundary.accessBoundaryRules.length >
+            exports.MAX_ACCESS_BOUNDARY_RULES_COUNT) {
+            throw new Error('The provided access boundary has more than ' +
+                `${exports.MAX_ACCESS_BOUNDARY_RULES_COUNT} access boundary rules.`);
+        }
+        // Check at least one permission should be defined in each Access Boundary
+        // Rule.
+        for (const rule of credentialAccessBoundary.accessBoundary
+            .accessBoundaryRules) {
+            if (rule.availablePermissions.length === 0) {
+                throw new Error('At least one permission should be defined in access boundary rules.');
+            }
+        }
+        this.stsCredential = new sts.StsCredentials(`https://sts.${this.universeDomain}/v1/token`);
+        this.cachedDownscopedAccessToken = null;
+    }
+    /**
+     * Provides a mechanism to inject Downscoped access tokens directly.
+     * The expiry_date field is required to facilitate determination of the token
+     * expiration which would make it easier for the token consumer to handle.
+     * @param credentials The Credentials object to set on the current client.
+     */
+    setCredentials(credentials) {
+        if (!credentials.expiry_date) {
+            throw new Error('The access token expiry_date field is missing in the provided ' +
+                'credentials.');
+        }
+        super.setCredentials(credentials);
+        this.cachedDownscopedAccessToken = credentials;
+    }
+    async getAccessToken() {
+        // If the cached access token is unavailable or expired, force refresh.
+        // The Downscoped access token will be returned in
+        // DownscopedAccessTokenResponse format.
+        if (!this.cachedDownscopedAccessToken ||
+            this.isExpired(this.cachedDownscopedAccessToken)) {
+            await this.refreshAccessTokenAsync();
+        }
+        // Return Downscoped access token in DownscopedAccessTokenResponse format.
+        return {
+            token: this.cachedDownscopedAccessToken.access_token,
+            expirationTime: this.cachedDownscopedAccessToken.expiry_date,
+            res: this.cachedDownscopedAccessToken.res,
+        };
+    }
+    /**
+     * The main authentication interface. It takes an optional url which when
+     * present is the endpoint being accessed, and returns a Promise which
+     * resolves with authorization header fields.
+     *
+     * The result has the form:
+     * { Authorization: 'Bearer <access_token_value>' }
+     */
+    async getRequestHeaders() {
+        const accessTokenResponse = await this.getAccessToken();
+        const headers = {
+            Authorization: `Bearer ${accessTokenResponse.token}`,
+        };
+        return this.addSharedMetadataHeaders(headers);
+    }
+    request(opts, callback) {
+        if (callback) {
+            this.requestAsync(opts).then(r => callback(null, r), e => {
+                return callback(e, e.response);
+            });
+        }
+        else {
+            return this.requestAsync(opts);
+        }
+    }
+    /**
+     * Authenticates the provided HTTP request, processes it and resolves with the
+     * returned response.
+     * @param opts The HTTP request options.
+     * @param reAuthRetried Whether the current attempt is a retry after a failed attempt due to an auth failure
+     * @return A promise that resolves with the successful response.
+     */
+    async requestAsync(opts, reAuthRetried = false) {
+        let response;
+        try {
+            const requestHeaders = await this.getRequestHeaders();
+            opts.headers = opts.headers || {};
+            if (requestHeaders && requestHeaders['x-goog-user-project']) {
+                opts.headers['x-goog-user-project'] =
+                    requestHeaders['x-goog-user-project'];
+            }
+            if (requestHeaders && requestHeaders.Authorization) {
+                opts.headers.Authorization = requestHeaders.Authorization;
+            }
+            response = await this.transporter.request(opts);
+        }
+        catch (e) {
+            const res = e.response;
+            if (res) {
+                const statusCode = res.status;
+                // Retry the request for metadata if the following criteria are true:
+                // - We haven't already retried.  It only makes sense to retry once.
+                // - The response was a 401 or a 403
+                // - The request didn't send a readableStream
+                // - forceRefreshOnFailure is true
+                const isReadableStream = res.config.data instanceof stream.Readable;
+                const isAuthErr = statusCode === 401 || statusCode === 403;
+                if (!reAuthRetried &&
+                    isAuthErr &&
+                    !isReadableStream &&
+                    this.forceRefreshOnFailure) {
+                    await this.refreshAccessTokenAsync();
+                    return await this.requestAsync(opts, true);
+                }
+            }
+            throw e;
+        }
+        return response;
+    }
+    /**
+     * Forces token refresh, even if unexpired tokens are currently cached.
+     * GCP access tokens are retrieved from authclient object/source credential.
+     * Then GCP access tokens are exchanged for downscoped access tokens via the
+     * token exchange endpoint.
+     * @return A promise that resolves with the fresh downscoped access token.
+     */
+    async refreshAccessTokenAsync() {
+        var _a;
+        // Retrieve GCP access token from source credential.
+        const subjectToken = (await this.authClient.getAccessToken()).token;
+        // Construct the STS credentials options.
+        const stsCredentialsOptions = {
+            grantType: STS_GRANT_TYPE,
+            requestedTokenType: STS_REQUEST_TOKEN_TYPE,
+            subjectToken: subjectToken,
+            subjectTokenType: STS_SUBJECT_TOKEN_TYPE,
+        };
+        // Exchange the source AuthClient access token for a Downscoped access
+        // token.
+        const stsResponse = await this.stsCredential.exchangeToken(stsCredentialsOptions, undefined, this.credentialAccessBoundary);
+        /**
+         * The STS endpoint will only return the expiration time for the downscoped
+         * access token if the original access token represents a service account.
+         * The downscoped token's expiration time will always match the source
+         * credential expiration. When no expires_in is returned, we can copy the
+         * source credential's expiration time.
+         */
+        const sourceCredExpireDate = ((_a = this.authClient.credentials) === null || _a === void 0 ? void 0 : _a.expiry_date) || null;
+        const expiryDate = stsResponse.expires_in
+            ? new Date().getTime() + stsResponse.expires_in * 1000
+            : sourceCredExpireDate;
+        // Save response in cached access token.
+        this.cachedDownscopedAccessToken = {
+            access_token: stsResponse.access_token,
+            expiry_date: expiryDate,
+            res: stsResponse.res,
+        };
+        // Save credentials.
+        this.credentials = {};
+        Object.assign(this.credentials, this.cachedDownscopedAccessToken);
+        delete this.credentials.res;
+        // Trigger tokens event to notify external listeners.
+        this.emit('tokens', {
+            refresh_token: null,
+            expiry_date: this.cachedDownscopedAccessToken.expiry_date,
+            access_token: this.cachedDownscopedAccessToken.access_token,
+            token_type: 'Bearer',
+            id_token: null,
+        });
+        // Return the cached access token.
+        return this.cachedDownscopedAccessToken;
+    }
+    /**
+     * Returns whether the provided credentials are expired or not.
+     * If there is no expiry time, assumes the token is not expired or expiring.
+     * @param downscopedAccessToken The credentials to check for expiration.
+     * @return Whether the credentials are expired or not.
+     */
+    isExpired(downscopedAccessToken) {
+        const now = new Date().getTime();
+        return downscopedAccessToken.expiry_date
+            ? now >=
+                downscopedAccessToken.expiry_date - this.eagerRefreshThresholdMillis
+            : false;
+    }
+}
+exports.DownscopedClient = DownscopedClient;
+
+
+/***/ }),
+
+/***/ 1380:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2018 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GCPEnv = void 0;
+exports.clear = clear;
+exports.getEnv = getEnv;
+const gcpMetadata = __nccwpck_require__(3563);
+var GCPEnv;
+(function (GCPEnv) {
+    GCPEnv["APP_ENGINE"] = "APP_ENGINE";
+    GCPEnv["KUBERNETES_ENGINE"] = "KUBERNETES_ENGINE";
+    GCPEnv["CLOUD_FUNCTIONS"] = "CLOUD_FUNCTIONS";
+    GCPEnv["COMPUTE_ENGINE"] = "COMPUTE_ENGINE";
+    GCPEnv["CLOUD_RUN"] = "CLOUD_RUN";
+    GCPEnv["NONE"] = "NONE";
+})(GCPEnv || (exports.GCPEnv = GCPEnv = {}));
+let envPromise;
+function clear() {
+    envPromise = undefined;
+}
+async function getEnv() {
+    if (envPromise) {
+        return envPromise;
+    }
+    envPromise = getEnvMemoized();
+    return envPromise;
+}
+async function getEnvMemoized() {
+    let env = GCPEnv.NONE;
+    if (isAppEngine()) {
+        env = GCPEnv.APP_ENGINE;
+    }
+    else if (isCloudFunction()) {
+        env = GCPEnv.CLOUD_FUNCTIONS;
+    }
+    else if (await isComputeEngine()) {
+        if (await isKubernetesEngine()) {
+            env = GCPEnv.KUBERNETES_ENGINE;
+        }
+        else if (isCloudRun()) {
+            env = GCPEnv.CLOUD_RUN;
+        }
+        else {
+            env = GCPEnv.COMPUTE_ENGINE;
+        }
+    }
+    else {
+        env = GCPEnv.NONE;
+    }
+    return env;
+}
+function isAppEngine() {
+    return !!(process.env.GAE_SERVICE || process.env.GAE_MODULE_NAME);
+}
+function isCloudFunction() {
+    return !!(process.env.FUNCTION_NAME || process.env.FUNCTION_TARGET);
+}
+/**
+ * This check only verifies that the environment is running knative.
+ * This must be run *after* checking for Kubernetes, otherwise it will
+ * return a false positive.
+ */
+function isCloudRun() {
+    return !!process.env.K_CONFIGURATION;
+}
+async function isKubernetesEngine() {
+    try {
+        await gcpMetadata.instance('attributes/cluster-name');
+        return true;
+    }
+    catch (e) {
+        return false;
+    }
+}
+async function isComputeEngine() {
+    return gcpMetadata.isAvailable();
+}
+
+
+/***/ }),
+
+/***/ 8749:
+/***/ ((__unused_webpack_module, exports) => {
+
+
+// Copyright 2022 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.InvalidSubjectTokenError = exports.InvalidMessageFieldError = exports.InvalidCodeFieldError = exports.InvalidTokenTypeFieldError = exports.InvalidExpirationTimeFieldError = exports.InvalidSuccessFieldError = exports.InvalidVersionFieldError = exports.ExecutableResponseError = exports.ExecutableResponse = void 0;
+const SAML_SUBJECT_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:saml2';
+const OIDC_SUBJECT_TOKEN_TYPE1 = 'urn:ietf:params:oauth:token-type:id_token';
+const OIDC_SUBJECT_TOKEN_TYPE2 = 'urn:ietf:params:oauth:token-type:jwt';
+/**
+ * Defines the response of a 3rd party executable run by the pluggable auth client.
+ */
+class ExecutableResponse {
+    /**
+     * Instantiates an ExecutableResponse instance using the provided JSON object
+     * from the output of the executable.
+     * @param responseJson Response from a 3rd party executable, loaded from a
+     * run of the executable or a cached output file.
+     */
+    constructor(responseJson) {
+        // Check that the required fields exist in the json response.
+        if (!responseJson.version) {
+            throw new InvalidVersionFieldError("Executable response must contain a 'version' field.");
+        }
+        if (responseJson.success === undefined) {
+            throw new InvalidSuccessFieldError("Executable response must contain a 'success' field.");
+        }
+        this.version = responseJson.version;
+        this.success = responseJson.success;
+        // Validate required fields for a successful response.
+        if (this.success) {
+            this.expirationTime = responseJson.expiration_time;
+            this.tokenType = responseJson.token_type;
+            // Validate token type field.
+            if (this.tokenType !== SAML_SUBJECT_TOKEN_TYPE &&
+                this.tokenType !== OIDC_SUBJECT_TOKEN_TYPE1 &&
+                this.tokenType !== OIDC_SUBJECT_TOKEN_TYPE2) {
+                throw new InvalidTokenTypeFieldError("Executable response must contain a 'token_type' field when successful " +
+                    `and it must be one of ${OIDC_SUBJECT_TOKEN_TYPE1}, ${OIDC_SUBJECT_TOKEN_TYPE2}, or ${SAML_SUBJECT_TOKEN_TYPE}.`);
+            }
+            // Validate subject token.
+            if (this.tokenType === SAML_SUBJECT_TOKEN_TYPE) {
+                if (!responseJson.saml_response) {
+                    throw new InvalidSubjectTokenError(`Executable response must contain a 'saml_response' field when token_type=${SAML_SUBJECT_TOKEN_TYPE}.`);
+                }
+                this.subjectToken = responseJson.saml_response;
+            }
+            else {
+                if (!responseJson.id_token) {
+                    throw new InvalidSubjectTokenError("Executable response must contain a 'id_token' field when " +
+                        `token_type=${OIDC_SUBJECT_TOKEN_TYPE1} or ${OIDC_SUBJECT_TOKEN_TYPE2}.`);
+                }
+                this.subjectToken = responseJson.id_token;
+            }
+        }
+        else {
+            // Both code and message must be provided for unsuccessful responses.
+            if (!responseJson.code) {
+                throw new InvalidCodeFieldError("Executable response must contain a 'code' field when unsuccessful.");
+            }
+            if (!responseJson.message) {
+                throw new InvalidMessageFieldError("Executable response must contain a 'message' field when unsuccessful.");
+            }
+            this.errorCode = responseJson.code;
+            this.errorMessage = responseJson.message;
+        }
+    }
+    /**
+     * @return A boolean representing if the response has a valid token. Returns
+     * true when the response was successful and the token is not expired.
+     */
+    isValid() {
+        return !this.isExpired() && this.success;
+    }
+    /**
+     * @return A boolean representing if the response is expired. Returns true if the
+     * provided timeout has passed.
+     */
+    isExpired() {
+        return (this.expirationTime !== undefined &&
+            this.expirationTime < Math.round(Date.now() / 1000));
+    }
+}
+exports.ExecutableResponse = ExecutableResponse;
+/**
+ * An error thrown by the ExecutableResponse class.
+ */
+class ExecutableResponseError extends Error {
+    constructor(message) {
+        super(message);
+        Object.setPrototypeOf(this, new.target.prototype);
+    }
+}
+exports.ExecutableResponseError = ExecutableResponseError;
+/**
+ * An error thrown when the 'version' field in an executable response is missing or invalid.
+ */
+class InvalidVersionFieldError extends ExecutableResponseError {
+}
+exports.InvalidVersionFieldError = InvalidVersionFieldError;
+/**
+ * An error thrown when the 'success' field in an executable response is missing or invalid.
+ */
+class InvalidSuccessFieldError extends ExecutableResponseError {
+}
+exports.InvalidSuccessFieldError = InvalidSuccessFieldError;
+/**
+ * An error thrown when the 'expiration_time' field in an executable response is missing or invalid.
+ */
+class InvalidExpirationTimeFieldError extends ExecutableResponseError {
+}
+exports.InvalidExpirationTimeFieldError = InvalidExpirationTimeFieldError;
+/**
+ * An error thrown when the 'token_type' field in an executable response is missing or invalid.
+ */
+class InvalidTokenTypeFieldError extends ExecutableResponseError {
+}
+exports.InvalidTokenTypeFieldError = InvalidTokenTypeFieldError;
+/**
+ * An error thrown when the 'code' field in an executable response is missing or invalid.
+ */
+class InvalidCodeFieldError extends ExecutableResponseError {
+}
+exports.InvalidCodeFieldError = InvalidCodeFieldError;
+/**
+ * An error thrown when the 'message' field in an executable response is missing or invalid.
+ */
+class InvalidMessageFieldError extends ExecutableResponseError {
+}
+exports.InvalidMessageFieldError = InvalidMessageFieldError;
+/**
+ * An error thrown when the subject token in an executable response is missing or invalid.
+ */
+class InvalidSubjectTokenError extends ExecutableResponseError {
+}
+exports.InvalidSubjectTokenError = InvalidSubjectTokenError;
+
+
+/***/ }),
+
+/***/ 8765:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2023 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ExternalAccountAuthorizedUserClient = exports.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE = void 0;
+const authclient_1 = __nccwpck_require__(4627);
+const oauth2common_1 = __nccwpck_require__(9510);
+const gaxios_1 = __nccwpck_require__(9555);
+const stream = __nccwpck_require__(2781);
+const baseexternalclient_1 = __nccwpck_require__(7391);
+/**
+ * The credentials JSON file type for external account authorized user clients.
+ */
+exports.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE = 'external_account_authorized_user';
+const DEFAULT_TOKEN_URL = 'https://sts.{universeDomain}/v1/oauthtoken';
+/**
+ * Handler for token refresh requests sent to the token_url endpoint for external
+ * authorized user credentials.
+ */
+class ExternalAccountAuthorizedUserHandler extends oauth2common_1.OAuthClientAuthHandler {
+    /**
+     * Initializes an ExternalAccountAuthorizedUserHandler instance.
+     * @param url The URL of the token refresh endpoint.
+     * @param transporter The transporter to use for the refresh request.
+     * @param clientAuthentication The client authentication credentials to use
+     *   for the refresh request.
+     */
+    constructor(url, transporter, clientAuthentication) {
+        super(clientAuthentication);
+        this.url = url;
+        this.transporter = transporter;
+    }
+    /**
+     * Requests a new access token from the token_url endpoint using the provided
+     *   refresh token.
+     * @param refreshToken The refresh token to use to generate a new access token.
+     * @param additionalHeaders Optional additional headers to pass along the
+     *   request.
+     * @return A promise that resolves with the token refresh response containing
+     *   the requested access token and its expiration time.
+     */
+    async refreshToken(refreshToken, additionalHeaders) {
+        const values = new URLSearchParams({
+            grant_type: 'refresh_token',
+            refresh_token: refreshToken,
+        });
+        const headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            ...additionalHeaders,
+        };
+        const opts = {
+            ...ExternalAccountAuthorizedUserHandler.RETRY_CONFIG,
+            url: this.url,
+            method: 'POST',
+            headers,
+            data: values.toString(),
+            responseType: 'json',
+        };
+        // Apply OAuth client authentication.
+        this.applyClientAuthenticationOptions(opts);
+        try {
+            const response = await this.transporter.request(opts);
+            // Successful response.
+            const tokenRefreshResponse = response.data;
+            tokenRefreshResponse.res = response;
+            return tokenRefreshResponse;
+        }
+        catch (error) {
+            // Translate error to OAuthError.
+            if (error instanceof gaxios_1.GaxiosError && error.response) {
+                throw (0, oauth2common_1.getErrorFromOAuthErrorResponse)(error.response.data, 
+                // Preserve other fields from the original error.
+                error);
+            }
+            // Request could fail before the server responds.
+            throw error;
+        }
+    }
+}
+/**
+ * External Account Authorized User Client. This is used for OAuth2 credentials
+ * sourced using external identities through Workforce Identity Federation.
+ * Obtaining the initial access and refresh token can be done through the
+ * Google Cloud CLI.
+ */
+class ExternalAccountAuthorizedUserClient extends authclient_1.AuthClient {
+    /**
+     * Instantiates an ExternalAccountAuthorizedUserClient instances using the
+     * provided JSON object loaded from a credentials files.
+     * An error is throws if the credential is not valid.
+     * @param options The external account authorized user option object typically
+     *   from the external accoutn authorized user JSON credential file.
+     * @param additionalOptions **DEPRECATED, all options are available in the
+     *   `options` parameter.** Optional additional behavior customization options.
+     *   These currently customize expiration threshold time and whether to retry
+     *   on 401/403 API request errors.
+     */
+    constructor(options, additionalOptions) {
+        var _a;
+        super({ ...options, ...additionalOptions });
+        if (options.universe_domain) {
+            this.universeDomain = options.universe_domain;
+        }
+        this.refreshToken = options.refresh_token;
+        const clientAuth = {
+            confidentialClientType: 'basic',
+            clientId: options.client_id,
+            clientSecret: options.client_secret,
+        };
+        this.externalAccountAuthorizedUserHandler =
+            new ExternalAccountAuthorizedUserHandler((_a = options.token_url) !== null && _a !== void 0 ? _a : DEFAULT_TOKEN_URL.replace('{universeDomain}', this.universeDomain), this.transporter, clientAuth);
+        this.cachedAccessToken = null;
+        this.quotaProjectId = options.quota_project_id;
+        // As threshold could be zero,
+        // eagerRefreshThresholdMillis || EXPIRATION_TIME_OFFSET will override the
+        // zero value.
+        if (typeof (additionalOptions === null || additionalOptions === void 0 ? void 0 : additionalOptions.eagerRefreshThresholdMillis) !== 'number') {
+            this.eagerRefreshThresholdMillis = baseexternalclient_1.EXPIRATION_TIME_OFFSET;
+        }
+        else {
+            this.eagerRefreshThresholdMillis = additionalOptions
+                .eagerRefreshThresholdMillis;
+        }
+        this.forceRefreshOnFailure = !!(additionalOptions === null || additionalOptions === void 0 ? void 0 : additionalOptions.forceRefreshOnFailure);
+    }
+    async getAccessToken() {
+        // If cached access token is unavailable or expired, force refresh.
+        if (!this.cachedAccessToken || this.isExpired(this.cachedAccessToken)) {
+            await this.refreshAccessTokenAsync();
+        }
+        // Return GCP access token in GetAccessTokenResponse format.
+        return {
+            token: this.cachedAccessToken.access_token,
+            res: this.cachedAccessToken.res,
+        };
+    }
+    async getRequestHeaders() {
+        const accessTokenResponse = await this.getAccessToken();
+        const headers = {
+            Authorization: `Bearer ${accessTokenResponse.token}`,
+        };
+        return this.addSharedMetadataHeaders(headers);
+    }
+    request(opts, callback) {
+        if (callback) {
+            this.requestAsync(opts).then(r => callback(null, r), e => {
+                return callback(e, e.response);
+            });
+        }
+        else {
+            return this.requestAsync(opts);
+        }
+    }
+    /**
+     * Authenticates the provided HTTP request, processes it and resolves with the
+     * returned response.
+     * @param opts The HTTP request options.
+     * @param reAuthRetried Whether the current attempt is a retry after a failed attempt due to an auth failure.
+     * @return A promise that resolves with the successful response.
+     */
+    async requestAsync(opts, reAuthRetried = false) {
+        let response;
+        try {
+            const requestHeaders = await this.getRequestHeaders();
+            opts.headers = opts.headers || {};
+            if (requestHeaders && requestHeaders['x-goog-user-project']) {
+                opts.headers['x-goog-user-project'] =
+                    requestHeaders['x-goog-user-project'];
+            }
+            if (requestHeaders && requestHeaders.Authorization) {
+                opts.headers.Authorization = requestHeaders.Authorization;
+            }
+            response = await this.transporter.request(opts);
+        }
+        catch (e) {
+            const res = e.response;
+            if (res) {
+                const statusCode = res.status;
+                // Retry the request for metadata if the following criteria are true:
+                // - We haven't already retried.  It only makes sense to retry once.
+                // - The response was a 401 or a 403
+                // - The request didn't send a readableStream
+                // - forceRefreshOnFailure is true
+                const isReadableStream = res.config.data instanceof stream.Readable;
+                const isAuthErr = statusCode === 401 || statusCode === 403;
+                if (!reAuthRetried &&
+                    isAuthErr &&
+                    !isReadableStream &&
+                    this.forceRefreshOnFailure) {
+                    await this.refreshAccessTokenAsync();
+                    return await this.requestAsync(opts, true);
+                }
+            }
+            throw e;
+        }
+        return response;
+    }
+    /**
+     * Forces token refresh, even if unexpired tokens are currently cached.
+     * @return A promise that resolves with the refreshed credential.
+     */
+    async refreshAccessTokenAsync() {
+        // Refresh the access token using the refresh token.
+        const refreshResponse = await this.externalAccountAuthorizedUserHandler.refreshToken(this.refreshToken);
+        this.cachedAccessToken = {
+            access_token: refreshResponse.access_token,
+            expiry_date: new Date().getTime() + refreshResponse.expires_in * 1000,
+            res: refreshResponse.res,
+        };
+        if (refreshResponse.refresh_token !== undefined) {
+            this.refreshToken = refreshResponse.refresh_token;
+        }
+        return this.cachedAccessToken;
+    }
+    /**
+     * Returns whether the provided credentials are expired or not.
+     * If there is no expiry time, assumes the token is not expired or expiring.
+     * @param credentials The credentials to check for expiration.
+     * @return Whether the credentials are expired or not.
+     */
+    isExpired(credentials) {
+        const now = new Date().getTime();
+        return credentials.expiry_date
+            ? now >= credentials.expiry_date - this.eagerRefreshThresholdMillis
+            : false;
+    }
+}
+exports.ExternalAccountAuthorizedUserClient = ExternalAccountAuthorizedUserClient;
+
+
+/***/ }),
+
+/***/ 4381:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2021 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ExternalAccountClient = void 0;
+const baseexternalclient_1 = __nccwpck_require__(7391);
+const identitypoolclient_1 = __nccwpck_require__(117);
+const awsclient_1 = __nccwpck_require__(1569);
+const pluggable_auth_client_1 = __nccwpck_require__(4782);
+/**
+ * Dummy class with no constructor. Developers are expected to use fromJSON.
+ */
+class ExternalAccountClient {
+    constructor() {
+        throw new Error('ExternalAccountClients should be initialized via: ' +
+            'ExternalAccountClient.fromJSON(), ' +
+            'directly via explicit constructors, eg. ' +
+            'new AwsClient(options), new IdentityPoolClient(options), new' +
+            'PluggableAuthClientOptions, or via ' +
+            'new GoogleAuth(options).getClient()');
+    }
+    /**
+     * This static method will instantiate the
+     * corresponding type of external account credential depending on the
+     * underlying credential source.
+     * @param options The external account options object typically loaded
+     *   from the external account JSON credential file.
+     * @param additionalOptions **DEPRECATED, all options are available in the
+     *   `options` parameter.** Optional additional behavior customization options.
+     *   These currently customize expiration threshold time and whether to retry
+     *   on 401/403 API request errors.
+     * @return A BaseExternalAccountClient instance or null if the options
+     *   provided do not correspond to an external account credential.
+     */
+    static fromJSON(options, additionalOptions) {
+        var _a, _b;
+        if (options && options.type === baseexternalclient_1.EXTERNAL_ACCOUNT_TYPE) {
+            if ((_a = options.credential_source) === null || _a === void 0 ? void 0 : _a.environment_id) {
+                return new awsclient_1.AwsClient(options, additionalOptions);
+            }
+            else if ((_b = options.credential_source) === null || _b === void 0 ? void 0 : _b.executable) {
+                return new pluggable_auth_client_1.PluggableAuthClient(options, additionalOptions);
+            }
+            else {
+                return new identitypoolclient_1.IdentityPoolClient(options, additionalOptions);
+            }
+        }
+        else {
+            return null;
+        }
+    }
+}
+exports.ExternalAccountClient = ExternalAccountClient;
+
+
+/***/ }),
+
+/***/ 7646:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+var _a, _b, _c;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.FileSubjectTokenSupplier = void 0;
+const util_1 = __nccwpck_require__(3837);
+const fs = __nccwpck_require__(7147);
+// fs.readfile is undefined in browser karma tests causing
+// `npm run browser-test` to fail as test.oauth2.ts imports this file via
+// src/index.ts.
+// Fallback to void function to avoid promisify throwing a TypeError.
+const readFile = (0, util_1.promisify)((_a = fs.readFile) !== null && _a !== void 0 ? _a : (() => { }));
+const realpath = (0, util_1.promisify)((_b = fs.realpath) !== null && _b !== void 0 ? _b : (() => { }));
+const lstat = (0, util_1.promisify)((_c = fs.lstat) !== null && _c !== void 0 ? _c : (() => { }));
+/**
+ * Internal subject token supplier implementation used when a file location
+ * is configured in the credential configuration used to build an {@link IdentityPoolClient}
+ */
+class FileSubjectTokenSupplier {
+    /**
+     * Instantiates a new file based subject token supplier.
+     * @param opts The file subject token supplier options to build the supplier
+     *   with.
+     */
+    constructor(opts) {
+        this.filePath = opts.filePath;
+        this.formatType = opts.formatType;
+        this.subjectTokenFieldName = opts.subjectTokenFieldName;
+    }
+    /**
+     * Returns the subject token stored at the file specified in the constructor.
+     * @param context {@link ExternalAccountSupplierContext} from the calling
+     *   {@link IdentityPoolClient}, contains the requested audience and subject
+     *   token type for the external account identity. Not used.
+     */
+    async getSubjectToken(context) {
+        // Make sure there is a file at the path. lstatSync will throw if there is
+        // nothing there.
+        let parsedFilePath = this.filePath;
+        try {
+            // Resolve path to actual file in case of symlink. Expect a thrown error
+            // if not resolvable.
+            parsedFilePath = await realpath(parsedFilePath);
+            if (!(await lstat(parsedFilePath)).isFile()) {
+                throw new Error();
+            }
+        }
+        catch (err) {
+            if (err instanceof Error) {
+                err.message = `The file at ${parsedFilePath} does not exist, or it is not a file. ${err.message}`;
+            }
+            throw err;
+        }
+        let subjectToken;
+        const rawText = await readFile(parsedFilePath, { encoding: 'utf8' });
+        if (this.formatType === 'text') {
+            subjectToken = rawText;
+        }
+        else if (this.formatType === 'json' && this.subjectTokenFieldName) {
+            const json = JSON.parse(rawText);
+            subjectToken = json[this.subjectTokenFieldName];
+        }
+        if (!subjectToken) {
+            throw new Error('Unable to parse the subject_token from the credential_source file');
+        }
+        return subjectToken;
+    }
+}
+exports.FileSubjectTokenSupplier = FileSubjectTokenSupplier;
+
+
+/***/ }),
+
+/***/ 695:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+
+// Copyright 2019 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (receiver, state, kind, f) {
+    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
+    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
+    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
+};
+var __classPrivateFieldSet = (this && this.__classPrivateFieldSet) || function (receiver, state, value, kind, f) {
+    if (kind === "m") throw new TypeError("Private method is not writable");
+    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a setter");
+    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
+    return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
+};
+var _GoogleAuth_instances, _GoogleAuth_pendingAuthClient, _GoogleAuth_prepareAndCacheClient, _GoogleAuth_determineClient;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GoogleAuth = exports.GoogleAuthExceptionMessages = exports.CLOUD_SDK_CLIENT_ID = void 0;
+const child_process_1 = __nccwpck_require__(2081);
+const fs = __nccwpck_require__(7147);
+const gcpMetadata = __nccwpck_require__(3563);
+const os = __nccwpck_require__(2037);
+const path = __nccwpck_require__(1017);
+const crypto_1 = __nccwpck_require__(8043);
+const transporters_1 = __nccwpck_require__(2649);
+const computeclient_1 = __nccwpck_require__(6875);
+const idtokenclient_1 = __nccwpck_require__(298);
+const envDetect_1 = __nccwpck_require__(1380);
+const jwtclient_1 = __nccwpck_require__(3959);
+const refreshclient_1 = __nccwpck_require__(8790);
+const impersonated_1 = __nccwpck_require__(1103);
+const externalclient_1 = __nccwpck_require__(4381);
+const baseexternalclient_1 = __nccwpck_require__(7391);
+const authclient_1 = __nccwpck_require__(4627);
+const externalAccountAuthorizedUserClient_1 = __nccwpck_require__(8765);
+const util_1 = __nccwpck_require__(8905);
+exports.CLOUD_SDK_CLIENT_ID = '764086051850-6qr4p6gpi6hn506pt8ejuq83di341hur.apps.googleusercontent.com';
+exports.GoogleAuthExceptionMessages = {
+    API_KEY_WITH_CREDENTIALS: 'API Keys and Credentials are mutually exclusive authentication methods and cannot be used together.',
+    NO_PROJECT_ID_FOUND: 'Unable to detect a Project Id in the current environment. \n' +
+        'To learn more about authentication and Google APIs, visit: \n' +
+        'https://cloud.google.com/docs/authentication/getting-started',
+    NO_CREDENTIALS_FOUND: 'Unable to find credentials in current environment. \n' +
+        'To learn more about authentication and Google APIs, visit: \n' +
+        'https://cloud.google.com/docs/authentication/getting-started',
+    NO_ADC_FOUND: 'Could not load the default credentials. Browse to https://cloud.google.com/docs/authentication/getting-started for more information.',
+    NO_UNIVERSE_DOMAIN_FOUND: 'Unable to detect a Universe Domain in the current environment.\n' +
+        'To learn more about Universe Domain retrieval, visit: \n' +
+        'https://cloud.google.com/compute/docs/metadata/predefined-metadata-keys',
+};
+class GoogleAuth {
+    // Note:  this properly is only public to satisfy unit tests.
+    // https://github.com/Microsoft/TypeScript/issues/5228
+    get isGCE() {
+        return this.checkIsGCE;
+    }
+    /**
+     * Configuration is resolved in the following order of precedence:
+     * - {@link GoogleAuthOptions.credentials `credentials`}
+     * - {@link GoogleAuthOptions.keyFilename `keyFilename`}
+     * - {@link GoogleAuthOptions.keyFile `keyFile`}
+     *
+     * {@link GoogleAuthOptions.clientOptions `clientOptions`} are passed to the
+     * {@link AuthClient `AuthClient`s}.
+     *
+     * @param opts
+     */
+    constructor(opts = {}) {
+        _GoogleAuth_instances.add(this);
+        /**
+         * Caches a value indicating whether the auth layer is running on Google
+         * Compute Engine.
+         * @private
+         */
+        this.checkIsGCE = undefined;
+        // To save the contents of the JSON credential file
+        this.jsonContent = null;
+        this.cachedCredential = null;
+        /**
+         * A pending {@link AuthClient}. Used for concurrent {@link GoogleAuth.getClient} calls.
+         */
+        _GoogleAuth_pendingAuthClient.set(this, null);
+        this.clientOptions = {};
+        this._cachedProjectId = opts.projectId || null;
+        this.cachedCredential = opts.authClient || null;
+        this.keyFilename = opts.keyFilename || opts.keyFile;
+        this.scopes = opts.scopes;
+        this.clientOptions = opts.clientOptions || {};
+        this.jsonContent = opts.credentials || null;
+        this.apiKey = opts.apiKey || this.clientOptions.apiKey || null;
+        // Cannot use both API Key + Credentials
+        if (this.apiKey && (this.jsonContent || this.clientOptions.credentials)) {
+            throw new RangeError(exports.GoogleAuthExceptionMessages.API_KEY_WITH_CREDENTIALS);
+        }
+        if (opts.universeDomain) {
+            this.clientOptions.universeDomain = opts.universeDomain;
+        }
+    }
+    // GAPIC client libraries should always use self-signed JWTs. The following
+    // variables are set on the JWT client in order to indicate the type of library,
+    // and sign the JWT with the correct audience and scopes (if not supplied).
+    setGapicJWTValues(client) {
+        client.defaultServicePath = this.defaultServicePath;
+        client.useJWTAccessWithScope = this.useJWTAccessWithScope;
+        client.defaultScopes = this.defaultScopes;
+    }
+    getProjectId(callback) {
+        if (callback) {
+            this.getProjectIdAsync().then(r => callback(null, r), callback);
+        }
+        else {
+            return this.getProjectIdAsync();
+        }
+    }
+    /**
+     * A temporary method for internal `getProjectId` usages where `null` is
+     * acceptable. In a future major release, `getProjectId` should return `null`
+     * (as the `Promise<string | null>` base signature describes) and this private
+     * method should be removed.
+     *
+     * @returns Promise that resolves with project id (or `null`)
+     */
+    async getProjectIdOptional() {
+        try {
+            return await this.getProjectId();
+        }
+        catch (e) {
+            if (e instanceof Error &&
+                e.message === exports.GoogleAuthExceptionMessages.NO_PROJECT_ID_FOUND) {
+                return null;
+            }
+            else {
+                throw e;
+            }
+        }
+    }
+    /**
+     * A private method for finding and caching a projectId.
+     *
+     * Supports environments in order of precedence:
+     * - GCLOUD_PROJECT or GOOGLE_CLOUD_PROJECT environment variable
+     * - GOOGLE_APPLICATION_CREDENTIALS JSON file
+     * - Cloud SDK: `gcloud config config-helper --format json`
+     * - GCE project ID from metadata server
+     *
+     * @returns projectId
+     */
+    async findAndCacheProjectId() {
+        let projectId = null;
+        projectId || (projectId = await this.getProductionProjectId());
+        projectId || (projectId = await this.getFileProjectId());
+        projectId || (projectId = await this.getDefaultServiceProjectId());
+        projectId || (projectId = await this.getGCEProjectId());
+        projectId || (projectId = await this.getExternalAccountClientProjectId());
+        if (projectId) {
+            this._cachedProjectId = projectId;
+            return projectId;
+        }
+        else {
+            throw new Error(exports.GoogleAuthExceptionMessages.NO_PROJECT_ID_FOUND);
+        }
+    }
+    async getProjectIdAsync() {
+        if (this._cachedProjectId) {
+            return this._cachedProjectId;
+        }
+        if (!this._findProjectIdPromise) {
+            this._findProjectIdPromise = this.findAndCacheProjectId();
+        }
+        return this._findProjectIdPromise;
+    }
+    /**
+     * Retrieves a universe domain from the metadata server via
+     * {@link gcpMetadata.universe}.
+     *
+     * @returns a universe domain
+     */
+    async getUniverseDomainFromMetadataServer() {
+        var _a;
+        let universeDomain;
+        try {
+            universeDomain = await gcpMetadata.universe('universe-domain');
+            universeDomain || (universeDomain = authclient_1.DEFAULT_UNIVERSE);
+        }
+        catch (e) {
+            if (e && ((_a = e === null || e === void 0 ? void 0 : e.response) === null || _a === void 0 ? void 0 : _a.status) === 404) {
+                universeDomain = authclient_1.DEFAULT_UNIVERSE;
+            }
+            else {
+                throw e;
+            }
+        }
+        return universeDomain;
+    }
+    /**
+     * Retrieves, caches, and returns the universe domain in the following order
+     * of precedence:
+     * - The universe domain in {@link GoogleAuth.clientOptions}
+     * - An existing or ADC {@link AuthClient}'s universe domain
+     * - {@link gcpMetadata.universe}, if {@link Compute} client
+     *
+     * @returns The universe domain
+     */
+    async getUniverseDomain() {
+        let universeDomain = (0, util_1.originalOrCamelOptions)(this.clientOptions).get('universe_domain');
+        try {
+            universeDomain !== null && universeDomain !== void 0 ? universeDomain : (universeDomain = (await this.getClient()).universeDomain);
+        }
+        catch (_a) {
+            // client or ADC is not available
+            universeDomain !== null && universeDomain !== void 0 ? universeDomain : (universeDomain = authclient_1.DEFAULT_UNIVERSE);
+        }
+        return universeDomain;
+    }
+    /**
+     * @returns Any scopes (user-specified or default scopes specified by the
+     *   client library) that need to be set on the current Auth client.
+     */
+    getAnyScopes() {
+        return this.scopes || this.defaultScopes;
+    }
+    getApplicationDefault(optionsOrCallback = {}, callback) {
+        let options;
+        if (typeof optionsOrCallback === 'function') {
+            callback = optionsOrCallback;
+        }
+        else {
+            options = optionsOrCallback;
+        }
+        if (callback) {
+            this.getApplicationDefaultAsync(options).then(r => callback(null, r.credential, r.projectId), callback);
+        }
+        else {
+            return this.getApplicationDefaultAsync(options);
+        }
+    }
+    async getApplicationDefaultAsync(options = {}) {
+        // If we've already got a cached credential, return it.
+        // This will also preserve one's configured quota project, in case they
+        // set one directly on the credential previously.
+        if (this.cachedCredential) {
+            // cache, while preserving existing quota project preferences
+            return await __classPrivateFieldGet(this, _GoogleAuth_instances, "m", _GoogleAuth_prepareAndCacheClient).call(this, this.cachedCredential, null);
+        }
+        let credential;
+        // Check for the existence of a local environment variable pointing to the
+        // location of the credential file. This is typically used in local
+        // developer scenarios.
+        credential =
+            await this._tryGetApplicationCredentialsFromEnvironmentVariable(options);
+        if (credential) {
+            if (credential instanceof jwtclient_1.JWT) {
+                credential.scopes = this.scopes;
+            }
+            else if (credential instanceof baseexternalclient_1.BaseExternalAccountClient) {
+                credential.scopes = this.getAnyScopes();
+            }
+            return await __classPrivateFieldGet(this, _GoogleAuth_instances, "m", _GoogleAuth_prepareAndCacheClient).call(this, credential);
+        }
+        // Look in the well-known credential file location.
+        credential =
+            await this._tryGetApplicationCredentialsFromWellKnownFile(options);
+        if (credential) {
+            if (credential instanceof jwtclient_1.JWT) {
+                credential.scopes = this.scopes;
+            }
+            else if (credential instanceof baseexternalclient_1.BaseExternalAccountClient) {
+                credential.scopes = this.getAnyScopes();
+            }
+            return await __classPrivateFieldGet(this, _GoogleAuth_instances, "m", _GoogleAuth_prepareAndCacheClient).call(this, credential);
+        }
+        // Determine if we're running on GCE.
+        if (await this._checkIsGCE()) {
+            options.scopes = this.getAnyScopes();
+            return await __classPrivateFieldGet(this, _GoogleAuth_instances, "m", _GoogleAuth_prepareAndCacheClient).call(this, new computeclient_1.Compute(options));
+        }
+        throw new Error(exports.GoogleAuthExceptionMessages.NO_ADC_FOUND);
+    }
+    /**
+     * Determines whether the auth layer is running on Google Compute Engine.
+     * Checks for GCP Residency, then fallback to checking if metadata server
+     * is available.
+     *
+     * @returns A promise that resolves with the boolean.
+     * @api private
+     */
+    async _checkIsGCE() {
+        if (this.checkIsGCE === undefined) {
+            this.checkIsGCE =
+                gcpMetadata.getGCPResidency() || (await gcpMetadata.isAvailable());
+        }
+        return this.checkIsGCE;
+    }
+    /**
+     * Attempts to load default credentials from the environment variable path..
+     * @returns Promise that resolves with the OAuth2Client or null.
+     * @api private
+     */
+    async _tryGetApplicationCredentialsFromEnvironmentVariable(options) {
+        const credentialsPath = process.env['GOOGLE_APPLICATION_CREDENTIALS'] ||
+            process.env['google_application_credentials'];
+        if (!credentialsPath || credentialsPath.length === 0) {
+            return null;
+        }
+        try {
+            return this._getApplicationCredentialsFromFilePath(credentialsPath, options);
+        }
+        catch (e) {
+            if (e instanceof Error) {
+                e.message = `Unable to read the credential file specified by the GOOGLE_APPLICATION_CREDENTIALS environment variable: ${e.message}`;
+            }
+            throw e;
+        }
+    }
+    /**
+     * Attempts to load default credentials from a well-known file location
+     * @return Promise that resolves with the OAuth2Client or null.
+     * @api private
+     */
+    async _tryGetApplicationCredentialsFromWellKnownFile(options) {
+        // First, figure out the location of the file, depending upon the OS type.
+        let location = null;
+        if (this._isWindows()) {
+            // Windows
+            location = process.env['APPDATA'];
+        }
+        else {
+            // Linux or Mac
+            const home = process.env['HOME'];
+            if (home) {
+                location = path.join(home, '.config');
+            }
+        }
+        // If we found the root path, expand it.
+        if (location) {
+            location = path.join(location, 'gcloud', 'application_default_credentials.json');
+            if (!fs.existsSync(location)) {
+                location = null;
+            }
+        }
+        // The file does not exist.
+        if (!location) {
+            return null;
+        }
+        // The file seems to exist. Try to use it.
+        const client = await this._getApplicationCredentialsFromFilePath(location, options);
+        return client;
+    }
+    /**
+     * Attempts to load default credentials from a file at the given path..
+     * @param filePath The path to the file to read.
+     * @returns Promise that resolves with the OAuth2Client
+     * @api private
+     */
+    async _getApplicationCredentialsFromFilePath(filePath, options = {}) {
+        // Make sure the path looks like a string.
+        if (!filePath || filePath.length === 0) {
+            throw new Error('The file path is invalid.');
+        }
+        // Make sure there is a file at the path. lstatSync will throw if there is
+        // nothing there.
+        try {
+            // Resolve path to actual file in case of symlink. Expect a thrown error
+            // if not resolvable.
+            filePath = fs.realpathSync(filePath);
+            if (!fs.lstatSync(filePath).isFile()) {
+                throw new Error();
+            }
+        }
+        catch (err) {
+            if (err instanceof Error) {
+                err.message = `The file at ${filePath} does not exist, or it is not a file. ${err.message}`;
+            }
+            throw err;
+        }
+        // Now open a read stream on the file, and parse it.
+        const readStream = fs.createReadStream(filePath);
+        return this.fromStream(readStream, options);
+    }
+    /**
+     * Create a credentials instance using a given impersonated input options.
+     * @param json The impersonated input object.
+     * @returns JWT or UserRefresh Client with data
+     */
+    fromImpersonatedJSON(json) {
+        var _a, _b, _c, _d;
+        if (!json) {
+            throw new Error('Must pass in a JSON object containing an  impersonated refresh token');
+        }
+        if (json.type !== impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
+            throw new Error(`The incoming JSON object does not have the "${impersonated_1.IMPERSONATED_ACCOUNT_TYPE}" type`);
+        }
+        if (!json.source_credentials) {
+            throw new Error('The incoming JSON object does not contain a source_credentials field');
+        }
+        if (!json.service_account_impersonation_url) {
+            throw new Error('The incoming JSON object does not contain a service_account_impersonation_url field');
+        }
+        const sourceClient = this.fromJSON(json.source_credentials);
+        if (((_a = json.service_account_impersonation_url) === null || _a === void 0 ? void 0 : _a.length) > 256) {
+            /**
+             * Prevents DOS attacks.
+             * @see {@link https://github.com/googleapis/google-auth-library-nodejs/security/code-scanning/85}
+             **/
+            throw new RangeError(`Target principal is too long: ${json.service_account_impersonation_url}`);
+        }
+        // Extract service account from service_account_impersonation_url
+        const targetPrincipal = (_c = (_b = /(?<target>[^/]+):(generateAccessToken|generateIdToken)$/.exec(json.service_account_impersonation_url)) === null || _b === void 0 ? void 0 : _b.groups) === null || _c === void 0 ? void 0 : _c.target;
+        if (!targetPrincipal) {
+            throw new RangeError(`Cannot extract target principal from ${json.service_account_impersonation_url}`);
+        }
+        const targetScopes = (_d = this.getAnyScopes()) !== null && _d !== void 0 ? _d : [];
+        return new impersonated_1.Impersonated({
+            ...json,
+            sourceClient,
+            targetPrincipal,
+            targetScopes: Array.isArray(targetScopes) ? targetScopes : [targetScopes],
+        });
+    }
+    /**
+     * Create a credentials instance using the given input options.
+     * This client is not cached.
+     *
+     * @param json The input object.
+     * @param options The JWT or UserRefresh options for the client
+     * @returns JWT or UserRefresh Client with data
+     */
+    fromJSON(json, options = {}) {
+        let client;
+        // user's preferred universe domain
+        const preferredUniverseDomain = (0, util_1.originalOrCamelOptions)(options).get('universe_domain');
+        if (json.type === refreshclient_1.USER_REFRESH_ACCOUNT_TYPE) {
+            client = new refreshclient_1.UserRefreshClient(options);
+            client.fromJSON(json);
+        }
+        else if (json.type === impersonated_1.IMPERSONATED_ACCOUNT_TYPE) {
+            client = this.fromImpersonatedJSON(json);
+        }
+        else if (json.type === baseexternalclient_1.EXTERNAL_ACCOUNT_TYPE) {
+            client = externalclient_1.ExternalAccountClient.fromJSON(json, options);
+            client.scopes = this.getAnyScopes();
+        }
+        else if (json.type === externalAccountAuthorizedUserClient_1.EXTERNAL_ACCOUNT_AUTHORIZED_USER_TYPE) {
+            client = new externalAccountAuthorizedUserClient_1.ExternalAccountAuthorizedUserClient(json, options);
+        }
+        else {
+            options.scopes = this.scopes;
+            client = new jwtclient_1.JWT(options);
+            this.setGapicJWTValues(client);
+            client.fromJSON(json);
+        }
+        if (preferredUniverseDomain) {
+            client.universeDomain = preferredUniverseDomain;
+        }
+        return client;
+    }
+    /**
+     * Return a JWT or UserRefreshClient from JavaScript object, caching both the
+     * object used to instantiate and the client.
+     * @param json The input object.
+     * @param options The JWT or UserRefresh options for the client
+     * @returns JWT or UserRefresh Client with data
+     */
+    _cacheClientFromJSON(json, options) {
+        const client = this.fromJSON(json, options);
+        // cache both raw data used to instantiate client and client itself.
+        this.jsonContent = json;
+        this.cachedCredential = client;
+        return client;
+    }
+    fromStream(inputStream, optionsOrCallback = {}, callback) {
+        let options = {};
+        if (typeof optionsOrCallback === 'function') {
+            callback = optionsOrCallback;
+        }
+        else {
+            options = optionsOrCallback;
+        }
+        if (callback) {
+            this.fromStreamAsync(inputStream, options).then(r => callback(null, r), callback);
+        }
+        else {
+            return this.fromStreamAsync(inputStream, options);
+        }
+    }
+    fromStreamAsync(inputStream, options) {
+        return new Promise((resolve, reject) => {
+            if (!inputStream) {
+                throw new Error('Must pass in a stream containing the Google auth settings.');
+            }
+            const chunks = [];
+            inputStream
+                .setEncoding('utf8')
+                .on('error', reject)
+                .on('data', chunk => chunks.push(chunk))
+                .on('end', () => {
+                try {
+                    try {
+                        const data = JSON.parse(chunks.join(''));
+                        const r = this._cacheClientFromJSON(data, options);
+                        return resolve(r);
+                    }
+                    catch (err) {
+                        // If we failed parsing this.keyFileName, assume that it
+                        // is a PEM or p12 certificate:
+                        if (!this.keyFilename)
+                            throw err;
+                        const client = new jwtclient_1.JWT({
+                            ...this.clientOptions,
+                            keyFile: this.keyFilename,
+                        });
+                        this.cachedCredential = client;
+                        this.setGapicJWTValues(client);
+                        return resolve(client);
+                    }
+                }
+                catch (err) {
+                    return reject(err);
+                }
+            });
+        });
+    }
+    /**
+     * Create a credentials instance using the given API key string.
+     * The created client is not cached. In order to create and cache it use the {@link GoogleAuth.getClient `getClient`} method after first providing an {@link GoogleAuth.apiKey `apiKey`}.
+     *
+     * @param apiKey The API key string
+     * @param options An optional options object.
+     * @returns A JWT loaded from the key
+     */
+    fromAPIKey(apiKey, options = {}) {
+        return new jwtclient_1.JWT({ ...options, apiKey });
+    }
+    /**
+     * Determines whether the current operating system is Windows.
+     * @api private
+     */
+    _isWindows() {
+        const sys = os.platform();
+        if (sys && sys.length >= 3) {
+            if (sys.substring(0, 3).toLowerCase() === 'win') {
+                return true;
+            }
+        }
+        return false;
+    }
+    /**
+     * Run the Google Cloud SDK command that prints the default project ID
+     */
+    async getDefaultServiceProjectId() {
+        return new Promise(resolve => {
+            (0, child_process_1.exec)('gcloud config config-helper --format json', (err, stdout) => {
+                if (!err && stdout) {
+                    try {
+                        const projectId = JSON.parse(stdout).configuration.properties.core.project;
+                        resolve(projectId);
+                        return;
+                    }
+                    catch (e) {
+                        // ignore errors
+                    }
+                }
+                resolve(null);
+            });
+        });
+    }
+    /**
+     * Loads the project id from environment variables.
+     * @api private
+     */
+    getProductionProjectId() {
+        return (process.env['GCLOUD_PROJECT'] ||
+            process.env['GOOGLE_CLOUD_PROJECT'] ||
+            process.env['gcloud_project'] ||
+            process.env['google_cloud_project']);
+    }
+    /**
+     * Loads the project id from the GOOGLE_APPLICATION_CREDENTIALS json file.
+     * @api private
+     */
+    async getFileProjectId() {
+        if (this.cachedCredential) {
+            // Try to read the project ID from the cached credentials file
+            return this.cachedCredential.projectId;
+        }
+        // Ensure the projectId is loaded from the keyFile if available.
+        if (this.keyFilename) {
+            const creds = await this.getClient();
+            if (creds && creds.projectId) {
+                return creds.projectId;
+            }
+        }
+        // Try to load a credentials file and read its project ID
+        const r = await this._tryGetApplicationCredentialsFromEnvironmentVariable();
+        if (r) {
+            return r.projectId;
+        }
+        else {
+            return null;
+        }
+    }
+    /**
+     * Gets the project ID from external account client if available.
+     */
+    async getExternalAccountClientProjectId() {
+        if (!this.jsonContent || this.jsonContent.type !== baseexternalclient_1.EXTERNAL_ACCOUNT_TYPE) {
+            return null;
+        }
+        const creds = await this.getClient();
+        // Do not suppress the underlying error, as the error could contain helpful
+        // information for debugging and fixing. This is especially true for
+        // external account creds as in order to get the project ID, the following
+        // operations have to succeed:
+        // 1. Valid credentials file should be supplied.
+        // 2. Ability to retrieve access tokens from STS token exchange API.
+        // 3. Ability to exchange for service account impersonated credentials (if
+        //    enabled).
+        // 4. Ability to get project info using the access token from step 2 or 3.
+        // Without surfacing the error, it is harder for developers to determine
+        // which step went wrong.
+        return await creds.getProjectId();
+    }
+    /**
+     * Gets the Compute Engine project ID if it can be inferred.
+     */
+    async getGCEProjectId() {
+        try {
+            const r = await gcpMetadata.project('project-id');
+            return r;
+        }
+        catch (e) {
+            // Ignore any errors
+            return null;
+        }
+    }
+    getCredentials(callback) {
+        if (callback) {
+            this.getCredentialsAsync().then(r => callback(null, r), callback);
+        }
+        else {
+            return this.getCredentialsAsync();
+        }
+    }
+    async getCredentialsAsync() {
+        const client = await this.getClient();
+        if (client instanceof impersonated_1.Impersonated) {
+            return { client_email: client.getTargetPrincipal() };
+        }
+        if (client instanceof baseexternalclient_1.BaseExternalAccountClient) {
+            const serviceAccountEmail = client.getServiceAccountEmail();
+            if (serviceAccountEmail) {
+                return {
+                    client_email: serviceAccountEmail,
+                    universe_domain: client.universeDomain,
+                };
+            }
+        }
+        if (this.jsonContent) {
+            return {
+                client_email: this.jsonContent.client_email,
+                private_key: this.jsonContent.private_key,
+                universe_domain: this.jsonContent.universe_domain,
+            };
+        }
+        if (await this._checkIsGCE()) {
+            const [client_email, universe_domain] = await Promise.all([
+                gcpMetadata.instance('service-accounts/default/email'),
+                this.getUniverseDomain(),
+            ]);
+            return { client_email, universe_domain };
+        }
+        throw new Error(exports.GoogleAuthExceptionMessages.NO_CREDENTIALS_FOUND);
+    }
+    /**
+     * Automatically obtain an {@link AuthClient `AuthClient`} based on the
+     * provided configuration. If no options were passed, use Application
+     * Default Credentials.
+     */
+    async getClient() {
+        if (this.cachedCredential) {
+            return this.cachedCredential;
+        }
+        // Use an existing auth client request, or cache a new one
+        __classPrivateFieldSet(this, _GoogleAuth_pendingAuthClient, __classPrivateFieldGet(this, _GoogleAuth_pendingAuthClient, "f") || __classPrivateFieldGet(this, _GoogleAuth_instances, "m", _GoogleAuth_determineClient).call(this), "f");
+        try {
+            return await __classPrivateFieldGet(this, _GoogleAuth_pendingAuthClient, "f");
+        }
+        finally {
+            // reset the pending auth client in case it is changed later
+            __classPrivateFieldSet(this, _GoogleAuth_pendingAuthClient, null, "f");
+        }
+    }
+    /**
+     * Creates a client which will fetch an ID token for authorization.
+     * @param targetAudience the audience for the fetched ID token.
+     * @returns IdTokenClient for making HTTP calls authenticated with ID tokens.
+     */
+    async getIdTokenClient(targetAudience) {
+        const client = await this.getClient();
+        if (!('fetchIdToken' in client)) {
+            throw new Error('Cannot fetch ID token in this environment, use GCE or set the GOOGLE_APPLICATION_CREDENTIALS environment variable to a service account credentials JSON file.');
+        }
+        return new idtokenclient_1.IdTokenClient({ targetAudience, idTokenProvider: client });
+    }
+    /**
+     * Automatically obtain application default credentials, and return
+     * an access token for making requests.
+     */
+    async getAccessToken() {
+        const client = await this.getClient();
+        return (await client.getAccessToken()).token;
+    }
+    /**
+     * Obtain the HTTP headers that will provide authorization for a given
+     * request.
+     */
+    async getRequestHeaders(url) {
+        const client = await this.getClient();
+        return client.getRequestHeaders(url);
+    }
+    /**
+     * Obtain credentials for a request, then attach the appropriate headers to
+     * the request options.
+     * @param opts Axios or Request options on which to attach the headers
+     */
+    async authorizeRequest(opts) {
+        opts = opts || {};
+        const url = opts.url || opts.uri;
+        const client = await this.getClient();
+        const headers = await client.getRequestHeaders(url);
+        opts.headers = Object.assign(opts.headers || {}, headers);
+        return opts;
+    }
+    /**
+     * Automatically obtain application default credentials, and make an
+     * HTTP request using the given options.
+     * @param opts Axios request options for the HTTP request.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async request(opts) {
+        const client = await this.getClient();
+        return client.request(opts);
+    }
+    /**
+     * Determine the compute environment in which the code is running.
+     */
+    getEnv() {
+        return (0, envDetect_1.getEnv)();
+    }
+    /**
+     * Sign the given data with the current private key, or go out
+     * to the IAM API to sign it.
+     * @param data The data to be signed.
+     * @param endpoint A custom endpoint to use.
+     *
+     * @example
+     * ```
+     * sign('data', 'https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/');
+     * ```
+     */
+    async sign(data, endpoint) {
+        const client = await this.getClient();
+        const universe = await this.getUniverseDomain();
+        endpoint =
+            endpoint ||
+                `https://iamcredentials.${universe}/v1/projects/-/serviceAccounts/`;
+        if (client instanceof impersonated_1.Impersonated) {
+            const signed = await client.sign(data);
+            return signed.signedBlob;
+        }
+        const crypto = (0, crypto_1.createCrypto)();
+        if (client instanceof jwtclient_1.JWT && client.key) {
+            const sign = await crypto.sign(client.key, data);
+            return sign;
+        }
+        const creds = await this.getCredentials();
+        if (!creds.client_email) {
+            throw new Error('Cannot sign data without `client_email`.');
+        }
+        return this.signBlob(crypto, creds.client_email, data, endpoint);
+    }
+    async signBlob(crypto, emailOrUniqueId, data, endpoint) {
+        const url = new URL(endpoint + `${emailOrUniqueId}:signBlob`);
+        const res = await this.request({
+            method: 'POST',
+            url: url.href,
+            data: {
+                payload: crypto.encodeBase64StringUtf8(data),
+            },
+            retry: true,
+            retryConfig: {
+                httpMethodsToRetry: ['POST'],
+            },
+        });
+        return res.data.signedBlob;
+    }
+}
+exports.GoogleAuth = GoogleAuth;
+_GoogleAuth_pendingAuthClient = new WeakMap(), _GoogleAuth_instances = new WeakSet(), _GoogleAuth_prepareAndCacheClient = async function _GoogleAuth_prepareAndCacheClient(credential, quotaProjectIdOverride = process.env['GOOGLE_CLOUD_QUOTA_PROJECT'] || null) {
+    const projectId = await this.getProjectIdOptional();
+    if (quotaProjectIdOverride) {
+        credential.quotaProjectId = quotaProjectIdOverride;
+    }
+    this.cachedCredential = credential;
+    return { credential, projectId };
+}, _GoogleAuth_determineClient = async function _GoogleAuth_determineClient() {
+    if (this.jsonContent) {
+        return this._cacheClientFromJSON(this.jsonContent, this.clientOptions);
+    }
+    else if (this.keyFilename) {
+        const filePath = path.resolve(this.keyFilename);
+        const stream = fs.createReadStream(filePath);
+        return await this.fromStreamAsync(stream, this.clientOptions);
+    }
+    else if (this.apiKey) {
+        const client = await this.fromAPIKey(this.apiKey, this.clientOptions);
+        client.scopes = this.scopes;
+        const { credential } = await __classPrivateFieldGet(this, _GoogleAuth_instances, "m", _GoogleAuth_prepareAndCacheClient).call(this, client);
+        return credential;
+    }
+    else {
+        const { credential } = await this.getApplicationDefaultAsync(this.clientOptions);
+        return credential;
+    }
+};
+/**
+ * Export DefaultTransporter as a static property of the class.
+ */
+GoogleAuth.DefaultTransporter = transporters_1.DefaultTransporter;
+
+
+/***/ }),
+
+/***/ 9735:
+/***/ ((__unused_webpack_module, exports) => {
+
+
+// Copyright 2014 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.IAMAuth = void 0;
+class IAMAuth {
+    /**
+     * IAM credentials.
+     *
+     * @param selector the iam authority selector
+     * @param token the token
+     * @constructor
+     */
+    constructor(selector, token) {
+        this.selector = selector;
+        this.token = token;
+        this.selector = selector;
+        this.token = token;
+    }
+    /**
+     * Acquire the HTTP headers required to make an authenticated request.
+     */
+    getRequestHeaders() {
+        return {
+            'x-goog-iam-authority-selector': this.selector,
+            'x-goog-iam-authorization-token': this.token,
+        };
+    }
+}
+exports.IAMAuth = IAMAuth;
+
+
+/***/ }),
+
+/***/ 117:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2021 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.IdentityPoolClient = void 0;
+const baseexternalclient_1 = __nccwpck_require__(7391);
+const util_1 = __nccwpck_require__(8905);
+const filesubjecttokensupplier_1 = __nccwpck_require__(7646);
+const urlsubjecttokensupplier_1 = __nccwpck_require__(7428);
+/**
+ * Defines the Url-sourced and file-sourced external account clients mainly
+ * used for K8s and Azure workloads.
+ */
+class IdentityPoolClient extends baseexternalclient_1.BaseExternalAccountClient {
+    /**
+     * Instantiate an IdentityPoolClient instance using the provided JSON
+     * object loaded from an external account credentials file.
+     * An error is thrown if the credential is not a valid file-sourced or
+     * url-sourced credential or a workforce pool user project is provided
+     * with a non workforce audience.
+     * @param options The external account options object typically loaded
+     *   from the external account JSON credential file. The camelCased options
+     *   are aliases for the snake_cased options.
+     * @param additionalOptions **DEPRECATED, all options are available in the
+     *   `options` parameter.** Optional additional behavior customization options.
+     *   These currently customize expiration threshold time and whether to retry
+     *   on 401/403 API request errors.
+     */
+    constructor(options, additionalOptions) {
+        super(options, additionalOptions);
+        const opts = (0, util_1.originalOrCamelOptions)(options);
+        const credentialSource = opts.get('credential_source');
+        const subjectTokenSupplier = opts.get('subject_token_supplier');
+        // Validate credential sourcing configuration.
+        if (!credentialSource && !subjectTokenSupplier) {
+            throw new Error('A credential source or subject token supplier must be specified.');
+        }
+        if (credentialSource && subjectTokenSupplier) {
+            throw new Error('Only one of credential source or subject token supplier can be specified.');
+        }
+        if (subjectTokenSupplier) {
+            this.subjectTokenSupplier = subjectTokenSupplier;
+            this.credentialSourceType = 'programmatic';
+        }
+        else {
+            const credentialSourceOpts = (0, util_1.originalOrCamelOptions)(credentialSource);
+            const formatOpts = (0, util_1.originalOrCamelOptions)(credentialSourceOpts.get('format'));
+            // Text is the default format type.
+            const formatType = formatOpts.get('type') || 'text';
+            const formatSubjectTokenFieldName = formatOpts.get('subject_token_field_name');
+            if (formatType !== 'json' && formatType !== 'text') {
+                throw new Error(`Invalid credential_source format "${formatType}"`);
+            }
+            if (formatType === 'json' && !formatSubjectTokenFieldName) {
+                throw new Error('Missing subject_token_field_name for JSON credential_source format');
+            }
+            const file = credentialSourceOpts.get('file');
+            const url = credentialSourceOpts.get('url');
+            const headers = credentialSourceOpts.get('headers');
+            if (file && url) {
+                throw new Error('No valid Identity Pool "credential_source" provided, must be either file or url.');
+            }
+            else if (file && !url) {
+                this.credentialSourceType = 'file';
+                this.subjectTokenSupplier = new filesubjecttokensupplier_1.FileSubjectTokenSupplier({
+                    filePath: file,
+                    formatType: formatType,
+                    subjectTokenFieldName: formatSubjectTokenFieldName,
+                });
+            }
+            else if (!file && url) {
+                this.credentialSourceType = 'url';
+                this.subjectTokenSupplier = new urlsubjecttokensupplier_1.UrlSubjectTokenSupplier({
+                    url: url,
+                    formatType: formatType,
+                    subjectTokenFieldName: formatSubjectTokenFieldName,
+                    headers: headers,
+                    additionalGaxiosOptions: IdentityPoolClient.RETRY_CONFIG,
+                });
+            }
+            else {
+                throw new Error('No valid Identity Pool "credential_source" provided, must be either file or url.');
+            }
+        }
+    }
+    /**
+     * Triggered when a external subject token is needed to be exchanged for a GCP
+     * access token via GCP STS endpoint. Gets a subject token by calling
+     * the configured {@link SubjectTokenSupplier}
+     * @return A promise that resolves with the external subject token.
+     */
+    async retrieveSubjectToken() {
+        return this.subjectTokenSupplier.getSubjectToken(this.supplierContext);
+    }
+}
+exports.IdentityPoolClient = IdentityPoolClient;
+
+
+/***/ }),
+
+/***/ 298:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2020 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.IdTokenClient = void 0;
+const oauth2client_1 = __nccwpck_require__(3936);
+class IdTokenClient extends oauth2client_1.OAuth2Client {
+    /**
+     * Google ID Token client
+     *
+     * Retrieve ID token from the metadata server.
+     * See: https://cloud.google.com/docs/authentication/get-id-token#metadata-server
+     */
+    constructor(options) {
+        super(options);
+        this.targetAudience = options.targetAudience;
+        this.idTokenProvider = options.idTokenProvider;
+    }
+    async getRequestMetadataAsync(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    url) {
+        if (!this.credentials.id_token ||
+            !this.credentials.expiry_date ||
+            this.isTokenExpiring()) {
+            const idToken = await this.idTokenProvider.fetchIdToken(this.targetAudience);
+            this.credentials = {
+                id_token: idToken,
+                expiry_date: this.getIdTokenExpiryDate(idToken),
+            };
+        }
+        const headers = {
+            Authorization: 'Bearer ' + this.credentials.id_token,
+        };
+        return { headers };
+    }
+    getIdTokenExpiryDate(idToken) {
+        const payloadB64 = idToken.split('.')[1];
+        if (payloadB64) {
+            const payload = JSON.parse(Buffer.from(payloadB64, 'base64').toString('ascii'));
+            return payload.exp * 1000;
+        }
+    }
+}
+exports.IdTokenClient = IdTokenClient;
+
+
+/***/ }),
+
+/***/ 1103:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+/**
+ * Copyright 2021 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.Impersonated = exports.IMPERSONATED_ACCOUNT_TYPE = void 0;
+const oauth2client_1 = __nccwpck_require__(3936);
+const gaxios_1 = __nccwpck_require__(9555);
+const util_1 = __nccwpck_require__(8905);
+exports.IMPERSONATED_ACCOUNT_TYPE = 'impersonated_service_account';
+class Impersonated extends oauth2client_1.OAuth2Client {
+    /**
+     * Impersonated service account credentials.
+     *
+     * Create a new access token by impersonating another service account.
+     *
+     * Impersonated Credentials allowing credentials issued to a user or
+     * service account to impersonate another. The source project using
+     * Impersonated Credentials must enable the "IAMCredentials" API.
+     * Also, the target service account must grant the orginating principal
+     * the "Service Account Token Creator" IAM role.
+     *
+     * @param {object} options - The configuration object.
+     * @param {object} [options.sourceClient] the source credential used as to
+     * acquire the impersonated credentials.
+     * @param {string} [options.targetPrincipal] the service account to
+     * impersonate.
+     * @param {string[]} [options.delegates] the chained list of delegates
+     * required to grant the final access_token. If set, the sequence of
+     * identities must have "Service Account Token Creator" capability granted to
+     * the preceding identity. For example, if set to [serviceAccountB,
+     * serviceAccountC], the sourceCredential must have the Token Creator role on
+     * serviceAccountB. serviceAccountB must have the Token Creator on
+     * serviceAccountC. Finally, C must have Token Creator on target_principal.
+     * If left unset, sourceCredential must have that role on targetPrincipal.
+     * @param {string[]} [options.targetScopes] scopes to request during the
+     * authorization grant.
+     * @param {number} [options.lifetime] number of seconds the delegated
+     * credential should be valid for up to 3600 seconds by default, or 43,200
+     * seconds by extending the token's lifetime, see:
+     * https://cloud.google.com/iam/docs/creating-short-lived-service-account-credentials#sa-credentials-oauth
+     * @param {string} [options.endpoint] api endpoint override.
+     */
+    constructor(options = {}) {
+        var _a, _b, _c, _d, _e, _f;
+        super(options);
+        // Start with an expired refresh token, which will automatically be
+        // refreshed before the first API call is made.
+        this.credentials = {
+            expiry_date: 1,
+            refresh_token: 'impersonated-placeholder',
+        };
+        this.sourceClient = (_a = options.sourceClient) !== null && _a !== void 0 ? _a : new oauth2client_1.OAuth2Client();
+        this.targetPrincipal = (_b = options.targetPrincipal) !== null && _b !== void 0 ? _b : '';
+        this.delegates = (_c = options.delegates) !== null && _c !== void 0 ? _c : [];
+        this.targetScopes = (_d = options.targetScopes) !== null && _d !== void 0 ? _d : [];
+        this.lifetime = (_e = options.lifetime) !== null && _e !== void 0 ? _e : 3600;
+        const usingExplicitUniverseDomain = !!(0, util_1.originalOrCamelOptions)(options).get('universe_domain');
+        if (!usingExplicitUniverseDomain) {
+            // override the default universe with the source's universe
+            this.universeDomain = this.sourceClient.universeDomain;
+        }
+        else if (this.sourceClient.universeDomain !== this.universeDomain) {
+            // non-default universe and is not matching the source - this could be a credential leak
+            throw new RangeError(`Universe domain ${this.sourceClient.universeDomain} in source credentials does not match ${this.universeDomain} universe domain set for impersonated credentials.`);
+        }
+        this.endpoint =
+            (_f = options.endpoint) !== null && _f !== void 0 ? _f : `https://iamcredentials.${this.universeDomain}`;
+    }
+    /**
+     * Signs some bytes.
+     *
+     * {@link https://cloud.google.com/iam/docs/reference/credentials/rest/v1/projects.serviceAccounts/signBlob Reference Documentation}
+     * @param blobToSign String to sign.
+     *
+     * @returns A {@link SignBlobResponse} denoting the keyID and signedBlob in base64 string
+     */
+    async sign(blobToSign) {
+        await this.sourceClient.getAccessToken();
+        const name = `projects/-/serviceAccounts/${this.targetPrincipal}`;
+        const u = `${this.endpoint}/v1/${name}:signBlob`;
+        const body = {
+            delegates: this.delegates,
+            payload: Buffer.from(blobToSign).toString('base64'),
+        };
+        const res = await this.sourceClient.request({
+            ...Impersonated.RETRY_CONFIG,
+            url: u,
+            data: body,
+            method: 'POST',
+        });
+        return res.data;
+    }
+    /** The service account email to be impersonated. */
+    getTargetPrincipal() {
+        return this.targetPrincipal;
+    }
+    /**
+     * Refreshes the access token.
+     */
+    async refreshToken() {
+        var _a, _b, _c, _d, _e, _f;
+        try {
+            await this.sourceClient.getAccessToken();
+            const name = 'projects/-/serviceAccounts/' + this.targetPrincipal;
+            const u = `${this.endpoint}/v1/${name}:generateAccessToken`;
+            const body = {
+                delegates: this.delegates,
+                scope: this.targetScopes,
+                lifetime: this.lifetime + 's',
+            };
+            const res = await this.sourceClient.request({
+                ...Impersonated.RETRY_CONFIG,
+                url: u,
+                data: body,
+                method: 'POST',
+            });
+            const tokenResponse = res.data;
+            this.credentials.access_token = tokenResponse.accessToken;
+            this.credentials.expiry_date = Date.parse(tokenResponse.expireTime);
+            return {
+                tokens: this.credentials,
+                res,
+            };
+        }
+        catch (error) {
+            if (!(error instanceof Error))
+                throw error;
+            let status = 0;
+            let message = '';
+            if (error instanceof gaxios_1.GaxiosError) {
+                status = (_c = (_b = (_a = error === null || error === void 0 ? void 0 : error.response) === null || _a === void 0 ? void 0 : _a.data) === null || _b === void 0 ? void 0 : _b.error) === null || _c === void 0 ? void 0 : _c.status;
+                message = (_f = (_e = (_d = error === null || error === void 0 ? void 0 : error.response) === null || _d === void 0 ? void 0 : _d.data) === null || _e === void 0 ? void 0 : _e.error) === null || _f === void 0 ? void 0 : _f.message;
+            }
+            if (status && message) {
+                error.message = `${status}: unable to impersonate: ${message}`;
+                throw error;
+            }
+            else {
+                error.message = `unable to impersonate: ${error}`;
+                throw error;
+            }
+        }
+    }
+    /**
+     * Generates an OpenID Connect ID token for a service account.
+     *
+     * {@link https://cloud.google.com/iam/docs/reference/credentials/rest/v1/projects.serviceAccounts/generateIdToken Reference Documentation}
+     *
+     * @param targetAudience the audience for the fetched ID token.
+     * @param options the for the request
+     * @return an OpenID Connect ID token
+     */
+    async fetchIdToken(targetAudience, options) {
+        var _a, _b;
+        await this.sourceClient.getAccessToken();
+        const name = `projects/-/serviceAccounts/${this.targetPrincipal}`;
+        const u = `${this.endpoint}/v1/${name}:generateIdToken`;
+        const body = {
+            delegates: this.delegates,
+            audience: targetAudience,
+            includeEmail: (_a = options === null || options === void 0 ? void 0 : options.includeEmail) !== null && _a !== void 0 ? _a : true,
+            useEmailAzp: (_b = options === null || options === void 0 ? void 0 : options.includeEmail) !== null && _b !== void 0 ? _b : true,
+        };
+        const res = await this.sourceClient.request({
+            ...Impersonated.RETRY_CONFIG,
+            url: u,
+            data: body,
+            method: 'POST',
+        });
+        return res.data.token;
+    }
+}
+exports.Impersonated = Impersonated;
+
+
+/***/ }),
+
+/***/ 8740:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2015 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.JWTAccess = void 0;
+const jws = __nccwpck_require__(4636);
+const util_1 = __nccwpck_require__(8905);
+const DEFAULT_HEADER = {
+    alg: 'RS256',
+    typ: 'JWT',
+};
+class JWTAccess {
+    /**
+     * JWTAccess service account credentials.
+     *
+     * Create a new access token by using the credential to create a new JWT token
+     * that's recognized as the access token.
+     *
+     * @param email the service account email address.
+     * @param key the private key that will be used to sign the token.
+     * @param keyId the ID of the private key used to sign the token.
+     */
+    constructor(email, key, keyId, eagerRefreshThresholdMillis) {
+        this.cache = new util_1.LRUCache({
+            capacity: 500,
+            maxAge: 60 * 60 * 1000,
+        });
+        this.email = email;
+        this.key = key;
+        this.keyId = keyId;
+        this.eagerRefreshThresholdMillis =
+            eagerRefreshThresholdMillis !== null && eagerRefreshThresholdMillis !== void 0 ? eagerRefreshThresholdMillis : 5 * 60 * 1000;
+    }
+    /**
+     * Ensures that we're caching a key appropriately, giving precedence to scopes vs. url
+     *
+     * @param url The URI being authorized.
+     * @param scopes The scope or scopes being authorized
+     * @returns A string that returns the cached key.
+     */
+    getCachedKey(url, scopes) {
+        let cacheKey = url;
+        if (scopes && Array.isArray(scopes) && scopes.length) {
+            cacheKey = url ? `${url}_${scopes.join('_')}` : `${scopes.join('_')}`;
+        }
+        else if (typeof scopes === 'string') {
+            cacheKey = url ? `${url}_${scopes}` : scopes;
+        }
+        if (!cacheKey) {
+            throw Error('Scopes or url must be provided');
+        }
+        return cacheKey;
+    }
+    /**
+     * Get a non-expired access token, after refreshing if necessary.
+     *
+     * @param url The URI being authorized.
+     * @param additionalClaims An object with a set of additional claims to
+     * include in the payload.
+     * @returns An object that includes the authorization header.
+     */
+    getRequestHeaders(url, additionalClaims, scopes) {
+        // Return cached authorization headers, unless we are within
+        // eagerRefreshThresholdMillis ms of them expiring:
+        const key = this.getCachedKey(url, scopes);
+        const cachedToken = this.cache.get(key);
+        const now = Date.now();
+        if (cachedToken &&
+            cachedToken.expiration - now > this.eagerRefreshThresholdMillis) {
+            return cachedToken.headers;
+        }
+        const iat = Math.floor(Date.now() / 1000);
+        const exp = JWTAccess.getExpirationTime(iat);
+        let defaultClaims;
+        // Turn scopes into space-separated string
+        if (Array.isArray(scopes)) {
+            scopes = scopes.join(' ');
+        }
+        // If scopes are specified, sign with scopes
+        if (scopes) {
+            defaultClaims = {
+                iss: this.email,
+                sub: this.email,
+                scope: scopes,
+                exp,
+                iat,
+            };
+        }
+        else {
+            defaultClaims = {
+                iss: this.email,
+                sub: this.email,
+                aud: url,
+                exp,
+                iat,
+            };
+        }
+        // if additionalClaims are provided, ensure they do not collide with
+        // other required claims.
+        if (additionalClaims) {
+            for (const claim in defaultClaims) {
+                if (additionalClaims[claim]) {
+                    throw new Error(`The '${claim}' property is not allowed when passing additionalClaims. This claim is included in the JWT by default.`);
+                }
+            }
+        }
+        const header = this.keyId
+            ? { ...DEFAULT_HEADER, kid: this.keyId }
+            : DEFAULT_HEADER;
+        const payload = Object.assign(defaultClaims, additionalClaims);
+        // Sign the jwt and add it to the cache
+        const signedJWT = jws.sign({ header, payload, secret: this.key });
+        const headers = { Authorization: `Bearer ${signedJWT}` };
+        this.cache.set(key, {
+            expiration: exp * 1000,
+            headers,
+        });
+        return headers;
+    }
+    /**
+     * Returns an expiration time for the JWT token.
+     *
+     * @param iat The issued at time for the JWT.
+     * @returns An expiration time for the JWT.
+     */
+    static getExpirationTime(iat) {
+        const exp = iat + 3600; // 3600 seconds = 1 hour
+        return exp;
+    }
+    /**
+     * Create a JWTAccess credentials instance using the given input options.
+     * @param json The input object.
+     */
+    fromJSON(json) {
+        if (!json) {
+            throw new Error('Must pass in a JSON object containing the service account auth settings.');
+        }
+        if (!json.client_email) {
+            throw new Error('The incoming JSON object does not contain a client_email field');
+        }
+        if (!json.private_key) {
+            throw new Error('The incoming JSON object does not contain a private_key field');
+        }
+        // Extract the relevant information from the json key file.
+        this.email = json.client_email;
+        this.key = json.private_key;
+        this.keyId = json.private_key_id;
+        this.projectId = json.project_id;
+    }
+    fromStream(inputStream, callback) {
+        if (callback) {
+            this.fromStreamAsync(inputStream).then(() => callback(), callback);
+        }
+        else {
+            return this.fromStreamAsync(inputStream);
+        }
+    }
+    fromStreamAsync(inputStream) {
+        return new Promise((resolve, reject) => {
+            if (!inputStream) {
+                reject(new Error('Must pass in a stream containing the service account auth settings.'));
+            }
+            let s = '';
+            inputStream
+                .setEncoding('utf8')
+                .on('data', chunk => (s += chunk))
+                .on('error', reject)
+                .on('end', () => {
+                try {
+                    const data = JSON.parse(s);
+                    this.fromJSON(data);
+                    resolve();
+                }
+                catch (err) {
+                    reject(err);
+                }
+            });
+        });
+    }
+}
+exports.JWTAccess = JWTAccess;
+
+
+/***/ }),
+
+/***/ 3959:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2013 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.JWT = void 0;
+const gtoken_1 = __nccwpck_require__(6031);
+const jwtaccess_1 = __nccwpck_require__(8740);
+const oauth2client_1 = __nccwpck_require__(3936);
+const authclient_1 = __nccwpck_require__(4627);
+class JWT extends oauth2client_1.OAuth2Client {
+    constructor(optionsOrEmail, keyFile, key, scopes, subject, keyId) {
+        const opts = optionsOrEmail && typeof optionsOrEmail === 'object'
+            ? optionsOrEmail
+            : { email: optionsOrEmail, keyFile, key, keyId, scopes, subject };
+        super(opts);
+        this.email = opts.email;
+        this.keyFile = opts.keyFile;
+        this.key = opts.key;
+        this.keyId = opts.keyId;
+        this.scopes = opts.scopes;
+        this.subject = opts.subject;
+        this.additionalClaims = opts.additionalClaims;
+        // Start with an expired refresh token, which will automatically be
+        // refreshed before the first API call is made.
+        this.credentials = { refresh_token: 'jwt-placeholder', expiry_date: 1 };
+    }
+    /**
+     * Creates a copy of the credential with the specified scopes.
+     * @param scopes List of requested scopes or a single scope.
+     * @return The cloned instance.
+     */
+    createScoped(scopes) {
+        const jwt = new JWT(this);
+        jwt.scopes = scopes;
+        return jwt;
+    }
+    /**
+     * Obtains the metadata to be sent with the request.
+     *
+     * @param url the URI being authorized.
+     */
+    async getRequestMetadataAsync(url) {
+        url = this.defaultServicePath ? `https://${this.defaultServicePath}/` : url;
+        const useSelfSignedJWT = (!this.hasUserScopes() && url) ||
+            (this.useJWTAccessWithScope && this.hasAnyScopes()) ||
+            this.universeDomain !== authclient_1.DEFAULT_UNIVERSE;
+        if (this.subject && this.universeDomain !== authclient_1.DEFAULT_UNIVERSE) {
+            throw new RangeError(`Service Account user is configured for the credential. Domain-wide delegation is not supported in universes other than ${authclient_1.DEFAULT_UNIVERSE}`);
+        }
+        if (!this.apiKey && useSelfSignedJWT) {
+            if (this.additionalClaims &&
+                this.additionalClaims.target_audience) {
+                const { tokens } = await this.refreshToken();
+                return {
+                    headers: this.addSharedMetadataHeaders({
+                        Authorization: `Bearer ${tokens.id_token}`,
+                    }),
+                };
+            }
+            else {
+                // no scopes have been set, but a uri has been provided. Use JWTAccess
+                // credentials.
+                if (!this.access) {
+                    this.access = new jwtaccess_1.JWTAccess(this.email, this.key, this.keyId, this.eagerRefreshThresholdMillis);
+                }
+                let scopes;
+                if (this.hasUserScopes()) {
+                    scopes = this.scopes;
+                }
+                else if (!url) {
+                    scopes = this.defaultScopes;
+                }
+                const useScopes = this.useJWTAccessWithScope ||
+                    this.universeDomain !== authclient_1.DEFAULT_UNIVERSE;
+                const headers = await this.access.getRequestHeaders(url !== null && url !== void 0 ? url : undefined, this.additionalClaims, 
+                // Scopes take precedent over audience for signing,
+                // so we only provide them if `useJWTAccessWithScope` is on or
+                // if we are in a non-default universe
+                useScopes ? scopes : undefined);
+                return { headers: this.addSharedMetadataHeaders(headers) };
+            }
+        }
+        else if (this.hasAnyScopes() || this.apiKey) {
+            return super.getRequestMetadataAsync(url);
+        }
+        else {
+            // If no audience, apiKey, or scopes are provided, we should not attempt
+            // to populate any headers:
+            return { headers: {} };
+        }
+    }
+    /**
+     * Fetches an ID token.
+     * @param targetAudience the audience for the fetched ID token.
+     */
+    async fetchIdToken(targetAudience) {
+        // Create a new gToken for fetching an ID token
+        const gtoken = new gtoken_1.GoogleToken({
+            iss: this.email,
+            sub: this.subject,
+            scope: this.scopes || this.defaultScopes,
+            keyFile: this.keyFile,
+            key: this.key,
+            additionalClaims: { target_audience: targetAudience },
+            transporter: this.transporter,
+        });
+        await gtoken.getToken({
+            forceRefresh: true,
+        });
+        if (!gtoken.idToken) {
+            throw new Error('Unknown error: Failed to fetch ID token');
+        }
+        return gtoken.idToken;
+    }
+    /**
+     * Determine if there are currently scopes available.
+     */
+    hasUserScopes() {
+        if (!this.scopes) {
+            return false;
+        }
+        return this.scopes.length > 0;
+    }
+    /**
+     * Are there any default or user scopes defined.
+     */
+    hasAnyScopes() {
+        if (this.scopes && this.scopes.length > 0)
+            return true;
+        if (this.defaultScopes && this.defaultScopes.length > 0)
+            return true;
+        return false;
+    }
+    authorize(callback) {
+        if (callback) {
+            this.authorizeAsync().then(r => callback(null, r), callback);
+        }
+        else {
+            return this.authorizeAsync();
+        }
+    }
+    async authorizeAsync() {
+        const result = await this.refreshToken();
+        if (!result) {
+            throw new Error('No result returned');
+        }
+        this.credentials = result.tokens;
+        this.credentials.refresh_token = 'jwt-placeholder';
+        this.key = this.gtoken.key;
+        this.email = this.gtoken.iss;
+        return result.tokens;
+    }
+    /**
+     * Refreshes the access token.
+     * @param refreshToken ignored
+     * @private
+     */
+    async refreshTokenNoCache(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    refreshToken) {
+        const gtoken = this.createGToken();
+        const token = await gtoken.getToken({
+            forceRefresh: this.isTokenExpiring(),
+        });
+        const tokens = {
+            access_token: token.access_token,
+            token_type: 'Bearer',
+            expiry_date: gtoken.expiresAt,
+            id_token: gtoken.idToken,
+        };
+        this.emit('tokens', tokens);
+        return { res: null, tokens };
+    }
+    /**
+     * Create a gToken if it doesn't already exist.
+     */
+    createGToken() {
+        if (!this.gtoken) {
+            this.gtoken = new gtoken_1.GoogleToken({
+                iss: this.email,
+                sub: this.subject,
+                scope: this.scopes || this.defaultScopes,
+                keyFile: this.keyFile,
+                key: this.key,
+                additionalClaims: this.additionalClaims,
+                transporter: this.transporter,
+            });
+        }
+        return this.gtoken;
+    }
+    /**
+     * Create a JWT credentials instance using the given input options.
+     * @param json The input object.
+     */
+    fromJSON(json) {
+        if (!json) {
+            throw new Error('Must pass in a JSON object containing the service account auth settings.');
+        }
+        if (!json.client_email) {
+            throw new Error('The incoming JSON object does not contain a client_email field');
+        }
+        if (!json.private_key) {
+            throw new Error('The incoming JSON object does not contain a private_key field');
+        }
+        // Extract the relevant information from the json key file.
+        this.email = json.client_email;
+        this.key = json.private_key;
+        this.keyId = json.private_key_id;
+        this.projectId = json.project_id;
+        this.quotaProjectId = json.quota_project_id;
+        this.universeDomain = json.universe_domain || this.universeDomain;
+    }
+    fromStream(inputStream, callback) {
+        if (callback) {
+            this.fromStreamAsync(inputStream).then(() => callback(), callback);
+        }
+        else {
+            return this.fromStreamAsync(inputStream);
+        }
+    }
+    fromStreamAsync(inputStream) {
+        return new Promise((resolve, reject) => {
+            if (!inputStream) {
+                throw new Error('Must pass in a stream containing the service account auth settings.');
+            }
+            let s = '';
+            inputStream
+                .setEncoding('utf8')
+                .on('error', reject)
+                .on('data', chunk => (s += chunk))
+                .on('end', () => {
+                try {
+                    const data = JSON.parse(s);
+                    this.fromJSON(data);
+                    resolve();
+                }
+                catch (e) {
+                    reject(e);
+                }
+            });
+        });
+    }
+    /**
+     * Creates a JWT credentials instance using an API Key for authentication.
+     * @param apiKey The API Key in string form.
+     */
+    fromAPIKey(apiKey) {
+        if (typeof apiKey !== 'string') {
+            throw new Error('Must provide an API Key string.');
+        }
+        this.apiKey = apiKey;
+    }
+    /**
+     * Using the key or keyFile on the JWT client, obtain an object that contains
+     * the key and the client email.
+     */
+    async getCredentials() {
+        if (this.key) {
+            return { private_key: this.key, client_email: this.email };
+        }
+        else if (this.keyFile) {
+            const gtoken = this.createGToken();
+            const creds = await gtoken.getCredentials(this.keyFile);
+            return { private_key: creds.privateKey, client_email: creds.clientEmail };
+        }
+        throw new Error('A key or a keyFile must be provided to getCredentials.');
+    }
+}
+exports.JWT = JWT;
+
+
+/***/ }),
+
+/***/ 4524:
+/***/ ((__unused_webpack_module, exports) => {
+
+
+// Copyright 2014 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.LoginTicket = void 0;
+class LoginTicket {
+    /**
+     * Create a simple class to extract user ID from an ID Token
+     *
+     * @param {string} env Envelope of the jwt
+     * @param {TokenPayload} pay Payload of the jwt
+     * @constructor
+     */
+    constructor(env, pay) {
+        this.envelope = env;
+        this.payload = pay;
+    }
+    getEnvelope() {
+        return this.envelope;
+    }
+    getPayload() {
+        return this.payload;
+    }
+    /**
+     * Create a simple class to extract user ID from an ID Token
+     *
+     * @return The user ID
+     */
+    getUserId() {
+        const payload = this.getPayload();
+        if (payload && payload.sub) {
+            return payload.sub;
+        }
+        return null;
+    }
+    /**
+     * Returns attributes from the login ticket.  This can contain
+     * various information about the user session.
+     *
+     * @return The envelope and payload
+     */
+    getAttributes() {
+        return { envelope: this.getEnvelope(), payload: this.getPayload() };
+    }
+}
+exports.LoginTicket = LoginTicket;
+
+
+/***/ }),
+
+/***/ 3936:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2019 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.OAuth2Client = exports.ClientAuthentication = exports.CertificateFormat = exports.CodeChallengeMethod = void 0;
+const gaxios_1 = __nccwpck_require__(9555);
+const querystring = __nccwpck_require__(3477);
+const stream = __nccwpck_require__(2781);
+const formatEcdsa = __nccwpck_require__(1728);
+const crypto_1 = __nccwpck_require__(8043);
+const authclient_1 = __nccwpck_require__(4627);
+const loginticket_1 = __nccwpck_require__(4524);
+var CodeChallengeMethod;
+(function (CodeChallengeMethod) {
+    CodeChallengeMethod["Plain"] = "plain";
+    CodeChallengeMethod["S256"] = "S256";
+})(CodeChallengeMethod || (exports.CodeChallengeMethod = CodeChallengeMethod = {}));
+var CertificateFormat;
+(function (CertificateFormat) {
+    CertificateFormat["PEM"] = "PEM";
+    CertificateFormat["JWK"] = "JWK";
+})(CertificateFormat || (exports.CertificateFormat = CertificateFormat = {}));
+/**
+ * The client authentication type. Supported values are basic, post, and none.
+ * https://datatracker.ietf.org/doc/html/rfc7591#section-2
+ */
+var ClientAuthentication;
+(function (ClientAuthentication) {
+    ClientAuthentication["ClientSecretPost"] = "ClientSecretPost";
+    ClientAuthentication["ClientSecretBasic"] = "ClientSecretBasic";
+    ClientAuthentication["None"] = "None";
+})(ClientAuthentication || (exports.ClientAuthentication = ClientAuthentication = {}));
+class OAuth2Client extends authclient_1.AuthClient {
+    constructor(optionsOrClientId, clientSecret, redirectUri) {
+        const opts = optionsOrClientId && typeof optionsOrClientId === 'object'
+            ? optionsOrClientId
+            : { clientId: optionsOrClientId, clientSecret, redirectUri };
+        super(opts);
+        this.certificateCache = {};
+        this.certificateExpiry = null;
+        this.certificateCacheFormat = CertificateFormat.PEM;
+        this.refreshTokenPromises = new Map();
+        this._clientId = opts.clientId;
+        this._clientSecret = opts.clientSecret;
+        this.redirectUri = opts.redirectUri;
+        this.endpoints = {
+            tokenInfoUrl: 'https://oauth2.googleapis.com/tokeninfo',
+            oauth2AuthBaseUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+            oauth2TokenUrl: 'https://oauth2.googleapis.com/token',
+            oauth2RevokeUrl: 'https://oauth2.googleapis.com/revoke',
+            oauth2FederatedSignonPemCertsUrl: 'https://www.googleapis.com/oauth2/v1/certs',
+            oauth2FederatedSignonJwkCertsUrl: 'https://www.googleapis.com/oauth2/v3/certs',
+            oauth2IapPublicKeyUrl: 'https://www.gstatic.com/iap/verify/public_key',
+            ...opts.endpoints,
+        };
+        this.clientAuthentication =
+            opts.clientAuthentication || ClientAuthentication.ClientSecretPost;
+        this.issuers = opts.issuers || [
+            'accounts.google.com',
+            'https://accounts.google.com',
+            this.universeDomain,
+        ];
+    }
+    /**
+     * Generates URL for consent page landing.
+     * @param opts Options.
+     * @return URL to consent page.
+     */
+    generateAuthUrl(opts = {}) {
+        if (opts.code_challenge_method && !opts.code_challenge) {
+            throw new Error('If a code_challenge_method is provided, code_challenge must be included.');
+        }
+        opts.response_type = opts.response_type || 'code';
+        opts.client_id = opts.client_id || this._clientId;
+        opts.redirect_uri = opts.redirect_uri || this.redirectUri;
+        // Allow scopes to be passed either as array or a string
+        if (Array.isArray(opts.scope)) {
+            opts.scope = opts.scope.join(' ');
+        }
+        const rootUrl = this.endpoints.oauth2AuthBaseUrl.toString();
+        return (rootUrl +
+            '?' +
+            querystring.stringify(opts));
+    }
+    generateCodeVerifier() {
+        // To make the code compatible with browser SubtleCrypto we need to make
+        // this method async.
+        throw new Error('generateCodeVerifier is removed, please use generateCodeVerifierAsync instead.');
+    }
+    /**
+     * Convenience method to automatically generate a code_verifier, and its
+     * resulting SHA256. If used, this must be paired with a S256
+     * code_challenge_method.
+     *
+     * For a full example see:
+     * https://github.com/googleapis/google-auth-library-nodejs/blob/main/samples/oauth2-codeVerifier.js
+     */
+    async generateCodeVerifierAsync() {
+        // base64 encoding uses 6 bits per character, and we want to generate128
+        // characters. 6*128/8 = 96.
+        const crypto = (0, crypto_1.createCrypto)();
+        const randomString = crypto.randomBytesBase64(96);
+        // The valid characters in the code_verifier are [A-Z]/[a-z]/[0-9]/
+        // "-"/"."/"_"/"~". Base64 encoded strings are pretty close, so we're just
+        // swapping out a few chars.
+        const codeVerifier = randomString
+            .replace(/\+/g, '~')
+            .replace(/=/g, '_')
+            .replace(/\//g, '-');
+        // Generate the base64 encoded SHA256
+        const unencodedCodeChallenge = await crypto.sha256DigestBase64(codeVerifier);
+        // We need to use base64UrlEncoding instead of standard base64
+        const codeChallenge = unencodedCodeChallenge
+            .split('=')[0]
+            .replace(/\+/g, '-')
+            .replace(/\//g, '_');
+        return { codeVerifier, codeChallenge };
+    }
+    getToken(codeOrOptions, callback) {
+        const options = typeof codeOrOptions === 'string' ? { code: codeOrOptions } : codeOrOptions;
+        if (callback) {
+            this.getTokenAsync(options).then(r => callback(null, r.tokens, r.res), e => callback(e, null, e.response));
+        }
+        else {
+            return this.getTokenAsync(options);
+        }
+    }
+    async getTokenAsync(options) {
+        const url = this.endpoints.oauth2TokenUrl.toString();
+        const headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        };
+        const values = {
+            client_id: options.client_id || this._clientId,
+            code_verifier: options.codeVerifier,
+            code: options.code,
+            grant_type: 'authorization_code',
+            redirect_uri: options.redirect_uri || this.redirectUri,
+        };
+        if (this.clientAuthentication === ClientAuthentication.ClientSecretBasic) {
+            const basic = Buffer.from(`${this._clientId}:${this._clientSecret}`);
+            headers['Authorization'] = `Basic ${basic.toString('base64')}`;
+        }
+        if (this.clientAuthentication === ClientAuthentication.ClientSecretPost) {
+            values.client_secret = this._clientSecret;
+        }
+        const res = await this.transporter.request({
+            ...OAuth2Client.RETRY_CONFIG,
+            method: 'POST',
+            url,
+            data: querystring.stringify(values),
+            headers,
+        });
+        const tokens = res.data;
+        if (res.data && res.data.expires_in) {
+            tokens.expiry_date = new Date().getTime() + res.data.expires_in * 1000;
+            delete tokens.expires_in;
+        }
+        this.emit('tokens', tokens);
+        return { tokens, res };
+    }
+    /**
+     * Refreshes the access token.
+     * @param refresh_token Existing refresh token.
+     * @private
+     */
+    async refreshToken(refreshToken) {
+        if (!refreshToken) {
+            return this.refreshTokenNoCache(refreshToken);
+        }
+        // If a request to refresh using the same token has started,
+        // return the same promise.
+        if (this.refreshTokenPromises.has(refreshToken)) {
+            return this.refreshTokenPromises.get(refreshToken);
+        }
+        const p = this.refreshTokenNoCache(refreshToken).then(r => {
+            this.refreshTokenPromises.delete(refreshToken);
+            return r;
+        }, e => {
+            this.refreshTokenPromises.delete(refreshToken);
+            throw e;
+        });
+        this.refreshTokenPromises.set(refreshToken, p);
+        return p;
+    }
+    async refreshTokenNoCache(refreshToken) {
+        var _a;
+        if (!refreshToken) {
+            throw new Error('No refresh token is set.');
+        }
+        const url = this.endpoints.oauth2TokenUrl.toString();
+        const data = {
+            refresh_token: refreshToken,
+            client_id: this._clientId,
+            client_secret: this._clientSecret,
+            grant_type: 'refresh_token',
+        };
+        let res;
+        try {
+            // request for new token
+            res = await this.transporter.request({
+                ...OAuth2Client.RETRY_CONFIG,
+                method: 'POST',
+                url,
+                data: querystring.stringify(data),
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            });
+        }
+        catch (e) {
+            if (e instanceof gaxios_1.GaxiosError &&
+                e.message === 'invalid_grant' &&
+                ((_a = e.response) === null || _a === void 0 ? void 0 : _a.data) &&
+                /ReAuth/i.test(e.response.data.error_description)) {
+                e.message = JSON.stringify(e.response.data);
+            }
+            throw e;
+        }
+        const tokens = res.data;
+        // TODO: de-duplicate this code from a few spots
+        if (res.data && res.data.expires_in) {
+            tokens.expiry_date = new Date().getTime() + res.data.expires_in * 1000;
+            delete tokens.expires_in;
+        }
+        this.emit('tokens', tokens);
+        return { tokens, res };
+    }
+    refreshAccessToken(callback) {
+        if (callback) {
+            this.refreshAccessTokenAsync().then(r => callback(null, r.credentials, r.res), callback);
+        }
+        else {
+            return this.refreshAccessTokenAsync();
+        }
+    }
+    async refreshAccessTokenAsync() {
+        const r = await this.refreshToken(this.credentials.refresh_token);
+        const tokens = r.tokens;
+        tokens.refresh_token = this.credentials.refresh_token;
+        this.credentials = tokens;
+        return { credentials: this.credentials, res: r.res };
+    }
+    getAccessToken(callback) {
+        if (callback) {
+            this.getAccessTokenAsync().then(r => callback(null, r.token, r.res), callback);
+        }
+        else {
+            return this.getAccessTokenAsync();
+        }
+    }
+    async getAccessTokenAsync() {
+        const shouldRefresh = !this.credentials.access_token || this.isTokenExpiring();
+        if (shouldRefresh) {
+            if (!this.credentials.refresh_token) {
+                if (this.refreshHandler) {
+                    const refreshedAccessToken = await this.processAndValidateRefreshHandler();
+                    if (refreshedAccessToken === null || refreshedAccessToken === void 0 ? void 0 : refreshedAccessToken.access_token) {
+                        this.setCredentials(refreshedAccessToken);
+                        return { token: this.credentials.access_token };
+                    }
+                }
+                else {
+                    throw new Error('No refresh token or refresh handler callback is set.');
+                }
+            }
+            const r = await this.refreshAccessTokenAsync();
+            if (!r.credentials || (r.credentials && !r.credentials.access_token)) {
+                throw new Error('Could not refresh access token.');
+            }
+            return { token: r.credentials.access_token, res: r.res };
+        }
+        else {
+            return { token: this.credentials.access_token };
+        }
+    }
+    /**
+     * The main authentication interface.  It takes an optional url which when
+     * present is the endpoint being accessed, and returns a Promise which
+     * resolves with authorization header fields.
+     *
+     * In OAuth2Client, the result has the form:
+     * { Authorization: 'Bearer <access_token_value>' }
+     * @param url The optional url being authorized
+     */
+    async getRequestHeaders(url) {
+        const headers = (await this.getRequestMetadataAsync(url)).headers;
+        return headers;
+    }
+    async getRequestMetadataAsync(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    url) {
+        const thisCreds = this.credentials;
+        if (!thisCreds.access_token &&
+            !thisCreds.refresh_token &&
+            !this.apiKey &&
+            !this.refreshHandler) {
+            throw new Error('No access, refresh token, API key or refresh handler callback is set.');
+        }
+        if (thisCreds.access_token && !this.isTokenExpiring()) {
+            thisCreds.token_type = thisCreds.token_type || 'Bearer';
+            const headers = {
+                Authorization: thisCreds.token_type + ' ' + thisCreds.access_token,
+            };
+            return { headers: this.addSharedMetadataHeaders(headers) };
+        }
+        // If refreshHandler exists, call processAndValidateRefreshHandler().
+        if (this.refreshHandler) {
+            const refreshedAccessToken = await this.processAndValidateRefreshHandler();
+            if (refreshedAccessToken === null || refreshedAccessToken === void 0 ? void 0 : refreshedAccessToken.access_token) {
+                this.setCredentials(refreshedAccessToken);
+                const headers = {
+                    Authorization: 'Bearer ' + this.credentials.access_token,
+                };
+                return { headers: this.addSharedMetadataHeaders(headers) };
+            }
+        }
+        if (this.apiKey) {
+            return { headers: { 'X-Goog-Api-Key': this.apiKey } };
+        }
+        let r = null;
+        let tokens = null;
+        try {
+            r = await this.refreshToken(thisCreds.refresh_token);
+            tokens = r.tokens;
+        }
+        catch (err) {
+            const e = err;
+            if (e.response &&
+                (e.response.status === 403 || e.response.status === 404)) {
+                e.message = `Could not refresh access token: ${e.message}`;
+            }
+            throw e;
+        }
+        const credentials = this.credentials;
+        credentials.token_type = credentials.token_type || 'Bearer';
+        tokens.refresh_token = credentials.refresh_token;
+        this.credentials = tokens;
+        const headers = {
+            Authorization: credentials.token_type + ' ' + tokens.access_token,
+        };
+        return { headers: this.addSharedMetadataHeaders(headers), res: r.res };
+    }
+    /**
+     * Generates an URL to revoke the given token.
+     * @param token The existing token to be revoked.
+     *
+     * @deprecated use instance method {@link OAuth2Client.getRevokeTokenURL}
+     */
+    static getRevokeTokenUrl(token) {
+        return new OAuth2Client().getRevokeTokenURL(token).toString();
+    }
+    /**
+     * Generates a URL to revoke the given token.
+     *
+     * @param token The existing token to be revoked.
+     */
+    getRevokeTokenURL(token) {
+        const url = new URL(this.endpoints.oauth2RevokeUrl);
+        url.searchParams.append('token', token);
+        return url;
+    }
+    revokeToken(token, callback) {
+        const opts = {
+            ...OAuth2Client.RETRY_CONFIG,
+            url: this.getRevokeTokenURL(token).toString(),
+            method: 'POST',
+        };
+        if (callback) {
+            this.transporter
+                .request(opts)
+                .then(r => callback(null, r), callback);
+        }
+        else {
+            return this.transporter.request(opts);
+        }
+    }
+    revokeCredentials(callback) {
+        if (callback) {
+            this.revokeCredentialsAsync().then(res => callback(null, res), callback);
+        }
+        else {
+            return this.revokeCredentialsAsync();
+        }
+    }
+    async revokeCredentialsAsync() {
+        const token = this.credentials.access_token;
+        this.credentials = {};
+        if (token) {
+            return this.revokeToken(token);
+        }
+        else {
+            throw new Error('No access token to revoke.');
+        }
+    }
+    request(opts, callback) {
+        if (callback) {
+            this.requestAsync(opts).then(r => callback(null, r), e => {
+                return callback(e, e.response);
+            });
+        }
+        else {
+            return this.requestAsync(opts);
+        }
+    }
+    async requestAsync(opts, reAuthRetried = false) {
+        let r2;
+        try {
+            const r = await this.getRequestMetadataAsync(opts.url);
+            opts.headers = opts.headers || {};
+            if (r.headers && r.headers['x-goog-user-project']) {
+                opts.headers['x-goog-user-project'] = r.headers['x-goog-user-project'];
+            }
+            if (r.headers && r.headers.Authorization) {
+                opts.headers.Authorization = r.headers.Authorization;
+            }
+            if (this.apiKey) {
+                opts.headers['X-Goog-Api-Key'] = this.apiKey;
+            }
+            r2 = await this.transporter.request(opts);
+        }
+        catch (e) {
+            const res = e.response;
+            if (res) {
+                const statusCode = res.status;
+                // Retry the request for metadata if the following criteria are true:
+                // - We haven't already retried.  It only makes sense to retry once.
+                // - The response was a 401 or a 403
+                // - The request didn't send a readableStream
+                // - An access_token and refresh_token were available, but either no
+                //   expiry_date was available or the forceRefreshOnFailure flag is set.
+                //   The absent expiry_date case can happen when developers stash the
+                //   access_token and refresh_token for later use, but the access_token
+                //   fails on the first try because it's expired. Some developers may
+                //   choose to enable forceRefreshOnFailure to mitigate time-related
+                //   errors.
+                // Or the following criteria are true:
+                // - We haven't already retried.  It only makes sense to retry once.
+                // - The response was a 401 or a 403
+                // - The request didn't send a readableStream
+                // - No refresh_token was available
+                // - An access_token and a refreshHandler callback were available, but
+                //   either no expiry_date was available or the forceRefreshOnFailure
+                //   flag is set. The access_token fails on the first try because it's
+                //   expired. Some developers may choose to enable forceRefreshOnFailure
+                //   to mitigate time-related errors.
+                const mayRequireRefresh = this.credentials &&
+                    this.credentials.access_token &&
+                    this.credentials.refresh_token &&
+                    (!this.credentials.expiry_date || this.forceRefreshOnFailure);
+                const mayRequireRefreshWithNoRefreshToken = this.credentials &&
+                    this.credentials.access_token &&
+                    !this.credentials.refresh_token &&
+                    (!this.credentials.expiry_date || this.forceRefreshOnFailure) &&
+                    this.refreshHandler;
+                const isReadableStream = res.config.data instanceof stream.Readable;
+                const isAuthErr = statusCode === 401 || statusCode === 403;
+                if (!reAuthRetried &&
+                    isAuthErr &&
+                    !isReadableStream &&
+                    mayRequireRefresh) {
+                    await this.refreshAccessTokenAsync();
+                    return this.requestAsync(opts, true);
+                }
+                else if (!reAuthRetried &&
+                    isAuthErr &&
+                    !isReadableStream &&
+                    mayRequireRefreshWithNoRefreshToken) {
+                    const refreshedAccessToken = await this.processAndValidateRefreshHandler();
+                    if (refreshedAccessToken === null || refreshedAccessToken === void 0 ? void 0 : refreshedAccessToken.access_token) {
+                        this.setCredentials(refreshedAccessToken);
+                    }
+                    return this.requestAsync(opts, true);
+                }
+            }
+            throw e;
+        }
+        return r2;
+    }
+    verifyIdToken(options, callback) {
+        // This function used to accept two arguments instead of an options object.
+        // Check the types to help users upgrade with less pain.
+        // This check can be removed after a 2.0 release.
+        if (callback && typeof callback !== 'function') {
+            throw new Error('This method accepts an options object as the first parameter, which includes the idToken, audience, and maxExpiry.');
+        }
+        if (callback) {
+            this.verifyIdTokenAsync(options).then(r => callback(null, r), callback);
+        }
+        else {
+            return this.verifyIdTokenAsync(options);
+        }
+    }
+    async verifyIdTokenAsync(options) {
+        if (!options.idToken) {
+            throw new Error('The verifyIdToken method requires an ID Token');
+        }
+        const response = await this.getFederatedSignonCertsAsync();
+        const login = await this.verifySignedJwtWithCertsAsync(options.idToken, response.certs, options.audience, this.issuers, options.maxExpiry);
+        return login;
+    }
+    /**
+     * Obtains information about the provisioned access token.  Especially useful
+     * if you want to check the scopes that were provisioned to a given token.
+     *
+     * @param accessToken Required.  The Access Token for which you want to get
+     * user info.
+     */
+    async getTokenInfo(accessToken) {
+        const { data } = await this.transporter.request({
+            ...OAuth2Client.RETRY_CONFIG,
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                Authorization: `Bearer ${accessToken}`,
+            },
+            url: this.endpoints.tokenInfoUrl.toString(),
+        });
+        const info = Object.assign({
+            expiry_date: new Date().getTime() + data.expires_in * 1000,
+            scopes: data.scope.split(' '),
+        }, data);
+        delete info.expires_in;
+        delete info.scope;
+        return info;
+    }
+    getFederatedSignonCerts(callback) {
+        if (callback) {
+            this.getFederatedSignonCertsAsync().then(r => callback(null, r.certs, r.res), callback);
+        }
+        else {
+            return this.getFederatedSignonCertsAsync();
+        }
+    }
+    async getFederatedSignonCertsAsync() {
+        const nowTime = new Date().getTime();
+        const format = (0, crypto_1.hasBrowserCrypto)()
+            ? CertificateFormat.JWK
+            : CertificateFormat.PEM;
+        if (this.certificateExpiry &&
+            nowTime < this.certificateExpiry.getTime() &&
+            this.certificateCacheFormat === format) {
+            return { certs: this.certificateCache, format };
+        }
+        let res;
+        let url;
+        switch (format) {
+            case CertificateFormat.PEM:
+                url = this.endpoints.oauth2FederatedSignonPemCertsUrl.toString();
+                break;
+            case CertificateFormat.JWK:
+                url = this.endpoints.oauth2FederatedSignonJwkCertsUrl.toString();
+                break;
+            default:
+                throw new Error(`Unsupported certificate format ${format}`);
+        }
+        try {
+            res = await this.transporter.request({
+                ...OAuth2Client.RETRY_CONFIG,
+                url,
+            });
+        }
+        catch (e) {
+            if (e instanceof Error) {
+                e.message = `Failed to retrieve verification certificates: ${e.message}`;
+            }
+            throw e;
+        }
+        const cacheControl = res ? res.headers['cache-control'] : undefined;
+        let cacheAge = -1;
+        if (cacheControl) {
+            const pattern = new RegExp('max-age=([0-9]*)');
+            const regexResult = pattern.exec(cacheControl);
+            if (regexResult && regexResult.length === 2) {
+                // Cache results with max-age (in seconds)
+                cacheAge = Number(regexResult[1]) * 1000; // milliseconds
+            }
+        }
+        let certificates = {};
+        switch (format) {
+            case CertificateFormat.PEM:
+                certificates = res.data;
+                break;
+            case CertificateFormat.JWK:
+                for (const key of res.data.keys) {
+                    certificates[key.kid] = key;
+                }
+                break;
+            default:
+                throw new Error(`Unsupported certificate format ${format}`);
+        }
+        const now = new Date();
+        this.certificateExpiry =
+            cacheAge === -1 ? null : new Date(now.getTime() + cacheAge);
+        this.certificateCache = certificates;
+        this.certificateCacheFormat = format;
+        return { certs: certificates, format, res };
+    }
+    getIapPublicKeys(callback) {
+        if (callback) {
+            this.getIapPublicKeysAsync().then(r => callback(null, r.pubkeys, r.res), callback);
+        }
+        else {
+            return this.getIapPublicKeysAsync();
+        }
+    }
+    async getIapPublicKeysAsync() {
+        let res;
+        const url = this.endpoints.oauth2IapPublicKeyUrl.toString();
+        try {
+            res = await this.transporter.request({
+                ...OAuth2Client.RETRY_CONFIG,
+                url,
+            });
+        }
+        catch (e) {
+            if (e instanceof Error) {
+                e.message = `Failed to retrieve verification certificates: ${e.message}`;
+            }
+            throw e;
+        }
+        return { pubkeys: res.data, res };
+    }
+    verifySignedJwtWithCerts() {
+        // To make the code compatible with browser SubtleCrypto we need to make
+        // this method async.
+        throw new Error('verifySignedJwtWithCerts is removed, please use verifySignedJwtWithCertsAsync instead.');
+    }
+    /**
+     * Verify the id token is signed with the correct certificate
+     * and is from the correct audience.
+     * @param jwt The jwt to verify (The ID Token in this case).
+     * @param certs The array of certs to test the jwt against.
+     * @param requiredAudience The audience to test the jwt against.
+     * @param issuers The allowed issuers of the jwt (Optional).
+     * @param maxExpiry The max expiry the certificate can be (Optional).
+     * @return Returns a promise resolving to LoginTicket on verification.
+     */
+    async verifySignedJwtWithCertsAsync(jwt, certs, requiredAudience, issuers, maxExpiry) {
+        const crypto = (0, crypto_1.createCrypto)();
+        if (!maxExpiry) {
+            maxExpiry = OAuth2Client.DEFAULT_MAX_TOKEN_LIFETIME_SECS_;
+        }
+        const segments = jwt.split('.');
+        if (segments.length !== 3) {
+            throw new Error('Wrong number of segments in token: ' + jwt);
+        }
+        const signed = segments[0] + '.' + segments[1];
+        let signature = segments[2];
+        let envelope;
+        let payload;
+        try {
+            envelope = JSON.parse(crypto.decodeBase64StringUtf8(segments[0]));
+        }
+        catch (err) {
+            if (err instanceof Error) {
+                err.message = `Can't parse token envelope: ${segments[0]}': ${err.message}`;
+            }
+            throw err;
+        }
+        if (!envelope) {
+            throw new Error("Can't parse token envelope: " + segments[0]);
+        }
+        try {
+            payload = JSON.parse(crypto.decodeBase64StringUtf8(segments[1]));
+        }
+        catch (err) {
+            if (err instanceof Error) {
+                err.message = `Can't parse token payload '${segments[0]}`;
+            }
+            throw err;
+        }
+        if (!payload) {
+            throw new Error("Can't parse token payload: " + segments[1]);
+        }
+        if (!Object.prototype.hasOwnProperty.call(certs, envelope.kid)) {
+            // If this is not present, then there's no reason to attempt verification
+            throw new Error('No pem found for envelope: ' + JSON.stringify(envelope));
+        }
+        const cert = certs[envelope.kid];
+        if (envelope.alg === 'ES256') {
+            signature = formatEcdsa.joseToDer(signature, 'ES256').toString('base64');
+        }
+        const verified = await crypto.verify(cert, signed, signature);
+        if (!verified) {
+            throw new Error('Invalid token signature: ' + jwt);
+        }
+        if (!payload.iat) {
+            throw new Error('No issue time in token: ' + JSON.stringify(payload));
+        }
+        if (!payload.exp) {
+            throw new Error('No expiration time in token: ' + JSON.stringify(payload));
+        }
+        const iat = Number(payload.iat);
+        if (isNaN(iat))
+            throw new Error('iat field using invalid format');
+        const exp = Number(payload.exp);
+        if (isNaN(exp))
+            throw new Error('exp field using invalid format');
+        const now = new Date().getTime() / 1000;
+        if (exp >= now + maxExpiry) {
+            throw new Error('Expiration time too far in future: ' + JSON.stringify(payload));
+        }
+        const earliest = iat - OAuth2Client.CLOCK_SKEW_SECS_;
+        const latest = exp + OAuth2Client.CLOCK_SKEW_SECS_;
+        if (now < earliest) {
+            throw new Error('Token used too early, ' +
+                now +
+                ' < ' +
+                earliest +
+                ': ' +
+                JSON.stringify(payload));
+        }
+        if (now > latest) {
+            throw new Error('Token used too late, ' +
+                now +
+                ' > ' +
+                latest +
+                ': ' +
+                JSON.stringify(payload));
+        }
+        if (issuers && issuers.indexOf(payload.iss) < 0) {
+            throw new Error('Invalid issuer, expected one of [' +
+                issuers +
+                '], but got ' +
+                payload.iss);
+        }
+        // Check the audience matches if we have one
+        if (typeof requiredAudience !== 'undefined' && requiredAudience !== null) {
+            const aud = payload.aud;
+            let audVerified = false;
+            // If the requiredAudience is an array, check if it contains token
+            // audience
+            if (requiredAudience.constructor === Array) {
+                audVerified = requiredAudience.indexOf(aud) > -1;
+            }
+            else {
+                audVerified = aud === requiredAudience;
+            }
+            if (!audVerified) {
+                throw new Error('Wrong recipient, payload audience != requiredAudience');
+            }
+        }
+        return new loginticket_1.LoginTicket(envelope, payload);
+    }
+    /**
+     * Returns a promise that resolves with AccessTokenResponse type if
+     * refreshHandler is defined.
+     * If not, nothing is returned.
+     */
+    async processAndValidateRefreshHandler() {
+        if (this.refreshHandler) {
+            const accessTokenResponse = await this.refreshHandler();
+            if (!accessTokenResponse.access_token) {
+                throw new Error('No access token is returned by the refreshHandler callback.');
+            }
+            return accessTokenResponse;
+        }
+        return;
+    }
+    /**
+     * Returns true if a token is expired or will expire within
+     * eagerRefreshThresholdMillismilliseconds.
+     * If there is no expiry time, assumes the token is not expired or expiring.
+     */
+    isTokenExpiring() {
+        const expiryDate = this.credentials.expiry_date;
+        return expiryDate
+            ? expiryDate <= new Date().getTime() + this.eagerRefreshThresholdMillis
+            : false;
+    }
+}
+exports.OAuth2Client = OAuth2Client;
+/**
+ * @deprecated use instance's {@link OAuth2Client.endpoints}
+ */
+OAuth2Client.GOOGLE_TOKEN_INFO_URL = 'https://oauth2.googleapis.com/tokeninfo';
+/**
+ * Clock skew - five minutes in seconds
+ */
+OAuth2Client.CLOCK_SKEW_SECS_ = 300;
+/**
+ * The default max Token Lifetime is one day in seconds
+ */
+OAuth2Client.DEFAULT_MAX_TOKEN_LIFETIME_SECS_ = 86400;
+
+
+/***/ }),
+
+/***/ 9510:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2021 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.OAuthClientAuthHandler = void 0;
+exports.getErrorFromOAuthErrorResponse = getErrorFromOAuthErrorResponse;
+const querystring = __nccwpck_require__(3477);
+const crypto_1 = __nccwpck_require__(8043);
+/** List of HTTP methods that accept request bodies. */
+const METHODS_SUPPORTING_REQUEST_BODY = ['PUT', 'POST', 'PATCH'];
+/**
+ * Abstract class for handling client authentication in OAuth-based
+ * operations.
+ * When request-body client authentication is used, only application/json and
+ * application/x-www-form-urlencoded content types for HTTP methods that support
+ * request bodies are supported.
+ */
+class OAuthClientAuthHandler {
+    /**
+     * Instantiates an OAuth client authentication handler.
+     * @param clientAuthentication The client auth credentials.
+     */
+    constructor(clientAuthentication) {
+        this.clientAuthentication = clientAuthentication;
+        this.crypto = (0, crypto_1.createCrypto)();
+    }
+    /**
+     * Applies client authentication on the OAuth request's headers or POST
+     * body but does not process the request.
+     * @param opts The GaxiosOptions whose headers or data are to be modified
+     *   depending on the client authentication mechanism to be used.
+     * @param bearerToken The optional bearer token to use for authentication.
+     *   When this is used, no client authentication credentials are needed.
+     */
+    applyClientAuthenticationOptions(opts, bearerToken) {
+        // Inject authenticated header.
+        this.injectAuthenticatedHeaders(opts, bearerToken);
+        // Inject authenticated request body.
+        if (!bearerToken) {
+            this.injectAuthenticatedRequestBody(opts);
+        }
+    }
+    /**
+     * Applies client authentication on the request's header if either
+     * basic authentication or bearer token authentication is selected.
+     *
+     * @param opts The GaxiosOptions whose headers or data are to be modified
+     *   depending on the client authentication mechanism to be used.
+     * @param bearerToken The optional bearer token to use for authentication.
+     *   When this is used, no client authentication credentials are needed.
+     */
+    injectAuthenticatedHeaders(opts, bearerToken) {
+        var _a;
+        // Bearer token prioritized higher than basic Auth.
+        if (bearerToken) {
+            opts.headers = opts.headers || {};
+            Object.assign(opts.headers, {
+                Authorization: `Bearer ${bearerToken}}`,
+            });
+        }
+        else if (((_a = this.clientAuthentication) === null || _a === void 0 ? void 0 : _a.confidentialClientType) === 'basic') {
+            opts.headers = opts.headers || {};
+            const clientId = this.clientAuthentication.clientId;
+            const clientSecret = this.clientAuthentication.clientSecret || '';
+            const base64EncodedCreds = this.crypto.encodeBase64StringUtf8(`${clientId}:${clientSecret}`);
+            Object.assign(opts.headers, {
+                Authorization: `Basic ${base64EncodedCreds}`,
+            });
+        }
+    }
+    /**
+     * Applies client authentication on the request's body if request-body
+     * client authentication is selected.
+     *
+     * @param opts The GaxiosOptions whose headers or data are to be modified
+     *   depending on the client authentication mechanism to be used.
+     */
+    injectAuthenticatedRequestBody(opts) {
+        var _a;
+        if (((_a = this.clientAuthentication) === null || _a === void 0 ? void 0 : _a.confidentialClientType) === 'request-body') {
+            const method = (opts.method || 'GET').toUpperCase();
+            // Inject authenticated request body.
+            if (METHODS_SUPPORTING_REQUEST_BODY.indexOf(method) !== -1) {
+                // Get content-type.
+                let contentType;
+                const headers = opts.headers || {};
+                for (const key in headers) {
+                    if (key.toLowerCase() === 'content-type' && headers[key]) {
+                        contentType = headers[key].toLowerCase();
+                        break;
+                    }
+                }
+                if (contentType === 'application/x-www-form-urlencoded') {
+                    opts.data = opts.data || '';
+                    const data = querystring.parse(opts.data);
+                    Object.assign(data, {
+                        client_id: this.clientAuthentication.clientId,
+                        client_secret: this.clientAuthentication.clientSecret || '',
+                    });
+                    opts.data = querystring.stringify(data);
+                }
+                else if (contentType === 'application/json') {
+                    opts.data = opts.data || {};
+                    Object.assign(opts.data, {
+                        client_id: this.clientAuthentication.clientId,
+                        client_secret: this.clientAuthentication.clientSecret || '',
+                    });
+                }
+                else {
+                    throw new Error(`${contentType} content-types are not supported with ` +
+                        `${this.clientAuthentication.confidentialClientType} ` +
+                        'client authentication');
+                }
+            }
+            else {
+                throw new Error(`${method} HTTP method does not support ` +
+                    `${this.clientAuthentication.confidentialClientType} ` +
+                    'client authentication');
+            }
+        }
+    }
+    /**
+     * Retry config for Auth-related requests.
+     *
+     * @remarks
+     *
+     * This is not a part of the default {@link AuthClient.transporter transporter/gaxios}
+     * config as some downstream APIs would prefer if customers explicitly enable retries,
+     * such as GCS.
+     */
+    static get RETRY_CONFIG() {
+        return {
+            retry: true,
+            retryConfig: {
+                httpMethodsToRetry: ['GET', 'PUT', 'POST', 'HEAD', 'OPTIONS', 'DELETE'],
+            },
+        };
+    }
+}
+exports.OAuthClientAuthHandler = OAuthClientAuthHandler;
+/**
+ * Converts an OAuth error response to a native JavaScript Error.
+ * @param resp The OAuth error response to convert to a native Error object.
+ * @param err The optional original error. If provided, the error properties
+ *   will be copied to the new error.
+ * @return The converted native Error object.
+ */
+function getErrorFromOAuthErrorResponse(resp, err) {
+    // Error response.
+    const errorCode = resp.error;
+    const errorDescription = resp.error_description;
+    const errorUri = resp.error_uri;
+    let message = `Error code ${errorCode}`;
+    if (typeof errorDescription !== 'undefined') {
+        message += `: ${errorDescription}`;
+    }
+    if (typeof errorUri !== 'undefined') {
+        message += ` - ${errorUri}`;
+    }
+    const newError = new Error(message);
+    // Copy properties from original error to newly generated error.
+    if (err) {
+        const keys = Object.keys(err);
+        if (err.stack) {
+            // Copy error.stack if available.
+            keys.push('stack');
+        }
+        keys.forEach(key => {
+            // Do not overwrite the message field.
+            if (key !== 'message') {
+                Object.defineProperty(newError, key, {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    value: err[key],
+                    writable: false,
+                    enumerable: true,
+                });
+            }
+        });
+    }
+    return newError;
+}
+
+
+/***/ }),
+
+/***/ 2460:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PassThroughClient = void 0;
+const authclient_1 = __nccwpck_require__(4627);
+/**
+ * An AuthClient without any Authentication information. Useful for:
+ * - Anonymous access
+ * - Local Emulators
+ * - Testing Environments
+ *
+ */
+class PassThroughClient extends authclient_1.AuthClient {
+    /**
+     * Creates a request without any authentication headers or checks.
+     *
+     * @remarks
+     *
+     * In testing environments it may be useful to change the provided
+     * {@link AuthClient.transporter} for any desired request overrides/handling.
+     *
+     * @param opts
+     * @returns The response of the request.
+     */
+    async request(opts) {
+        return this.transporter.request(opts);
+    }
+    /**
+     * A required method of the base class.
+     * Always will return an empty object.
+     *
+     * @returns {}
+     */
+    async getAccessToken() {
+        return {};
+    }
+    /**
+     * A required method of the base class.
+     * Always will return an empty object.
+     *
+     * @returns {}
+     */
+    async getRequestHeaders() {
+        return {};
+    }
+}
+exports.PassThroughClient = PassThroughClient;
+const a = new PassThroughClient();
+a.getAccessToken();
+
+
+/***/ }),
+
+/***/ 4782:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2022 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PluggableAuthClient = exports.ExecutableError = void 0;
+const baseexternalclient_1 = __nccwpck_require__(7391);
+const executable_response_1 = __nccwpck_require__(8749);
+const pluggable_auth_handler_1 = __nccwpck_require__(8941);
+/**
+ * Error thrown from the executable run by PluggableAuthClient.
+ */
+class ExecutableError extends Error {
+    constructor(message, code) {
+        super(`The executable failed with exit code: ${code} and error message: ${message}.`);
+        this.code = code;
+        Object.setPrototypeOf(this, new.target.prototype);
+    }
+}
+exports.ExecutableError = ExecutableError;
+/**
+ * The default executable timeout when none is provided, in milliseconds.
+ */
+const DEFAULT_EXECUTABLE_TIMEOUT_MILLIS = 30 * 1000;
+/**
+ * The minimum allowed executable timeout in milliseconds.
+ */
+const MINIMUM_EXECUTABLE_TIMEOUT_MILLIS = 5 * 1000;
+/**
+ * The maximum allowed executable timeout in milliseconds.
+ */
+const MAXIMUM_EXECUTABLE_TIMEOUT_MILLIS = 120 * 1000;
+/**
+ * The environment variable to check to see if executable can be run.
+ * Value must be set to '1' for the executable to run.
+ */
+const GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES = 'GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES';
+/**
+ * The maximum currently supported executable version.
+ */
+const MAXIMUM_EXECUTABLE_VERSION = 1;
+/**
+ * PluggableAuthClient enables the exchange of workload identity pool external credentials for
+ * Google access tokens by retrieving 3rd party tokens through a user supplied executable. These
+ * scripts/executables are completely independent of the Google Cloud Auth libraries. These
+ * credentials plug into ADC and will call the specified executable to retrieve the 3rd party token
+ * to be exchanged for a Google access token.
+ *
+ * <p>To use these credentials, the GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES environment variable
+ * must be set to '1'. This is for security reasons.
+ *
+ * <p>Both OIDC and SAML are supported. The executable must adhere to a specific response format
+ * defined below.
+ *
+ * <p>The executable must print out the 3rd party token to STDOUT in JSON format. When an
+ * output_file is specified in the credential configuration, the executable must also handle writing the
+ * JSON response to this file.
+ *
+ * <pre>
+ * OIDC response sample:
+ * {
+ *   "version": 1,
+ *   "success": true,
+ *   "token_type": "urn:ietf:params:oauth:token-type:id_token",
+ *   "id_token": "HEADER.PAYLOAD.SIGNATURE",
+ *   "expiration_time": 1620433341
+ * }
+ *
+ * SAML2 response sample:
+ * {
+ *   "version": 1,
+ *   "success": true,
+ *   "token_type": "urn:ietf:params:oauth:token-type:saml2",
+ *   "saml_response": "...",
+ *   "expiration_time": 1620433341
+ * }
+ *
+ * Error response sample:
+ * {
+ *   "version": 1,
+ *   "success": false,
+ *   "code": "401",
+ *   "message": "Error message."
+ * }
+ * </pre>
+ *
+ * <p>The "expiration_time" field in the JSON response is only required for successful
+ * responses when an output file was specified in the credential configuration
+ *
+ * <p>The auth libraries will populate certain environment variables that will be accessible by the
+ * executable, such as: GOOGLE_EXTERNAL_ACCOUNT_AUDIENCE, GOOGLE_EXTERNAL_ACCOUNT_TOKEN_TYPE,
+ * GOOGLE_EXTERNAL_ACCOUNT_INTERACTIVE, GOOGLE_EXTERNAL_ACCOUNT_IMPERSONATED_EMAIL, and
+ * GOOGLE_EXTERNAL_ACCOUNT_OUTPUT_FILE.
+ *
+ * <p>Please see this repositories README for a complete executable request/response specification.
+ */
+class PluggableAuthClient extends baseexternalclient_1.BaseExternalAccountClient {
+    /**
+     * Instantiates a PluggableAuthClient instance using the provided JSON
+     * object loaded from an external account credentials file.
+     * An error is thrown if the credential is not a valid pluggable auth credential.
+     * @param options The external account options object typically loaded from
+     *   the external account JSON credential file.
+     * @param additionalOptions **DEPRECATED, all options are available in the
+     *   `options` parameter.** Optional additional behavior customization options.
+     *   These currently customize expiration threshold time and whether to retry
+     *   on 401/403 API request errors.
+     */
+    constructor(options, additionalOptions) {
+        super(options, additionalOptions);
+        if (!options.credential_source.executable) {
+            throw new Error('No valid Pluggable Auth "credential_source" provided.');
+        }
+        this.command = options.credential_source.executable.command;
+        if (!this.command) {
+            throw new Error('No valid Pluggable Auth "credential_source" provided.');
+        }
+        // Check if the provided timeout exists and if it is valid.
+        if (options.credential_source.executable.timeout_millis === undefined) {
+            this.timeoutMillis = DEFAULT_EXECUTABLE_TIMEOUT_MILLIS;
+        }
+        else {
+            this.timeoutMillis = options.credential_source.executable.timeout_millis;
+            if (this.timeoutMillis < MINIMUM_EXECUTABLE_TIMEOUT_MILLIS ||
+                this.timeoutMillis > MAXIMUM_EXECUTABLE_TIMEOUT_MILLIS) {
+                throw new Error(`Timeout must be between ${MINIMUM_EXECUTABLE_TIMEOUT_MILLIS} and ` +
+                    `${MAXIMUM_EXECUTABLE_TIMEOUT_MILLIS} milliseconds.`);
+            }
+        }
+        this.outputFile = options.credential_source.executable.output_file;
+        this.handler = new pluggable_auth_handler_1.PluggableAuthHandler({
+            command: this.command,
+            timeoutMillis: this.timeoutMillis,
+            outputFile: this.outputFile,
+        });
+        this.credentialSourceType = 'executable';
+    }
+    /**
+     * Triggered when an external subject token is needed to be exchanged for a
+     * GCP access token via GCP STS endpoint.
+     * This uses the `options.credential_source` object to figure out how
+     * to retrieve the token using the current environment. In this case,
+     * this calls a user provided executable which returns the subject token.
+     * The logic is summarized as:
+     * 1. Validated that the executable is allowed to run. The
+     *    GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES environment must be set to
+     *    1 for security reasons.
+     * 2. If an output file is specified by the user, check the file location
+     *    for a response. If the file exists and contains a valid response,
+     *    return the subject token from the file.
+     * 3. Call the provided executable and return response.
+     * @return A promise that resolves with the external subject token.
+     */
+    async retrieveSubjectToken() {
+        // Check if the executable is allowed to run.
+        if (process.env[GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES] !== '1') {
+            throw new Error('Pluggable Auth executables need to be explicitly allowed to run by ' +
+                'setting the GOOGLE_EXTERNAL_ACCOUNT_ALLOW_EXECUTABLES environment ' +
+                'Variable to 1.');
+        }
+        let executableResponse = undefined;
+        // Try to get cached executable response from output file.
+        if (this.outputFile) {
+            executableResponse = await this.handler.retrieveCachedResponse();
+        }
+        // If no response from output file, call the executable.
+        if (!executableResponse) {
+            // Set up environment map with required values for the executable.
+            const envMap = new Map();
+            envMap.set('GOOGLE_EXTERNAL_ACCOUNT_AUDIENCE', this.audience);
+            envMap.set('GOOGLE_EXTERNAL_ACCOUNT_TOKEN_TYPE', this.subjectTokenType);
+            // Always set to 0 because interactive mode is not supported.
+            envMap.set('GOOGLE_EXTERNAL_ACCOUNT_INTERACTIVE', '0');
+            if (this.outputFile) {
+                envMap.set('GOOGLE_EXTERNAL_ACCOUNT_OUTPUT_FILE', this.outputFile);
+            }
+            const serviceAccountEmail = this.getServiceAccountEmail();
+            if (serviceAccountEmail) {
+                envMap.set('GOOGLE_EXTERNAL_ACCOUNT_IMPERSONATED_EMAIL', serviceAccountEmail);
+            }
+            executableResponse =
+                await this.handler.retrieveResponseFromExecutable(envMap);
+        }
+        if (executableResponse.version > MAXIMUM_EXECUTABLE_VERSION) {
+            throw new Error(`Version of executable is not currently supported, maximum supported version is ${MAXIMUM_EXECUTABLE_VERSION}.`);
+        }
+        // Check that response was successful.
+        if (!executableResponse.success) {
+            throw new ExecutableError(executableResponse.errorMessage, executableResponse.errorCode);
+        }
+        // Check that response contains expiration time if output file was specified.
+        if (this.outputFile) {
+            if (!executableResponse.expirationTime) {
+                throw new executable_response_1.InvalidExpirationTimeFieldError('The executable response must contain the `expiration_time` field for successful responses when an output_file has been specified in the configuration.');
+            }
+        }
+        // Check that response is not expired.
+        if (executableResponse.isExpired()) {
+            throw new Error('Executable response is expired.');
+        }
+        // Return subject token from response.
+        return executableResponse.subjectToken;
+    }
+}
+exports.PluggableAuthClient = PluggableAuthClient;
+
+
+/***/ }),
+
+/***/ 8941:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2022 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.PluggableAuthHandler = void 0;
+const pluggable_auth_client_1 = __nccwpck_require__(4782);
+const executable_response_1 = __nccwpck_require__(8749);
+const childProcess = __nccwpck_require__(2081);
+const fs = __nccwpck_require__(7147);
+/**
+ * A handler used to retrieve 3rd party token responses from user defined
+ * executables and cached file output for the PluggableAuthClient class.
+ */
+class PluggableAuthHandler {
+    /**
+     * Instantiates a PluggableAuthHandler instance using the provided
+     * PluggableAuthHandlerOptions object.
+     */
+    constructor(options) {
+        if (!options.command) {
+            throw new Error('No command provided.');
+        }
+        this.commandComponents = PluggableAuthHandler.parseCommand(options.command);
+        this.timeoutMillis = options.timeoutMillis;
+        if (!this.timeoutMillis) {
+            throw new Error('No timeoutMillis provided.');
+        }
+        this.outputFile = options.outputFile;
+    }
+    /**
+     * Calls user provided executable to get a 3rd party subject token and
+     * returns the response.
+     * @param envMap a Map of additional Environment Variables required for
+     *   the executable.
+     * @return A promise that resolves with the executable response.
+     */
+    retrieveResponseFromExecutable(envMap) {
+        return new Promise((resolve, reject) => {
+            // Spawn process to run executable using added environment variables.
+            const child = childProcess.spawn(this.commandComponents[0], this.commandComponents.slice(1), {
+                env: { ...process.env, ...Object.fromEntries(envMap) },
+            });
+            let output = '';
+            // Append stdout to output as executable runs.
+            child.stdout.on('data', (data) => {
+                output += data;
+            });
+            // Append stderr as executable runs.
+            child.stderr.on('data', (err) => {
+                output += err;
+            });
+            // Set up a timeout to end the child process and throw an error.
+            const timeout = setTimeout(() => {
+                // Kill child process and remove listeners so 'close' event doesn't get
+                // read after child process is killed.
+                child.removeAllListeners();
+                child.kill();
+                return reject(new Error('The executable failed to finish within the timeout specified.'));
+            }, this.timeoutMillis);
+            child.on('close', (code) => {
+                // Cancel timeout if executable closes before timeout is reached.
+                clearTimeout(timeout);
+                if (code === 0) {
+                    // If the executable completed successfully, try to return the parsed response.
+                    try {
+                        const responseJson = JSON.parse(output);
+                        const response = new executable_response_1.ExecutableResponse(responseJson);
+                        return resolve(response);
+                    }
+                    catch (error) {
+                        if (error instanceof executable_response_1.ExecutableResponseError) {
+                            return reject(error);
+                        }
+                        return reject(new executable_response_1.ExecutableResponseError(`The executable returned an invalid response: ${output}`));
+                    }
+                }
+                else {
+                    return reject(new pluggable_auth_client_1.ExecutableError(output, code.toString()));
+                }
+            });
+        });
+    }
+    /**
+     * Checks user provided output file for response from previous run of
+     * executable and return the response if it exists, is formatted correctly, and is not expired.
+     */
+    async retrieveCachedResponse() {
+        if (!this.outputFile || this.outputFile.length === 0) {
+            return undefined;
+        }
+        let filePath;
+        try {
+            filePath = await fs.promises.realpath(this.outputFile);
+        }
+        catch (_a) {
+            // If file path cannot be resolved, return undefined.
+            return undefined;
+        }
+        if (!(await fs.promises.lstat(filePath)).isFile()) {
+            // If path does not lead to file, return undefined.
+            return undefined;
+        }
+        const responseString = await fs.promises.readFile(filePath, {
+            encoding: 'utf8',
+        });
+        if (responseString === '') {
+            return undefined;
+        }
+        try {
+            const responseJson = JSON.parse(responseString);
+            const response = new executable_response_1.ExecutableResponse(responseJson);
+            // Check if response is successful and unexpired.
+            if (response.isValid()) {
+                return new executable_response_1.ExecutableResponse(responseJson);
+            }
+            return undefined;
+        }
+        catch (error) {
+            if (error instanceof executable_response_1.ExecutableResponseError) {
+                throw error;
+            }
+            throw new executable_response_1.ExecutableResponseError(`The output file contained an invalid response: ${responseString}`);
+        }
+    }
+    /**
+     * Parses given command string into component array, splitting on spaces unless
+     * spaces are between quotation marks.
+     */
+    static parseCommand(command) {
+        // Split the command into components by splitting on spaces,
+        // unless spaces are contained in quotation marks.
+        const components = command.match(/(?:[^\s"]+|"[^"]*")+/g);
+        if (!components) {
+            throw new Error(`Provided command: "${command}" could not be parsed.`);
+        }
+        // Remove quotation marks from the beginning and end of each component if they are present.
+        for (let i = 0; i < components.length; i++) {
+            if (components[i][0] === '"' && components[i].slice(-1) === '"') {
+                components[i] = components[i].slice(1, -1);
+            }
+        }
+        return components;
+    }
+}
+exports.PluggableAuthHandler = PluggableAuthHandler;
+
+
+/***/ }),
+
+/***/ 8790:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2015 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.UserRefreshClient = exports.USER_REFRESH_ACCOUNT_TYPE = void 0;
+const oauth2client_1 = __nccwpck_require__(3936);
+const querystring_1 = __nccwpck_require__(3477);
+exports.USER_REFRESH_ACCOUNT_TYPE = 'authorized_user';
+class UserRefreshClient extends oauth2client_1.OAuth2Client {
+    constructor(optionsOrClientId, clientSecret, refreshToken, eagerRefreshThresholdMillis, forceRefreshOnFailure) {
+        const opts = optionsOrClientId && typeof optionsOrClientId === 'object'
+            ? optionsOrClientId
+            : {
+                clientId: optionsOrClientId,
+                clientSecret,
+                refreshToken,
+                eagerRefreshThresholdMillis,
+                forceRefreshOnFailure,
+            };
+        super(opts);
+        this._refreshToken = opts.refreshToken;
+        this.credentials.refresh_token = opts.refreshToken;
+    }
+    /**
+     * Refreshes the access token.
+     * @param refreshToken An ignored refreshToken..
+     * @param callback Optional callback.
+     */
+    async refreshTokenNoCache(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    refreshToken) {
+        return super.refreshTokenNoCache(this._refreshToken);
+    }
+    async fetchIdToken(targetAudience) {
+        const res = await this.transporter.request({
+            ...UserRefreshClient.RETRY_CONFIG,
+            url: this.endpoints.oauth2TokenUrl,
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            method: 'POST',
+            data: (0, querystring_1.stringify)({
+                client_id: this._clientId,
+                client_secret: this._clientSecret,
+                grant_type: 'refresh_token',
+                refresh_token: this._refreshToken,
+                target_audience: targetAudience,
+            }),
+        });
+        return res.data.id_token;
+    }
+    /**
+     * Create a UserRefreshClient credentials instance using the given input
+     * options.
+     * @param json The input object.
+     */
+    fromJSON(json) {
+        if (!json) {
+            throw new Error('Must pass in a JSON object containing the user refresh token');
+        }
+        if (json.type !== 'authorized_user') {
+            throw new Error('The incoming JSON object does not have the "authorized_user" type');
+        }
+        if (!json.client_id) {
+            throw new Error('The incoming JSON object does not contain a client_id field');
+        }
+        if (!json.client_secret) {
+            throw new Error('The incoming JSON object does not contain a client_secret field');
+        }
+        if (!json.refresh_token) {
+            throw new Error('The incoming JSON object does not contain a refresh_token field');
+        }
+        this._clientId = json.client_id;
+        this._clientSecret = json.client_secret;
+        this._refreshToken = json.refresh_token;
+        this.credentials.refresh_token = json.refresh_token;
+        this.quotaProjectId = json.quota_project_id;
+        this.universeDomain = json.universe_domain || this.universeDomain;
+    }
+    fromStream(inputStream, callback) {
+        if (callback) {
+            this.fromStreamAsync(inputStream).then(() => callback(), callback);
+        }
+        else {
+            return this.fromStreamAsync(inputStream);
+        }
+    }
+    async fromStreamAsync(inputStream) {
+        return new Promise((resolve, reject) => {
+            if (!inputStream) {
+                return reject(new Error('Must pass in a stream containing the user refresh token.'));
+            }
+            let s = '';
+            inputStream
+                .setEncoding('utf8')
+                .on('error', reject)
+                .on('data', chunk => (s += chunk))
+                .on('end', () => {
+                try {
+                    const data = JSON.parse(s);
+                    this.fromJSON(data);
+                    return resolve();
+                }
+                catch (err) {
+                    return reject(err);
+                }
+            });
+        });
+    }
+    /**
+     * Create a UserRefreshClient credentials instance using the given input
+     * options.
+     * @param json The input object.
+     */
+    static fromJSON(json) {
+        const client = new UserRefreshClient();
+        client.fromJSON(json);
+        return client;
+    }
+}
+exports.UserRefreshClient = UserRefreshClient;
+
+
+/***/ }),
+
+/***/ 6308:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2021 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.StsCredentials = void 0;
+const gaxios_1 = __nccwpck_require__(9555);
+const querystring = __nccwpck_require__(3477);
+const transporters_1 = __nccwpck_require__(2649);
+const oauth2common_1 = __nccwpck_require__(9510);
+/**
+ * Implements the OAuth 2.0 token exchange based on
+ * https://tools.ietf.org/html/rfc8693
+ */
+class StsCredentials extends oauth2common_1.OAuthClientAuthHandler {
+    /**
+     * Initializes an STS credentials instance.
+     * @param tokenExchangeEndpoint The token exchange endpoint.
+     * @param clientAuthentication The client authentication credentials if
+     *   available.
+     */
+    constructor(tokenExchangeEndpoint, clientAuthentication) {
+        super(clientAuthentication);
+        this.tokenExchangeEndpoint = tokenExchangeEndpoint;
+        this.transporter = new transporters_1.DefaultTransporter();
+    }
+    /**
+     * Exchanges the provided token for another type of token based on the
+     * rfc8693 spec.
+     * @param stsCredentialsOptions The token exchange options used to populate
+     *   the token exchange request.
+     * @param additionalHeaders Optional additional headers to pass along the
+     *   request.
+     * @param options Optional additional GCP-specific non-spec defined options
+     *   to send with the request.
+     *   Example: `&options=${encodeUriComponent(JSON.stringified(options))}`
+     * @return A promise that resolves with the token exchange response containing
+     *   the requested token and its expiration time.
+     */
+    async exchangeToken(stsCredentialsOptions, additionalHeaders, 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    options) {
+        var _a, _b, _c;
+        const values = {
+            grant_type: stsCredentialsOptions.grantType,
+            resource: stsCredentialsOptions.resource,
+            audience: stsCredentialsOptions.audience,
+            scope: (_a = stsCredentialsOptions.scope) === null || _a === void 0 ? void 0 : _a.join(' '),
+            requested_token_type: stsCredentialsOptions.requestedTokenType,
+            subject_token: stsCredentialsOptions.subjectToken,
+            subject_token_type: stsCredentialsOptions.subjectTokenType,
+            actor_token: (_b = stsCredentialsOptions.actingParty) === null || _b === void 0 ? void 0 : _b.actorToken,
+            actor_token_type: (_c = stsCredentialsOptions.actingParty) === null || _c === void 0 ? void 0 : _c.actorTokenType,
+            // Non-standard GCP-specific options.
+            options: options && JSON.stringify(options),
+        };
+        // Remove undefined fields.
+        Object.keys(values).forEach(key => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            if (typeof values[key] === 'undefined') {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                delete values[key];
+            }
+        });
+        const headers = {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        };
+        // Inject additional STS headers if available.
+        Object.assign(headers, additionalHeaders || {});
+        const opts = {
+            ...StsCredentials.RETRY_CONFIG,
+            url: this.tokenExchangeEndpoint.toString(),
+            method: 'POST',
+            headers,
+            data: querystring.stringify(values),
+            responseType: 'json',
+        };
+        // Apply OAuth client authentication.
+        this.applyClientAuthenticationOptions(opts);
+        try {
+            const response = await this.transporter.request(opts);
+            // Successful response.
+            const stsSuccessfulResponse = response.data;
+            stsSuccessfulResponse.res = response;
+            return stsSuccessfulResponse;
+        }
+        catch (error) {
+            // Translate error to OAuthError.
+            if (error instanceof gaxios_1.GaxiosError && error.response) {
+                throw (0, oauth2common_1.getErrorFromOAuthErrorResponse)(error.response.data, 
+                // Preserve other fields from the original error.
+                error);
+            }
+            // Request could fail before the server responds.
+            throw error;
+        }
+    }
+}
+exports.StsCredentials = StsCredentials;
+
+
+/***/ }),
+
+/***/ 7428:
+/***/ ((__unused_webpack_module, exports) => {
+
+
+// Copyright 2024 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.UrlSubjectTokenSupplier = void 0;
+/**
+ * Internal subject token supplier implementation used when a URL
+ * is configured in the credential configuration used to build an {@link IdentityPoolClient}
+ */
+class UrlSubjectTokenSupplier {
+    /**
+     * Instantiates a URL subject token supplier.
+     * @param opts The URL subject token supplier options to build the supplier with.
+     */
+    constructor(opts) {
+        this.url = opts.url;
+        this.formatType = opts.formatType;
+        this.subjectTokenFieldName = opts.subjectTokenFieldName;
+        this.headers = opts.headers;
+        this.additionalGaxiosOptions = opts.additionalGaxiosOptions;
+    }
+    /**
+     * Sends a GET request to the URL provided in the constructor and resolves
+     * with the returned external subject token.
+     * @param context {@link ExternalAccountSupplierContext} from the calling
+     *   {@link IdentityPoolClient}, contains the requested audience and subject
+     *   token type for the external account identity. Not used.
+     */
+    async getSubjectToken(context) {
+        const opts = {
+            ...this.additionalGaxiosOptions,
+            url: this.url,
+            method: 'GET',
+            headers: this.headers,
+            responseType: this.formatType,
+        };
+        let subjectToken;
+        if (this.formatType === 'text') {
+            const response = await context.transporter.request(opts);
+            subjectToken = response.data;
+        }
+        else if (this.formatType === 'json' && this.subjectTokenFieldName) {
+            const response = await context.transporter.request(opts);
+            subjectToken = response.data[this.subjectTokenFieldName];
+        }
+        if (!subjectToken) {
+            throw new Error('Unable to parse the subject_token from the credential_source URL');
+        }
+        return subjectToken;
+    }
+}
+exports.UrlSubjectTokenSupplier = UrlSubjectTokenSupplier;
+
+
+/***/ }),
+
+/***/ 4693:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2019 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+/* global window */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.BrowserCrypto = void 0;
+// This file implements crypto functions we need using in-browser
+// SubtleCrypto interface `window.crypto.subtle`.
+const base64js = __nccwpck_require__(6463);
+const crypto_1 = __nccwpck_require__(8043);
+class BrowserCrypto {
+    constructor() {
+        if (typeof window === 'undefined' ||
+            window.crypto === undefined ||
+            window.crypto.subtle === undefined) {
+            throw new Error("SubtleCrypto not found. Make sure it's an https:// website.");
+        }
+    }
+    async sha256DigestBase64(str) {
+        // SubtleCrypto digest() method is async, so we must make
+        // this method async as well.
+        // To calculate SHA256 digest using SubtleCrypto, we first
+        // need to convert an input string to an ArrayBuffer:
+        const inputBuffer = new TextEncoder().encode(str);
+        // Result is ArrayBuffer as well.
+        const outputBuffer = await window.crypto.subtle.digest('SHA-256', inputBuffer);
+        return base64js.fromByteArray(new Uint8Array(outputBuffer));
+    }
+    randomBytesBase64(count) {
+        const array = new Uint8Array(count);
+        window.crypto.getRandomValues(array);
+        return base64js.fromByteArray(array);
+    }
+    static padBase64(base64) {
+        // base64js requires padding, so let's add some '='
+        while (base64.length % 4 !== 0) {
+            base64 += '=';
+        }
+        return base64;
+    }
+    async verify(pubkey, data, signature) {
+        const algo = {
+            name: 'RSASSA-PKCS1-v1_5',
+            hash: { name: 'SHA-256' },
+        };
+        const dataArray = new TextEncoder().encode(data);
+        const signatureArray = base64js.toByteArray(BrowserCrypto.padBase64(signature));
+        const cryptoKey = await window.crypto.subtle.importKey('jwk', pubkey, algo, true, ['verify']);
+        // SubtleCrypto's verify method is async so we must make
+        // this method async as well.
+        const result = await window.crypto.subtle.verify(algo, cryptoKey, signatureArray, dataArray);
+        return result;
+    }
+    async sign(privateKey, data) {
+        const algo = {
+            name: 'RSASSA-PKCS1-v1_5',
+            hash: { name: 'SHA-256' },
+        };
+        const dataArray = new TextEncoder().encode(data);
+        const cryptoKey = await window.crypto.subtle.importKey('jwk', privateKey, algo, true, ['sign']);
+        // SubtleCrypto's sign method is async so we must make
+        // this method async as well.
+        const result = await window.crypto.subtle.sign(algo, cryptoKey, dataArray);
+        return base64js.fromByteArray(new Uint8Array(result));
+    }
+    decodeBase64StringUtf8(base64) {
+        const uint8array = base64js.toByteArray(BrowserCrypto.padBase64(base64));
+        const result = new TextDecoder().decode(uint8array);
+        return result;
+    }
+    encodeBase64StringUtf8(text) {
+        const uint8array = new TextEncoder().encode(text);
+        const result = base64js.fromByteArray(uint8array);
+        return result;
+    }
+    /**
+     * Computes the SHA-256 hash of the provided string.
+     * @param str The plain text string to hash.
+     * @return A promise that resolves with the SHA-256 hash of the provided
+     *   string in hexadecimal encoding.
+     */
+    async sha256DigestHex(str) {
+        // SubtleCrypto digest() method is async, so we must make
+        // this method async as well.
+        // To calculate SHA256 digest using SubtleCrypto, we first
+        // need to convert an input string to an ArrayBuffer:
+        const inputBuffer = new TextEncoder().encode(str);
+        // Result is ArrayBuffer as well.
+        const outputBuffer = await window.crypto.subtle.digest('SHA-256', inputBuffer);
+        return (0, crypto_1.fromArrayBufferToHex)(outputBuffer);
+    }
+    /**
+     * Computes the HMAC hash of a message using the provided crypto key and the
+     * SHA-256 algorithm.
+     * @param key The secret crypto key in utf-8 or ArrayBuffer format.
+     * @param msg The plain text message.
+     * @return A promise that resolves with the HMAC-SHA256 hash in ArrayBuffer
+     *   format.
+     */
+    async signWithHmacSha256(key, msg) {
+        // Convert key, if provided in ArrayBuffer format, to string.
+        const rawKey = typeof key === 'string'
+            ? key
+            : String.fromCharCode(...new Uint16Array(key));
+        const enc = new TextEncoder();
+        const cryptoKey = await window.crypto.subtle.importKey('raw', enc.encode(rawKey), {
+            name: 'HMAC',
+            hash: {
+                name: 'SHA-256',
+            },
+        }, false, ['sign']);
+        return window.crypto.subtle.sign('HMAC', cryptoKey, enc.encode(msg));
+    }
+}
+exports.BrowserCrypto = BrowserCrypto;
+
+
+/***/ }),
+
+/***/ 8043:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2019 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+/* global window */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.createCrypto = createCrypto;
+exports.hasBrowserCrypto = hasBrowserCrypto;
+exports.fromArrayBufferToHex = fromArrayBufferToHex;
+const crypto_1 = __nccwpck_require__(4693);
+const crypto_2 = __nccwpck_require__(757);
+function createCrypto() {
+    if (hasBrowserCrypto()) {
+        return new crypto_1.BrowserCrypto();
+    }
+    return new crypto_2.NodeCrypto();
+}
+function hasBrowserCrypto() {
+    return (typeof window !== 'undefined' &&
+        typeof window.crypto !== 'undefined' &&
+        typeof window.crypto.subtle !== 'undefined');
+}
+/**
+ * Converts an ArrayBuffer to a hexadecimal string.
+ * @param arrayBuffer The ArrayBuffer to convert to hexadecimal string.
+ * @return The hexadecimal encoding of the ArrayBuffer.
+ */
+function fromArrayBufferToHex(arrayBuffer) {
+    // Convert buffer to byte array.
+    const byteArray = Array.from(new Uint8Array(arrayBuffer));
+    // Convert bytes to hex string.
+    return byteArray
+        .map(byte => {
+        return byte.toString(16).padStart(2, '0');
+    })
+        .join('');
+}
+
+
+/***/ }),
+
+/***/ 757:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2019 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.NodeCrypto = void 0;
+const crypto = __nccwpck_require__(6113);
+class NodeCrypto {
+    async sha256DigestBase64(str) {
+        return crypto.createHash('sha256').update(str).digest('base64');
+    }
+    randomBytesBase64(count) {
+        return crypto.randomBytes(count).toString('base64');
+    }
+    async verify(pubkey, data, signature) {
+        const verifier = crypto.createVerify('RSA-SHA256');
+        verifier.update(data);
+        verifier.end();
+        return verifier.verify(pubkey, signature, 'base64');
+    }
+    async sign(privateKey, data) {
+        const signer = crypto.createSign('RSA-SHA256');
+        signer.update(data);
+        signer.end();
+        return signer.sign(privateKey, 'base64');
+    }
+    decodeBase64StringUtf8(base64) {
+        return Buffer.from(base64, 'base64').toString('utf-8');
+    }
+    encodeBase64StringUtf8(text) {
+        return Buffer.from(text, 'utf-8').toString('base64');
+    }
+    /**
+     * Computes the SHA-256 hash of the provided string.
+     * @param str The plain text string to hash.
+     * @return A promise that resolves with the SHA-256 hash of the provided
+     *   string in hexadecimal encoding.
+     */
+    async sha256DigestHex(str) {
+        return crypto.createHash('sha256').update(str).digest('hex');
+    }
+    /**
+     * Computes the HMAC hash of a message using the provided crypto key and the
+     * SHA-256 algorithm.
+     * @param key The secret crypto key in utf-8 or ArrayBuffer format.
+     * @param msg The plain text message.
+     * @return A promise that resolves with the HMAC-SHA256 hash in ArrayBuffer
+     *   format.
+     */
+    async signWithHmacSha256(key, msg) {
+        const cryptoKey = typeof key === 'string' ? key : toBuffer(key);
+        return toArrayBuffer(crypto.createHmac('sha256', cryptoKey).update(msg).digest());
+    }
+}
+exports.NodeCrypto = NodeCrypto;
+/**
+ * Converts a Node.js Buffer to an ArrayBuffer.
+ * https://stackoverflow.com/questions/8609289/convert-a-binary-nodejs-buffer-to-javascript-arraybuffer
+ * @param buffer The Buffer input to covert.
+ * @return The ArrayBuffer representation of the input.
+ */
+function toArrayBuffer(buffer) {
+    return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+}
+/**
+ * Converts an ArrayBuffer to a Node.js Buffer.
+ * @param arrayBuffer The ArrayBuffer input to covert.
+ * @return The Buffer representation of the input.
+ */
+function toBuffer(arrayBuffer) {
+    return Buffer.from(arrayBuffer);
+}
+
+
+/***/ }),
+
+/***/ 810:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GoogleAuth = exports.auth = exports.DefaultTransporter = exports.PassThroughClient = exports.ExecutableError = exports.PluggableAuthClient = exports.DownscopedClient = exports.BaseExternalAccountClient = exports.ExternalAccountClient = exports.IdentityPoolClient = exports.AwsRequestSigner = exports.AwsClient = exports.UserRefreshClient = exports.LoginTicket = exports.ClientAuthentication = exports.OAuth2Client = exports.CodeChallengeMethod = exports.Impersonated = exports.JWT = exports.JWTAccess = exports.IdTokenClient = exports.IAMAuth = exports.GCPEnv = exports.Compute = exports.DEFAULT_UNIVERSE = exports.AuthClient = exports.gaxios = exports.gcpMetadata = void 0;
+// Copyright 2017 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+const googleauth_1 = __nccwpck_require__(695);
+Object.defineProperty(exports, "GoogleAuth", ({ enumerable: true, get: function () { return googleauth_1.GoogleAuth; } }));
+// Export common deps to ensure types/instances are the exact match. Useful
+// for consistently configuring the library across versions.
+exports.gcpMetadata = __nccwpck_require__(3563);
+exports.gaxios = __nccwpck_require__(9555);
+var authclient_1 = __nccwpck_require__(4627);
+Object.defineProperty(exports, "AuthClient", ({ enumerable: true, get: function () { return authclient_1.AuthClient; } }));
+Object.defineProperty(exports, "DEFAULT_UNIVERSE", ({ enumerable: true, get: function () { return authclient_1.DEFAULT_UNIVERSE; } }));
+var computeclient_1 = __nccwpck_require__(6875);
+Object.defineProperty(exports, "Compute", ({ enumerable: true, get: function () { return computeclient_1.Compute; } }));
+var envDetect_1 = __nccwpck_require__(1380);
+Object.defineProperty(exports, "GCPEnv", ({ enumerable: true, get: function () { return envDetect_1.GCPEnv; } }));
+var iam_1 = __nccwpck_require__(9735);
+Object.defineProperty(exports, "IAMAuth", ({ enumerable: true, get: function () { return iam_1.IAMAuth; } }));
+var idtokenclient_1 = __nccwpck_require__(298);
+Object.defineProperty(exports, "IdTokenClient", ({ enumerable: true, get: function () { return idtokenclient_1.IdTokenClient; } }));
+var jwtaccess_1 = __nccwpck_require__(8740);
+Object.defineProperty(exports, "JWTAccess", ({ enumerable: true, get: function () { return jwtaccess_1.JWTAccess; } }));
+var jwtclient_1 = __nccwpck_require__(3959);
+Object.defineProperty(exports, "JWT", ({ enumerable: true, get: function () { return jwtclient_1.JWT; } }));
+var impersonated_1 = __nccwpck_require__(1103);
+Object.defineProperty(exports, "Impersonated", ({ enumerable: true, get: function () { return impersonated_1.Impersonated; } }));
+var oauth2client_1 = __nccwpck_require__(3936);
+Object.defineProperty(exports, "CodeChallengeMethod", ({ enumerable: true, get: function () { return oauth2client_1.CodeChallengeMethod; } }));
+Object.defineProperty(exports, "OAuth2Client", ({ enumerable: true, get: function () { return oauth2client_1.OAuth2Client; } }));
+Object.defineProperty(exports, "ClientAuthentication", ({ enumerable: true, get: function () { return oauth2client_1.ClientAuthentication; } }));
+var loginticket_1 = __nccwpck_require__(4524);
+Object.defineProperty(exports, "LoginTicket", ({ enumerable: true, get: function () { return loginticket_1.LoginTicket; } }));
+var refreshclient_1 = __nccwpck_require__(8790);
+Object.defineProperty(exports, "UserRefreshClient", ({ enumerable: true, get: function () { return refreshclient_1.UserRefreshClient; } }));
+var awsclient_1 = __nccwpck_require__(1569);
+Object.defineProperty(exports, "AwsClient", ({ enumerable: true, get: function () { return awsclient_1.AwsClient; } }));
+var awsrequestsigner_1 = __nccwpck_require__(1754);
+Object.defineProperty(exports, "AwsRequestSigner", ({ enumerable: true, get: function () { return awsrequestsigner_1.AwsRequestSigner; } }));
+var identitypoolclient_1 = __nccwpck_require__(117);
+Object.defineProperty(exports, "IdentityPoolClient", ({ enumerable: true, get: function () { return identitypoolclient_1.IdentityPoolClient; } }));
+var externalclient_1 = __nccwpck_require__(4381);
+Object.defineProperty(exports, "ExternalAccountClient", ({ enumerable: true, get: function () { return externalclient_1.ExternalAccountClient; } }));
+var baseexternalclient_1 = __nccwpck_require__(7391);
+Object.defineProperty(exports, "BaseExternalAccountClient", ({ enumerable: true, get: function () { return baseexternalclient_1.BaseExternalAccountClient; } }));
+var downscopedclient_1 = __nccwpck_require__(6270);
+Object.defineProperty(exports, "DownscopedClient", ({ enumerable: true, get: function () { return downscopedclient_1.DownscopedClient; } }));
+var pluggable_auth_client_1 = __nccwpck_require__(4782);
+Object.defineProperty(exports, "PluggableAuthClient", ({ enumerable: true, get: function () { return pluggable_auth_client_1.PluggableAuthClient; } }));
+Object.defineProperty(exports, "ExecutableError", ({ enumerable: true, get: function () { return pluggable_auth_client_1.ExecutableError; } }));
+var passthrough_1 = __nccwpck_require__(2460);
+Object.defineProperty(exports, "PassThroughClient", ({ enumerable: true, get: function () { return passthrough_1.PassThroughClient; } }));
+var transporters_1 = __nccwpck_require__(2649);
+Object.defineProperty(exports, "DefaultTransporter", ({ enumerable: true, get: function () { return transporters_1.DefaultTransporter; } }));
+const auth = new googleauth_1.GoogleAuth();
+exports.auth = auth;
+
+
+/***/ }),
+
+/***/ 6608:
+/***/ ((__unused_webpack_module, exports) => {
+
+
+// Copyright 2017 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.validate = validate;
+// Accepts an options object passed from the user to the API.  In the
+// previous version of the API, it referred to a `Request` options object.
+// Now it refers to an Axiox Request Config object.  This is here to help
+// ensure users don't pass invalid options when they upgrade from 0.x to 1.x.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function validate(options) {
+    const vpairs = [
+        { invalid: 'uri', expected: 'url' },
+        { invalid: 'json', expected: 'data' },
+        { invalid: 'qs', expected: 'params' },
+    ];
+    for (const pair of vpairs) {
+        if (options[pair.invalid]) {
+            const e = `'${pair.invalid}' is not a valid configuration option. Please use '${pair.expected}' instead. This library is using Axios for requests. Please see https://github.com/axios/axios to learn more about the valid request options.`;
+            throw new Error(e);
+        }
+    }
+}
+
+
+/***/ }),
+
+/***/ 2649:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+// Copyright 2019 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.DefaultTransporter = void 0;
+const gaxios_1 = __nccwpck_require__(9555);
+const options_1 = __nccwpck_require__(6608);
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const pkg = __nccwpck_require__(1402);
+const PRODUCT_NAME = 'google-api-nodejs-client';
+class DefaultTransporter {
+    constructor() {
+        /**
+         * A configurable, replacable `Gaxios` instance.
+         */
+        this.instance = new gaxios_1.Gaxios();
+    }
+    /**
+     * Configures request options before making a request.
+     * @param opts GaxiosOptions options.
+     * @return Configured options.
+     */
+    configure(opts = {}) {
+        opts.headers = opts.headers || {};
+        if (typeof window === 'undefined') {
+            // set transporter user agent if not in browser
+            const uaValue = opts.headers['User-Agent'];
+            if (!uaValue) {
+                opts.headers['User-Agent'] = DefaultTransporter.USER_AGENT;
+            }
+            else if (!uaValue.includes(`${PRODUCT_NAME}/`)) {
+                opts.headers['User-Agent'] =
+                    `${uaValue} ${DefaultTransporter.USER_AGENT}`;
+            }
+            // track google-auth-library-nodejs version:
+            if (!opts.headers['x-goog-api-client']) {
+                const nodeVersion = process.version.replace(/^v/, '');
+                opts.headers['x-goog-api-client'] = `gl-node/${nodeVersion}`;
+            }
+        }
+        return opts;
+    }
+    /**
+     * Makes a request using Gaxios with given options.
+     * @param opts GaxiosOptions options.
+     * @param callback optional callback that contains GaxiosResponse object.
+     * @return GaxiosPromise, assuming no callback is passed.
+     */
+    request(opts) {
+        // ensure the user isn't passing in request-style options
+        opts = this.configure(opts);
+        (0, options_1.validate)(opts);
+        return this.instance.request(opts).catch(e => {
+            throw this.processError(e);
+        });
+    }
+    get defaults() {
+        return this.instance.defaults;
+    }
+    set defaults(opts) {
+        this.instance.defaults = opts;
+    }
+    /**
+     * Changes the error to include details from the body.
+     */
+    processError(e) {
+        const res = e.response;
+        const err = e;
+        const body = res ? res.data : null;
+        if (res && body && body.error && res.status !== 200) {
+            if (typeof body.error === 'string') {
+                err.message = body.error;
+                err.status = res.status;
+            }
+            else if (Array.isArray(body.error.errors)) {
+                err.message = body.error.errors
+                    .map((err2) => err2.message)
+                    .join('\n');
+                err.code = body.error.code;
+                err.errors = body.error.errors;
+            }
+            else {
+                err.message = body.error.message;
+                err.code = body.error.code;
+            }
+        }
+        else if (res && res.status >= 400) {
+            // Consider all 4xx and 5xx responses errors.
+            err.message = body;
+            err.status = res.status;
+        }
+        return err;
+    }
+}
+exports.DefaultTransporter = DefaultTransporter;
+/**
+ * Default user agent.
+ */
+DefaultTransporter.USER_AGENT = `${PRODUCT_NAME}/${pkg.version}`;
+
+
+/***/ }),
+
+/***/ 8905:
+/***/ (function(__unused_webpack_module, exports) {
+
+
+// Copyright 2023 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (receiver, state, kind, f) {
+    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
+    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
+    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
+};
+var _LRUCache_instances, _LRUCache_cache, _LRUCache_moveToEnd, _LRUCache_evict;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.LRUCache = void 0;
+exports.snakeToCamel = snakeToCamel;
+exports.originalOrCamelOptions = originalOrCamelOptions;
+/**
+ * Returns the camel case of a provided string.
+ *
+ * @remarks
+ *
+ * Match any `_` and not `_` pair, then return the uppercase of the not `_`
+ * character.
+ *
+ * @internal
+ *
+ * @param str the string to convert
+ * @returns the camelCase'd string
+ */
+function snakeToCamel(str) {
+    return str.replace(/([_][^_])/g, match => match.slice(1).toUpperCase());
+}
+/**
+ * Get the value of `obj[key]` or `obj[camelCaseKey]`, with a preference
+ * for original, non-camelCase key.
+ *
+ * @param obj object to lookup a value in
+ * @returns a `get` function for getting `obj[key || snakeKey]`, if available
+ */
+function originalOrCamelOptions(obj) {
+    /**
+     *
+     * @param key an index of object, preferably snake_case
+     * @returns the value `obj[key || snakeKey]`, if available
+     */
+    function get(key) {
+        var _a;
+        const o = (obj || {});
+        return (_a = o[key]) !== null && _a !== void 0 ? _a : o[snakeToCamel(key)];
+    }
+    return { get };
+}
+/**
+ * A simple LRU cache utility.
+ * Not meant for external usage.
+ *
+ * @experimental
+ * @internal
+ */
+class LRUCache {
+    constructor(options) {
+        _LRUCache_instances.add(this);
+        /**
+         * Maps are in order. Thus, the older item is the first item.
+         *
+         * {@link https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map}
+         */
+        _LRUCache_cache.set(this, new Map());
+        this.capacity = options.capacity;
+        this.maxAge = options.maxAge;
+    }
+    /**
+     * Add an item to the cache.
+     *
+     * @param key the key to upsert
+     * @param value the value of the key
+     */
+    set(key, value) {
+        __classPrivateFieldGet(this, _LRUCache_instances, "m", _LRUCache_moveToEnd).call(this, key, value);
+        __classPrivateFieldGet(this, _LRUCache_instances, "m", _LRUCache_evict).call(this);
+    }
+    /**
+     * Get an item from the cache.
+     *
+     * @param key the key to retrieve
+     */
+    get(key) {
+        const item = __classPrivateFieldGet(this, _LRUCache_cache, "f").get(key);
+        if (!item)
+            return;
+        __classPrivateFieldGet(this, _LRUCache_instances, "m", _LRUCache_moveToEnd).call(this, key, item.value);
+        __classPrivateFieldGet(this, _LRUCache_instances, "m", _LRUCache_evict).call(this);
+        return item.value;
+    }
+}
+exports.LRUCache = LRUCache;
+_LRUCache_cache = new WeakMap(), _LRUCache_instances = new WeakSet(), _LRUCache_moveToEnd = function _LRUCache_moveToEnd(key, value) {
+    __classPrivateFieldGet(this, _LRUCache_cache, "f").delete(key);
+    __classPrivateFieldGet(this, _LRUCache_cache, "f").set(key, {
+        value,
+        lastAccessed: Date.now(),
+    });
+}, _LRUCache_evict = function _LRUCache_evict() {
+    const cutoffDate = this.maxAge ? Date.now() - this.maxAge : 0;
+    /**
+     * Because we know Maps are in order, this item is both the
+     * last item in the list (capacity) and oldest (maxAge).
+     */
+    let oldestItem = __classPrivateFieldGet(this, _LRUCache_cache, "f").entries().next();
+    while (!oldestItem.done &&
+        (__classPrivateFieldGet(this, _LRUCache_cache, "f").size > this.capacity || // too many
+            oldestItem.value[1].lastAccessed < cutoffDate) // too old
+    ) {
+        __classPrivateFieldGet(this, _LRUCache_cache, "f").delete(oldestItem.value[0]);
+        oldestItem = __classPrivateFieldGet(this, _LRUCache_cache, "f").entries().next();
+    }
+};
+
+
+/***/ }),
+
+/***/ 6031:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+
+/**
+ * Copyright 2018 Google LLC
+ *
+ * Distributed under MIT license.
+ * See file LICENSE for detail or copy at https://opensource.org/licenses/MIT
+ */
+var __classPrivateFieldGet = (this && this.__classPrivateFieldGet) || function (receiver, state, kind, f) {
+    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a getter");
+    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot read private member from an object whose class did not declare it");
+    return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
+};
+var __classPrivateFieldSet = (this && this.__classPrivateFieldSet) || function (receiver, state, value, kind, f) {
+    if (kind === "m") throw new TypeError("Private method is not writable");
+    if (kind === "a" && !f) throw new TypeError("Private accessor was defined without a setter");
+    if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver)) throw new TypeError("Cannot write private member to an object whose class did not declare it");
+    return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
+};
+var _GoogleToken_instances, _GoogleToken_inFlightRequest, _GoogleToken_getTokenAsync, _GoogleToken_getTokenAsyncInner, _GoogleToken_ensureEmail, _GoogleToken_revokeTokenAsync, _GoogleToken_configure, _GoogleToken_requestToken;
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GoogleToken = void 0;
+const fs = __nccwpck_require__(7147);
+const gaxios_1 = __nccwpck_require__(9555);
+const jws = __nccwpck_require__(4636);
+const path = __nccwpck_require__(1017);
+const util_1 = __nccwpck_require__(3837);
+const readFile = fs.readFile
+    ? (0, util_1.promisify)(fs.readFile)
+    : async () => {
+        // if running in the web-browser, fs.readFile may not have been shimmed.
+        throw new ErrorWithCode('use key rather than keyFile.', 'MISSING_CREDENTIALS');
+    };
+const GOOGLE_TOKEN_URL = 'https://www.googleapis.com/oauth2/v4/token';
+const GOOGLE_REVOKE_TOKEN_URL = 'https://accounts.google.com/o/oauth2/revoke?token=';
+class ErrorWithCode extends Error {
+    constructor(message, code) {
+        super(message);
+        this.code = code;
+    }
+}
+class GoogleToken {
+    get accessToken() {
+        return this.rawToken ? this.rawToken.access_token : undefined;
+    }
+    get idToken() {
+        return this.rawToken ? this.rawToken.id_token : undefined;
+    }
+    get tokenType() {
+        return this.rawToken ? this.rawToken.token_type : undefined;
+    }
+    get refreshToken() {
+        return this.rawToken ? this.rawToken.refresh_token : undefined;
+    }
+    /**
+     * Create a GoogleToken.
+     *
+     * @param options  Configuration object.
+     */
+    constructor(options) {
+        _GoogleToken_instances.add(this);
+        this.transporter = {
+            request: opts => (0, gaxios_1.request)(opts),
+        };
+        _GoogleToken_inFlightRequest.set(this, void 0);
+        __classPrivateFieldGet(this, _GoogleToken_instances, "m", _GoogleToken_configure).call(this, options);
+    }
+    /**
+     * Returns whether the token has expired.
+     *
+     * @return true if the token has expired, false otherwise.
+     */
+    hasExpired() {
+        const now = new Date().getTime();
+        if (this.rawToken && this.expiresAt) {
+            return now >= this.expiresAt;
+        }
+        else {
+            return true;
+        }
+    }
+    /**
+     * Returns whether the token will expire within eagerRefreshThresholdMillis
+     *
+     * @return true if the token will be expired within eagerRefreshThresholdMillis, false otherwise.
+     */
+    isTokenExpiring() {
+        var _a;
+        const now = new Date().getTime();
+        const eagerRefreshThresholdMillis = (_a = this.eagerRefreshThresholdMillis) !== null && _a !== void 0 ? _a : 0;
+        if (this.rawToken && this.expiresAt) {
+            return this.expiresAt <= now + eagerRefreshThresholdMillis;
+        }
+        else {
+            return true;
+        }
+    }
+    getToken(callback, opts = {}) {
+        if (typeof callback === 'object') {
+            opts = callback;
+            callback = undefined;
+        }
+        opts = Object.assign({
+            forceRefresh: false,
+        }, opts);
+        if (callback) {
+            const cb = callback;
+            __classPrivateFieldGet(this, _GoogleToken_instances, "m", _GoogleToken_getTokenAsync).call(this, opts).then(t => cb(null, t), callback);
+            return;
+        }
+        return __classPrivateFieldGet(this, _GoogleToken_instances, "m", _GoogleToken_getTokenAsync).call(this, opts);
+    }
+    /**
+     * Given a keyFile, extract the key and client email if available
+     * @param keyFile Path to a json, pem, or p12 file that contains the key.
+     * @returns an object with privateKey and clientEmail properties
+     */
+    async getCredentials(keyFile) {
+        const ext = path.extname(keyFile);
+        switch (ext) {
+            case '.json': {
+                const key = await readFile(keyFile, 'utf8');
+                const body = JSON.parse(key);
+                const privateKey = body.private_key;
+                const clientEmail = body.client_email;
+                if (!privateKey || !clientEmail) {
+                    throw new ErrorWithCode('private_key and client_email are required.', 'MISSING_CREDENTIALS');
+                }
+                return { privateKey, clientEmail };
+            }
+            case '.der':
+            case '.crt':
+            case '.pem': {
+                const privateKey = await readFile(keyFile, 'utf8');
+                return { privateKey };
+            }
+            case '.p12':
+            case '.pfx': {
+                throw new ErrorWithCode('*.p12 certificates are not supported after v6.1.2. ' +
+                    'Consider utilizing *.json format or converting *.p12 to *.pem using the OpenSSL CLI.', 'UNKNOWN_CERTIFICATE_TYPE');
+            }
+            default:
+                throw new ErrorWithCode('Unknown certificate type. Type is determined based on file extension. ' +
+                    'Current supported extensions are *.json, and *.pem.', 'UNKNOWN_CERTIFICATE_TYPE');
+        }
+    }
+    revokeToken(callback) {
+        if (callback) {
+            __classPrivateFieldGet(this, _GoogleToken_instances, "m", _GoogleToken_revokeTokenAsync).call(this).then(() => callback(), callback);
+            return;
+        }
+        return __classPrivateFieldGet(this, _GoogleToken_instances, "m", _GoogleToken_revokeTokenAsync).call(this);
+    }
+}
+exports.GoogleToken = GoogleToken;
+_GoogleToken_inFlightRequest = new WeakMap(), _GoogleToken_instances = new WeakSet(), _GoogleToken_getTokenAsync = async function _GoogleToken_getTokenAsync(opts) {
+    if (__classPrivateFieldGet(this, _GoogleToken_inFlightRequest, "f") && !opts.forceRefresh) {
+        return __classPrivateFieldGet(this, _GoogleToken_inFlightRequest, "f");
+    }
+    try {
+        return await (__classPrivateFieldSet(this, _GoogleToken_inFlightRequest, __classPrivateFieldGet(this, _GoogleToken_instances, "m", _GoogleToken_getTokenAsyncInner).call(this, opts), "f"));
+    }
+    finally {
+        __classPrivateFieldSet(this, _GoogleToken_inFlightRequest, undefined, "f");
+    }
+}, _GoogleToken_getTokenAsyncInner = async function _GoogleToken_getTokenAsyncInner(opts) {
+    if (this.isTokenExpiring() === false && opts.forceRefresh === false) {
+        return Promise.resolve(this.rawToken);
+    }
+    if (!this.key && !this.keyFile) {
+        throw new Error('No key or keyFile set.');
+    }
+    if (!this.key && this.keyFile) {
+        const creds = await this.getCredentials(this.keyFile);
+        this.key = creds.privateKey;
+        this.iss = creds.clientEmail || this.iss;
+        if (!creds.clientEmail) {
+            __classPrivateFieldGet(this, _GoogleToken_instances, "m", _GoogleToken_ensureEmail).call(this);
+        }
+    }
+    return __classPrivateFieldGet(this, _GoogleToken_instances, "m", _GoogleToken_requestToken).call(this);
+}, _GoogleToken_ensureEmail = function _GoogleToken_ensureEmail() {
+    if (!this.iss) {
+        throw new ErrorWithCode('email is required.', 'MISSING_CREDENTIALS');
+    }
+}, _GoogleToken_revokeTokenAsync = async function _GoogleToken_revokeTokenAsync() {
+    if (!this.accessToken) {
+        throw new Error('No token to revoke.');
+    }
+    const url = GOOGLE_REVOKE_TOKEN_URL + this.accessToken;
+    await this.transporter.request({
+        url,
+        retry: true,
+    });
+    __classPrivateFieldGet(this, _GoogleToken_instances, "m", _GoogleToken_configure).call(this, {
+        email: this.iss,
+        sub: this.sub,
+        key: this.key,
+        keyFile: this.keyFile,
+        scope: this.scope,
+        additionalClaims: this.additionalClaims,
+    });
+}, _GoogleToken_configure = function _GoogleToken_configure(options = {}) {
+    this.keyFile = options.keyFile;
+    this.key = options.key;
+    this.rawToken = undefined;
+    this.iss = options.email || options.iss;
+    this.sub = options.sub;
+    this.additionalClaims = options.additionalClaims;
+    if (typeof options.scope === 'object') {
+        this.scope = options.scope.join(' ');
+    }
+    else {
+        this.scope = options.scope;
+    }
+    this.eagerRefreshThresholdMillis = options.eagerRefreshThresholdMillis;
+    if (options.transporter) {
+        this.transporter = options.transporter;
+    }
+}, _GoogleToken_requestToken = 
+/**
+ * Request the token from Google.
+ */
+async function _GoogleToken_requestToken() {
+    var _a, _b;
+    const iat = Math.floor(new Date().getTime() / 1000);
+    const additionalClaims = this.additionalClaims || {};
+    const payload = Object.assign({
+        iss: this.iss,
+        scope: this.scope,
+        aud: GOOGLE_TOKEN_URL,
+        exp: iat + 3600,
+        iat,
+        sub: this.sub,
+    }, additionalClaims);
+    const signedJWT = jws.sign({
+        header: { alg: 'RS256' },
+        payload,
+        secret: this.key,
+    });
+    try {
+        const r = await this.transporter.request({
+            method: 'POST',
+            url: GOOGLE_TOKEN_URL,
+            data: {
+                grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                assertion: signedJWT,
+            },
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            responseType: 'json',
+            retryConfig: {
+                httpMethodsToRetry: ['POST'],
+            },
+        });
+        this.rawToken = r.data;
+        this.expiresAt =
+            r.data.expires_in === null || r.data.expires_in === undefined
+                ? undefined
+                : (iat + r.data.expires_in) * 1000;
+        return this.rawToken;
+    }
+    catch (e) {
+        this.rawToken = undefined;
+        this.tokenExpires = undefined;
+        const body = e.response && ((_a = e.response) === null || _a === void 0 ? void 0 : _a.data)
+            ? (_b = e.response) === null || _b === void 0 ? void 0 : _b.data
+            : {};
+        if (body.error) {
+            const desc = body.error_description
+                ? `: ${body.error_description}`
+                : '';
+            e.message = `${body.error}${desc}`;
+        }
+        throw e;
+    }
+};
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 1621:
+/***/ ((module) => {
+
+
+
+module.exports = (flag, argv = process.argv) => {
+	const prefix = flag.startsWith('-') ? '' : (flag.length === 1 ? '-' : '--');
+	const position = argv.indexOf(prefix + flag);
+	const terminatorPosition = argv.indexOf('--');
+	return position !== -1 && (terminatorPosition === -1 || position < terminatorPosition);
+};
+
+
+/***/ }),
+
+/***/ 7219:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || function (mod) {
+    if (mod && mod.__esModule) return mod;
+    var result = {};
+    if (mod != null) for (var k in mod) if (k !== "default" && Object.prototype.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
+    __setModuleDefault(result, mod);
+    return result;
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.HttpsProxyAgent = void 0;
+const net = __importStar(__nccwpck_require__(1808));
+const tls = __importStar(__nccwpck_require__(4404));
+const assert_1 = __importDefault(__nccwpck_require__(9491));
+const debug_1 = __importDefault(__nccwpck_require__(8237));
+const agent_base_1 = __nccwpck_require__(694);
+const url_1 = __nccwpck_require__(7310);
+const parse_proxy_response_1 = __nccwpck_require__(595);
+const debug = (0, debug_1.default)('https-proxy-agent');
+/**
+ * The `HttpsProxyAgent` implements an HTTP Agent subclass that connects to
+ * the specified "HTTP(s) proxy server" in order to proxy HTTPS requests.
+ *
+ * Outgoing HTTP requests are first tunneled through the proxy server using the
+ * `CONNECT` HTTP request method to establish a connection to the proxy server,
+ * and then the proxy server connects to the destination target and issues the
+ * HTTP request from the proxy server.
+ *
+ * `https:` requests have their socket connection upgraded to TLS once
+ * the connection to the proxy server has been established.
+ */
+class HttpsProxyAgent extends agent_base_1.Agent {
+    constructor(proxy, opts) {
+        super(opts);
+        this.options = { path: undefined };
+        this.proxy = typeof proxy === 'string' ? new url_1.URL(proxy) : proxy;
+        this.proxyHeaders = opts?.headers ?? {};
+        debug('Creating new HttpsProxyAgent instance: %o', this.proxy.href);
+        // Trim off the brackets from IPv6 addresses
+        const host = (this.proxy.hostname || this.proxy.host).replace(/^\[|\]$/g, '');
+        const port = this.proxy.port
+            ? parseInt(this.proxy.port, 10)
+            : this.proxy.protocol === 'https:'
+                ? 443
+                : 80;
+        this.connectOpts = {
+            // Attempt to negotiate http/1.1 for proxy servers that support http/2
+            ALPNProtocols: ['http/1.1'],
+            ...(opts ? omit(opts, 'headers') : null),
+            host,
+            port,
+        };
+    }
+    /**
+     * Called when the node-core HTTP client library is creating a
+     * new HTTP request.
+     */
+    async connect(req, opts) {
+        const { proxy } = this;
+        if (!opts.host) {
+            throw new TypeError('No "host" provided');
+        }
+        // Create a socket connection to the proxy server.
+        let socket;
+        if (proxy.protocol === 'https:') {
+            debug('Creating `tls.Socket`: %o', this.connectOpts);
+            const servername = this.connectOpts.servername || this.connectOpts.host;
+            socket = tls.connect({
+                ...this.connectOpts,
+                servername,
+            });
+        }
+        else {
+            debug('Creating `net.Socket`: %o', this.connectOpts);
+            socket = net.connect(this.connectOpts);
+        }
+        const headers = typeof this.proxyHeaders === 'function'
+            ? this.proxyHeaders()
+            : { ...this.proxyHeaders };
+        const host = net.isIPv6(opts.host) ? `[${opts.host}]` : opts.host;
+        let payload = `CONNECT ${host}:${opts.port} HTTP/1.1\r\n`;
+        // Inject the `Proxy-Authorization` header if necessary.
+        if (proxy.username || proxy.password) {
+            const auth = `${decodeURIComponent(proxy.username)}:${decodeURIComponent(proxy.password)}`;
+            headers['Proxy-Authorization'] = `Basic ${Buffer.from(auth).toString('base64')}`;
+        }
+        headers.Host = `${host}:${opts.port}`;
+        if (!headers['Proxy-Connection']) {
+            headers['Proxy-Connection'] = this.keepAlive
+                ? 'Keep-Alive'
+                : 'close';
+        }
+        for (const name of Object.keys(headers)) {
+            payload += `${name}: ${headers[name]}\r\n`;
+        }
+        const proxyResponsePromise = (0, parse_proxy_response_1.parseProxyResponse)(socket);
+        socket.write(`${payload}\r\n`);
+        const { connect, buffered } = await proxyResponsePromise;
+        req.emit('proxyConnect', connect);
+        this.emit('proxyConnect', connect, req);
+        if (connect.statusCode === 200) {
+            req.once('socket', resume);
+            if (opts.secureEndpoint) {
+                // The proxy is connecting to a TLS server, so upgrade
+                // this socket connection to a TLS connection.
+                debug('Upgrading socket connection to TLS');
+                const servername = opts.servername || opts.host;
+                return tls.connect({
+                    ...omit(opts, 'host', 'path', 'port'),
+                    socket,
+                    servername,
+                });
+            }
+            return socket;
+        }
+        // Some other status code that's not 200... need to re-play the HTTP
+        // header "data" events onto the socket once the HTTP machinery is
+        // attached so that the node core `http` can parse and handle the
+        // error status code.
+        // Close the original socket, and a new "fake" socket is returned
+        // instead, so that the proxy doesn't get the HTTP request
+        // written to it (which may contain `Authorization` headers or other
+        // sensitive data).
+        //
+        // See: https://hackerone.com/reports/541502
+        socket.destroy();
+        const fakeSocket = new net.Socket({ writable: false });
+        fakeSocket.readable = true;
+        // Need to wait for the "socket" event to re-play the "data" events.
+        req.once('socket', (s) => {
+            debug('Replaying proxy buffer for failed request');
+            (0, assert_1.default)(s.listenerCount('data') > 0);
+            // Replay the "buffered" Buffer onto the fake `socket`, since at
+            // this point the HTTP module machinery has been hooked up for
+            // the user.
+            s.push(buffered);
+            s.push(null);
+        });
+        return fakeSocket;
+    }
+}
+HttpsProxyAgent.protocols = ['http', 'https'];
+exports.HttpsProxyAgent = HttpsProxyAgent;
+function resume(socket) {
+    socket.resume();
+}
+function omit(obj, ...keys) {
+    const ret = {};
+    let key;
+    for (key in obj) {
+        if (!keys.includes(key)) {
+            ret[key] = obj[key];
+        }
+    }
+    return ret;
+}
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 595:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.parseProxyResponse = void 0;
+const debug_1 = __importDefault(__nccwpck_require__(8237));
+const debug = (0, debug_1.default)('https-proxy-agent:parse-proxy-response');
+function parseProxyResponse(socket) {
+    return new Promise((resolve, reject) => {
+        // we need to buffer any HTTP traffic that happens with the proxy before we get
+        // the CONNECT response, so that if the response is anything other than an "200"
+        // response code, then we can re-play the "data" events on the socket once the
+        // HTTP parser is hooked up...
+        let buffersLength = 0;
+        const buffers = [];
+        function read() {
+            const b = socket.read();
+            if (b)
+                ondata(b);
+            else
+                socket.once('readable', read);
+        }
+        function cleanup() {
+            socket.removeListener('end', onend);
+            socket.removeListener('error', onerror);
+            socket.removeListener('readable', read);
+        }
+        function onend() {
+            cleanup();
+            debug('onend');
+            reject(new Error('Proxy connection ended before receiving CONNECT response'));
+        }
+        function onerror(err) {
+            cleanup();
+            debug('onerror %o', err);
+            reject(err);
+        }
+        function ondata(b) {
+            buffers.push(b);
+            buffersLength += b.length;
+            const buffered = Buffer.concat(buffers, buffersLength);
+            const endOfHeaders = buffered.indexOf('\r\n\r\n');
+            if (endOfHeaders === -1) {
+                // keep buffering
+                debug('have not received end of HTTP headers yet...');
+                read();
+                return;
+            }
+            const headerParts = buffered
+                .slice(0, endOfHeaders)
+                .toString('ascii')
+                .split('\r\n');
+            const firstLine = headerParts.shift();
+            if (!firstLine) {
+                socket.destroy();
+                return reject(new Error('No header received from proxy CONNECT response'));
+            }
+            const firstLineParts = firstLine.split(' ');
+            const statusCode = +firstLineParts[1];
+            const statusText = firstLineParts.slice(2).join(' ');
+            const headers = {};
+            for (const header of headerParts) {
+                if (!header)
+                    continue;
+                const firstColon = header.indexOf(':');
+                if (firstColon === -1) {
+                    socket.destroy();
+                    return reject(new Error(`Invalid header from proxy CONNECT response: "${header}"`));
+                }
+                const key = header.slice(0, firstColon).toLowerCase();
+                const value = header.slice(firstColon + 1).trimStart();
+                const current = headers[key];
+                if (typeof current === 'string') {
+                    headers[key] = [current, value];
+                }
+                else if (Array.isArray(current)) {
+                    current.push(value);
+                }
+                else {
+                    headers[key] = value;
+                }
+            }
+            debug('got proxy server response: %o %o', firstLine, headers);
+            cleanup();
+            resolve({
+                connect: {
+                    statusCode,
+                    statusText,
+                    headers,
+                },
+                buffered,
+            });
+        }
+        socket.on('error', onerror);
+        socket.on('end', onend);
+        read();
+    });
+}
+exports.parseProxyResponse = parseProxyResponse;
+//# sourceMappingURL=parse-proxy-response.js.map
 
 /***/ }),
 
@@ -9640,6 +22761,1649 @@ function isPlainObject(o) {
 }
 
 exports.isPlainObject = isPlainObject;
+
+
+/***/ }),
+
+/***/ 1554:
+/***/ ((module) => {
+
+
+
+const isStream = stream =>
+	stream !== null &&
+	typeof stream === 'object' &&
+	typeof stream.pipe === 'function';
+
+isStream.writable = stream =>
+	isStream(stream) &&
+	stream.writable !== false &&
+	typeof stream._write === 'function' &&
+	typeof stream._writableState === 'object';
+
+isStream.readable = stream =>
+	isStream(stream) &&
+	stream.readable !== false &&
+	typeof stream._read === 'function' &&
+	typeof stream._readableState === 'object';
+
+isStream.duplex = stream =>
+	isStream.writable(stream) &&
+	isStream.readable(stream);
+
+isStream.transform = stream =>
+	isStream.duplex(stream) &&
+	typeof stream._transform === 'function';
+
+module.exports = isStream;
+
+
+/***/ }),
+
+/***/ 5031:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var json_stringify = (__nccwpck_require__(8574).stringify);
+var json_parse     = __nccwpck_require__(9099);
+
+module.exports = function(options) {
+    return  {
+        parse: json_parse(options),
+        stringify: json_stringify
+    }
+};
+//create the default method members with no options applied for backwards compatibility
+module.exports.parse = json_parse();
+module.exports.stringify = json_stringify;
+
+
+/***/ }),
+
+/***/ 9099:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var BigNumber = null;
+
+// regexpxs extracted from
+// (c) BSD-3-Clause
+// https://github.com/fastify/secure-json-parse/graphs/contributors and https://github.com/hapijs/bourne/graphs/contributors
+
+const suspectProtoRx = /(?:_|\\u005[Ff])(?:_|\\u005[Ff])(?:p|\\u0070)(?:r|\\u0072)(?:o|\\u006[Ff])(?:t|\\u0074)(?:o|\\u006[Ff])(?:_|\\u005[Ff])(?:_|\\u005[Ff])/;
+const suspectConstructorRx = /(?:c|\\u0063)(?:o|\\u006[Ff])(?:n|\\u006[Ee])(?:s|\\u0073)(?:t|\\u0074)(?:r|\\u0072)(?:u|\\u0075)(?:c|\\u0063)(?:t|\\u0074)(?:o|\\u006[Ff])(?:r|\\u0072)/;
+
+/*
+    json_parse.js
+    2012-06-20
+
+    Public Domain.
+
+    NO WARRANTY EXPRESSED OR IMPLIED. USE AT YOUR OWN RISK.
+
+    This file creates a json_parse function.
+    During create you can (optionally) specify some behavioural switches
+
+        require('json-bigint')(options)
+
+            The optional options parameter holds switches that drive certain
+            aspects of the parsing process:
+            * options.strict = true will warn about duplicate-key usage in the json.
+              The default (strict = false) will silently ignore those and overwrite
+              values for keys that are in duplicate use.
+
+    The resulting function follows this signature:
+        json_parse(text, reviver)
+            This method parses a JSON text to produce an object or array.
+            It can throw a SyntaxError exception.
+
+            The optional reviver parameter is a function that can filter and
+            transform the results. It receives each of the keys and values,
+            and its return value is used instead of the original value.
+            If it returns what it received, then the structure is not modified.
+            If it returns undefined then the member is deleted.
+
+            Example:
+
+            // Parse the text. Values that look like ISO date strings will
+            // be converted to Date objects.
+
+            myData = json_parse(text, function (key, value) {
+                var a;
+                if (typeof value === 'string') {
+                    a =
+/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2}(?:\.\d*)?)Z$/.exec(value);
+                    if (a) {
+                        return new Date(Date.UTC(+a[1], +a[2] - 1, +a[3], +a[4],
+                            +a[5], +a[6]));
+                    }
+                }
+                return value;
+            });
+
+    This is a reference implementation. You are free to copy, modify, or
+    redistribute.
+
+    This code should be minified before deployment.
+    See http://javascript.crockford.com/jsmin.html
+
+    USE YOUR OWN COPY. IT IS EXTREMELY UNWISE TO LOAD CODE FROM SERVERS YOU DO
+    NOT CONTROL.
+*/
+
+/*members "", "\"", "\/", "\\", at, b, call, charAt, f, fromCharCode,
+    hasOwnProperty, message, n, name, prototype, push, r, t, text
+*/
+
+var json_parse = function (options) {
+  'use strict';
+
+  // This is a function that can parse a JSON text, producing a JavaScript
+  // data structure. It is a simple, recursive descent parser. It does not use
+  // eval or regular expressions, so it can be used as a model for implementing
+  // a JSON parser in other languages.
+
+  // We are defining the function inside of another function to avoid creating
+  // global variables.
+
+  // Default options one can override by passing options to the parse()
+  var _options = {
+    strict: false, // not being strict means do not generate syntax errors for "duplicate key"
+    storeAsString: false, // toggles whether the values should be stored as BigNumber (default) or a string
+    alwaysParseAsBig: false, // toggles whether all numbers should be Big
+    useNativeBigInt: false, // toggles whether to use native BigInt instead of bignumber.js
+    protoAction: 'error',
+    constructorAction: 'error',
+  };
+
+  // If there are options, then use them to override the default _options
+  if (options !== undefined && options !== null) {
+    if (options.strict === true) {
+      _options.strict = true;
+    }
+    if (options.storeAsString === true) {
+      _options.storeAsString = true;
+    }
+    _options.alwaysParseAsBig =
+      options.alwaysParseAsBig === true ? options.alwaysParseAsBig : false;
+    _options.useNativeBigInt =
+      options.useNativeBigInt === true ? options.useNativeBigInt : false;
+
+    if (typeof options.constructorAction !== 'undefined') {
+      if (
+        options.constructorAction === 'error' ||
+        options.constructorAction === 'ignore' ||
+        options.constructorAction === 'preserve'
+      ) {
+        _options.constructorAction = options.constructorAction;
+      } else {
+        throw new Error(
+          `Incorrect value for constructorAction option, must be "error", "ignore" or undefined but passed ${options.constructorAction}`
+        );
+      }
+    }
+
+    if (typeof options.protoAction !== 'undefined') {
+      if (
+        options.protoAction === 'error' ||
+        options.protoAction === 'ignore' ||
+        options.protoAction === 'preserve'
+      ) {
+        _options.protoAction = options.protoAction;
+      } else {
+        throw new Error(
+          `Incorrect value for protoAction option, must be "error", "ignore" or undefined but passed ${options.protoAction}`
+        );
+      }
+    }
+  }
+
+  var at, // The index of the current character
+    ch, // The current character
+    escapee = {
+      '"': '"',
+      '\\': '\\',
+      '/': '/',
+      b: '\b',
+      f: '\f',
+      n: '\n',
+      r: '\r',
+      t: '\t',
+    },
+    text,
+    error = function (m) {
+      // Call error when something is wrong.
+
+      throw {
+        name: 'SyntaxError',
+        message: m,
+        at: at,
+        text: text,
+      };
+    },
+    next = function (c) {
+      // If a c parameter is provided, verify that it matches the current character.
+
+      if (c && c !== ch) {
+        error("Expected '" + c + "' instead of '" + ch + "'");
+      }
+
+      // Get the next character. When there are no more characters,
+      // return the empty string.
+
+      ch = text.charAt(at);
+      at += 1;
+      return ch;
+    },
+    number = function () {
+      // Parse a number value.
+
+      var number,
+        string = '';
+
+      if (ch === '-') {
+        string = '-';
+        next('-');
+      }
+      while (ch >= '0' && ch <= '9') {
+        string += ch;
+        next();
+      }
+      if (ch === '.') {
+        string += '.';
+        while (next() && ch >= '0' && ch <= '9') {
+          string += ch;
+        }
+      }
+      if (ch === 'e' || ch === 'E') {
+        string += ch;
+        next();
+        if (ch === '-' || ch === '+') {
+          string += ch;
+          next();
+        }
+        while (ch >= '0' && ch <= '9') {
+          string += ch;
+          next();
+        }
+      }
+      number = +string;
+      if (!isFinite(number)) {
+        error('Bad number');
+      } else {
+        if (BigNumber == null) BigNumber = __nccwpck_require__(7558);
+        //if (number > 9007199254740992 || number < -9007199254740992)
+        // Bignumber has stricter check: everything with length > 15 digits disallowed
+        if (string.length > 15)
+          return _options.storeAsString
+            ? string
+            : _options.useNativeBigInt
+            ? BigInt(string)
+            : new BigNumber(string);
+        else
+          return !_options.alwaysParseAsBig
+            ? number
+            : _options.useNativeBigInt
+            ? BigInt(number)
+            : new BigNumber(number);
+      }
+    },
+    string = function () {
+      // Parse a string value.
+
+      var hex,
+        i,
+        string = '',
+        uffff;
+
+      // When parsing for string values, we must look for " and \ characters.
+
+      if (ch === '"') {
+        var startAt = at;
+        while (next()) {
+          if (ch === '"') {
+            if (at - 1 > startAt) string += text.substring(startAt, at - 1);
+            next();
+            return string;
+          }
+          if (ch === '\\') {
+            if (at - 1 > startAt) string += text.substring(startAt, at - 1);
+            next();
+            if (ch === 'u') {
+              uffff = 0;
+              for (i = 0; i < 4; i += 1) {
+                hex = parseInt(next(), 16);
+                if (!isFinite(hex)) {
+                  break;
+                }
+                uffff = uffff * 16 + hex;
+              }
+              string += String.fromCharCode(uffff);
+            } else if (typeof escapee[ch] === 'string') {
+              string += escapee[ch];
+            } else {
+              break;
+            }
+            startAt = at;
+          }
+        }
+      }
+      error('Bad string');
+    },
+    white = function () {
+      // Skip whitespace.
+
+      while (ch && ch <= ' ') {
+        next();
+      }
+    },
+    word = function () {
+      // true, false, or null.
+
+      switch (ch) {
+        case 't':
+          next('t');
+          next('r');
+          next('u');
+          next('e');
+          return true;
+        case 'f':
+          next('f');
+          next('a');
+          next('l');
+          next('s');
+          next('e');
+          return false;
+        case 'n':
+          next('n');
+          next('u');
+          next('l');
+          next('l');
+          return null;
+      }
+      error("Unexpected '" + ch + "'");
+    },
+    value, // Place holder for the value function.
+    array = function () {
+      // Parse an array value.
+
+      var array = [];
+
+      if (ch === '[') {
+        next('[');
+        white();
+        if (ch === ']') {
+          next(']');
+          return array; // empty array
+        }
+        while (ch) {
+          array.push(value());
+          white();
+          if (ch === ']') {
+            next(']');
+            return array;
+          }
+          next(',');
+          white();
+        }
+      }
+      error('Bad array');
+    },
+    object = function () {
+      // Parse an object value.
+
+      var key,
+        object = Object.create(null);
+
+      if (ch === '{') {
+        next('{');
+        white();
+        if (ch === '}') {
+          next('}');
+          return object; // empty object
+        }
+        while (ch) {
+          key = string();
+          white();
+          next(':');
+          if (
+            _options.strict === true &&
+            Object.hasOwnProperty.call(object, key)
+          ) {
+            error('Duplicate key "' + key + '"');
+          }
+
+          if (suspectProtoRx.test(key) === true) {
+            if (_options.protoAction === 'error') {
+              error('Object contains forbidden prototype property');
+            } else if (_options.protoAction === 'ignore') {
+              value();
+            } else {
+              object[key] = value();
+            }
+          } else if (suspectConstructorRx.test(key) === true) {
+            if (_options.constructorAction === 'error') {
+              error('Object contains forbidden constructor property');
+            } else if (_options.constructorAction === 'ignore') {
+              value();
+            } else {
+              object[key] = value();
+            }
+          } else {
+            object[key] = value();
+          }
+
+          white();
+          if (ch === '}') {
+            next('}');
+            return object;
+          }
+          next(',');
+          white();
+        }
+      }
+      error('Bad object');
+    };
+
+  value = function () {
+    // Parse a JSON value. It could be an object, an array, a string, a number,
+    // or a word.
+
+    white();
+    switch (ch) {
+      case '{':
+        return object();
+      case '[':
+        return array();
+      case '"':
+        return string();
+      case '-':
+        return number();
+      default:
+        return ch >= '0' && ch <= '9' ? number() : word();
+    }
+  };
+
+  // Return the json_parse function. It will have access to all of the above
+  // functions and variables.
+
+  return function (source, reviver) {
+    var result;
+
+    text = source + '';
+    at = 0;
+    ch = ' ';
+    result = value();
+    white();
+    if (ch) {
+      error('Syntax error');
+    }
+
+    // If there is a reviver function, we recursively walk the new structure,
+    // passing each name/value pair to the reviver function for possible
+    // transformation, starting with a temporary root object that holds the result
+    // in an empty key. If there is not a reviver function, we simply return the
+    // result.
+
+    return typeof reviver === 'function'
+      ? (function walk(holder, key) {
+          var k,
+            v,
+            value = holder[key];
+          if (value && typeof value === 'object') {
+            Object.keys(value).forEach(function (k) {
+              v = walk(value, k);
+              if (v !== undefined) {
+                value[k] = v;
+              } else {
+                delete value[k];
+              }
+            });
+          }
+          return reviver.call(holder, key, value);
+        })({ '': result }, '')
+      : result;
+  };
+};
+
+module.exports = json_parse;
+
+
+/***/ }),
+
+/***/ 8574:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var BigNumber = __nccwpck_require__(7558);
+
+/*
+    json2.js
+    2013-05-26
+
+    Public Domain.
+
+    NO WARRANTY EXPRESSED OR IMPLIED. USE AT YOUR OWN RISK.
+
+    See http://www.JSON.org/js.html
+
+
+    This code should be minified before deployment.
+    See http://javascript.crockford.com/jsmin.html
+
+    USE YOUR OWN COPY. IT IS EXTREMELY UNWISE TO LOAD CODE FROM SERVERS YOU DO
+    NOT CONTROL.
+
+
+    This file creates a global JSON object containing two methods: stringify
+    and parse.
+
+        JSON.stringify(value, replacer, space)
+            value       any JavaScript value, usually an object or array.
+
+            replacer    an optional parameter that determines how object
+                        values are stringified for objects. It can be a
+                        function or an array of strings.
+
+            space       an optional parameter that specifies the indentation
+                        of nested structures. If it is omitted, the text will
+                        be packed without extra whitespace. If it is a number,
+                        it will specify the number of spaces to indent at each
+                        level. If it is a string (such as '\t' or '&nbsp;'),
+                        it contains the characters used to indent at each level.
+
+            This method produces a JSON text from a JavaScript value.
+
+            When an object value is found, if the object contains a toJSON
+            method, its toJSON method will be called and the result will be
+            stringified. A toJSON method does not serialize: it returns the
+            value represented by the name/value pair that should be serialized,
+            or undefined if nothing should be serialized. The toJSON method
+            will be passed the key associated with the value, and this will be
+            bound to the value
+
+            For example, this would serialize Dates as ISO strings.
+
+                Date.prototype.toJSON = function (key) {
+                    function f(n) {
+                        // Format integers to have at least two digits.
+                        return n < 10 ? '0' + n : n;
+                    }
+
+                    return this.getUTCFullYear()   + '-' +
+                         f(this.getUTCMonth() + 1) + '-' +
+                         f(this.getUTCDate())      + 'T' +
+                         f(this.getUTCHours())     + ':' +
+                         f(this.getUTCMinutes())   + ':' +
+                         f(this.getUTCSeconds())   + 'Z';
+                };
+
+            You can provide an optional replacer method. It will be passed the
+            key and value of each member, with this bound to the containing
+            object. The value that is returned from your method will be
+            serialized. If your method returns undefined, then the member will
+            be excluded from the serialization.
+
+            If the replacer parameter is an array of strings, then it will be
+            used to select the members to be serialized. It filters the results
+            such that only members with keys listed in the replacer array are
+            stringified.
+
+            Values that do not have JSON representations, such as undefined or
+            functions, will not be serialized. Such values in objects will be
+            dropped; in arrays they will be replaced with null. You can use
+            a replacer function to replace those with JSON values.
+            JSON.stringify(undefined) returns undefined.
+
+            The optional space parameter produces a stringification of the
+            value that is filled with line breaks and indentation to make it
+            easier to read.
+
+            If the space parameter is a non-empty string, then that string will
+            be used for indentation. If the space parameter is a number, then
+            the indentation will be that many spaces.
+
+            Example:
+
+            text = JSON.stringify(['e', {pluribus: 'unum'}]);
+            // text is '["e",{"pluribus":"unum"}]'
+
+
+            text = JSON.stringify(['e', {pluribus: 'unum'}], null, '\t');
+            // text is '[\n\t"e",\n\t{\n\t\t"pluribus": "unum"\n\t}\n]'
+
+            text = JSON.stringify([new Date()], function (key, value) {
+                return this[key] instanceof Date ?
+                    'Date(' + this[key] + ')' : value;
+            });
+            // text is '["Date(---current time---)"]'
+
+
+        JSON.parse(text, reviver)
+            This method parses a JSON text to produce an object or array.
+            It can throw a SyntaxError exception.
+
+            The optional reviver parameter is a function that can filter and
+            transform the results. It receives each of the keys and values,
+            and its return value is used instead of the original value.
+            If it returns what it received, then the structure is not modified.
+            If it returns undefined then the member is deleted.
+
+            Example:
+
+            // Parse the text. Values that look like ISO date strings will
+            // be converted to Date objects.
+
+            myData = JSON.parse(text, function (key, value) {
+                var a;
+                if (typeof value === 'string') {
+                    a =
+/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2}(?:\.\d*)?)Z$/.exec(value);
+                    if (a) {
+                        return new Date(Date.UTC(+a[1], +a[2] - 1, +a[3], +a[4],
+                            +a[5], +a[6]));
+                    }
+                }
+                return value;
+            });
+
+            myData = JSON.parse('["Date(09/09/2001)"]', function (key, value) {
+                var d;
+                if (typeof value === 'string' &&
+                        value.slice(0, 5) === 'Date(' &&
+                        value.slice(-1) === ')') {
+                    d = new Date(value.slice(5, -1));
+                    if (d) {
+                        return d;
+                    }
+                }
+                return value;
+            });
+
+
+    This is a reference implementation. You are free to copy, modify, or
+    redistribute.
+*/
+
+/*jslint evil: true, regexp: true */
+
+/*members "", "\b", "\t", "\n", "\f", "\r", "\"", JSON, "\\", apply,
+    call, charCodeAt, getUTCDate, getUTCFullYear, getUTCHours,
+    getUTCMinutes, getUTCMonth, getUTCSeconds, hasOwnProperty, join,
+    lastIndex, length, parse, prototype, push, replace, slice, stringify,
+    test, toJSON, toString, valueOf
+*/
+
+
+// Create a JSON object only if one does not already exist. We create the
+// methods in a closure to avoid creating global variables.
+
+var JSON = module.exports;
+
+(function () {
+    'use strict';
+
+    function f(n) {
+        // Format integers to have at least two digits.
+        return n < 10 ? '0' + n : n;
+    }
+
+    var cx = /[\u0000\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g,
+        escapable = /[\\\"\x00-\x1f\x7f-\x9f\u00ad\u0600-\u0604\u070f\u17b4\u17b5\u200c-\u200f\u2028-\u202f\u2060-\u206f\ufeff\ufff0-\uffff]/g,
+        gap,
+        indent,
+        meta = {    // table of character substitutions
+            '\b': '\\b',
+            '\t': '\\t',
+            '\n': '\\n',
+            '\f': '\\f',
+            '\r': '\\r',
+            '"' : '\\"',
+            '\\': '\\\\'
+        },
+        rep;
+
+
+    function quote(string) {
+
+// If the string contains no control characters, no quote characters, and no
+// backslash characters, then we can safely slap some quotes around it.
+// Otherwise we must also replace the offending characters with safe escape
+// sequences.
+
+        escapable.lastIndex = 0;
+        return escapable.test(string) ? '"' + string.replace(escapable, function (a) {
+            var c = meta[a];
+            return typeof c === 'string'
+                ? c
+                : '\\u' + ('0000' + a.charCodeAt(0).toString(16)).slice(-4);
+        }) + '"' : '"' + string + '"';
+    }
+
+
+    function str(key, holder) {
+
+// Produce a string from holder[key].
+
+        var i,          // The loop counter.
+            k,          // The member key.
+            v,          // The member value.
+            length,
+            mind = gap,
+            partial,
+            value = holder[key],
+            isBigNumber = value != null && (value instanceof BigNumber || BigNumber.isBigNumber(value));
+
+// If the value has a toJSON method, call it to obtain a replacement value.
+
+        if (value && typeof value === 'object' &&
+                typeof value.toJSON === 'function') {
+            value = value.toJSON(key);
+        }
+
+// If we were called with a replacer function, then call the replacer to
+// obtain a replacement value.
+
+        if (typeof rep === 'function') {
+            value = rep.call(holder, key, value);
+        }
+
+// What happens next depends on the value's type.
+
+        switch (typeof value) {
+        case 'string':
+            if (isBigNumber) {
+                return value;
+            } else {
+                return quote(value);
+            }
+
+        case 'number':
+
+// JSON numbers must be finite. Encode non-finite numbers as null.
+
+            return isFinite(value) ? String(value) : 'null';
+
+        case 'boolean':
+        case 'null':
+        case 'bigint':
+
+// If the value is a boolean or null, convert it to a string. Note:
+// typeof null does not produce 'null'. The case is included here in
+// the remote chance that this gets fixed someday.
+
+            return String(value);
+
+// If the type is 'object', we might be dealing with an object or an array or
+// null.
+
+        case 'object':
+
+// Due to a specification blunder in ECMAScript, typeof null is 'object',
+// so watch out for that case.
+
+            if (!value) {
+                return 'null';
+            }
+
+// Make an array to hold the partial results of stringifying this object value.
+
+            gap += indent;
+            partial = [];
+
+// Is the value an array?
+
+            if (Object.prototype.toString.apply(value) === '[object Array]') {
+
+// The value is an array. Stringify every element. Use null as a placeholder
+// for non-JSON values.
+
+                length = value.length;
+                for (i = 0; i < length; i += 1) {
+                    partial[i] = str(i, value) || 'null';
+                }
+
+// Join all of the elements together, separated with commas, and wrap them in
+// brackets.
+
+                v = partial.length === 0
+                    ? '[]'
+                    : gap
+                    ? '[\n' + gap + partial.join(',\n' + gap) + '\n' + mind + ']'
+                    : '[' + partial.join(',') + ']';
+                gap = mind;
+                return v;
+            }
+
+// If the replacer is an array, use it to select the members to be stringified.
+
+            if (rep && typeof rep === 'object') {
+                length = rep.length;
+                for (i = 0; i < length; i += 1) {
+                    if (typeof rep[i] === 'string') {
+                        k = rep[i];
+                        v = str(k, value);
+                        if (v) {
+                            partial.push(quote(k) + (gap ? ': ' : ':') + v);
+                        }
+                    }
+                }
+            } else {
+
+// Otherwise, iterate through all of the keys in the object.
+
+                Object.keys(value).forEach(function(k) {
+                    var v = str(k, value);
+                    if (v) {
+                        partial.push(quote(k) + (gap ? ': ' : ':') + v);
+                    }
+                });
+            }
+
+// Join all of the member texts together, separated with commas,
+// and wrap them in braces.
+
+            v = partial.length === 0
+                ? '{}'
+                : gap
+                ? '{\n' + gap + partial.join(',\n' + gap) + '\n' + mind + '}'
+                : '{' + partial.join(',') + '}';
+            gap = mind;
+            return v;
+        }
+    }
+
+// If the JSON object does not yet have a stringify method, give it one.
+
+    if (typeof JSON.stringify !== 'function') {
+        JSON.stringify = function (value, replacer, space) {
+
+// The stringify method takes a value and an optional replacer, and an optional
+// space parameter, and returns a JSON text. The replacer can be a function
+// that can replace values, or an array of strings that will select the keys.
+// A default replacer method can be provided. Use of the space parameter can
+// produce text that is more easily readable.
+
+            var i;
+            gap = '';
+            indent = '';
+
+// If the space parameter is a number, make an indent string containing that
+// many spaces.
+
+            if (typeof space === 'number') {
+                for (i = 0; i < space; i += 1) {
+                    indent += ' ';
+                }
+
+// If the space parameter is a string, it will be used as the indent string.
+
+            } else if (typeof space === 'string') {
+                indent = space;
+            }
+
+// If there is a replacer, it must be a function or an array.
+// Otherwise, throw an error.
+
+            rep = replacer;
+            if (replacer && typeof replacer !== 'function' &&
+                    (typeof replacer !== 'object' ||
+                    typeof replacer.length !== 'number')) {
+                throw new Error('JSON.stringify');
+            }
+
+// Make a fake root object containing our value under the key of ''.
+// Return the result of stringifying the value.
+
+            return str('', {'': value});
+        };
+    }
+}());
+
+
+/***/ }),
+
+/***/ 6010:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+var bufferEqual = __nccwpck_require__(9239);
+var Buffer = (__nccwpck_require__(1867).Buffer);
+var crypto = __nccwpck_require__(6113);
+var formatEcdsa = __nccwpck_require__(1728);
+var util = __nccwpck_require__(3837);
+
+var MSG_INVALID_ALGORITHM = '"%s" is not a valid algorithm.\n  Supported algorithms are:\n  "HS256", "HS384", "HS512", "RS256", "RS384", "RS512", "PS256", "PS384", "PS512", "ES256", "ES384", "ES512" and "none".'
+var MSG_INVALID_SECRET = 'secret must be a string or buffer';
+var MSG_INVALID_VERIFIER_KEY = 'key must be a string or a buffer';
+var MSG_INVALID_SIGNER_KEY = 'key must be a string, a buffer or an object';
+
+var supportsKeyObjects = typeof crypto.createPublicKey === 'function';
+if (supportsKeyObjects) {
+  MSG_INVALID_VERIFIER_KEY += ' or a KeyObject';
+  MSG_INVALID_SECRET += 'or a KeyObject';
+}
+
+function checkIsPublicKey(key) {
+  if (Buffer.isBuffer(key)) {
+    return;
+  }
+
+  if (typeof key === 'string') {
+    return;
+  }
+
+  if (!supportsKeyObjects) {
+    throw typeError(MSG_INVALID_VERIFIER_KEY);
+  }
+
+  if (typeof key !== 'object') {
+    throw typeError(MSG_INVALID_VERIFIER_KEY);
+  }
+
+  if (typeof key.type !== 'string') {
+    throw typeError(MSG_INVALID_VERIFIER_KEY);
+  }
+
+  if (typeof key.asymmetricKeyType !== 'string') {
+    throw typeError(MSG_INVALID_VERIFIER_KEY);
+  }
+
+  if (typeof key.export !== 'function') {
+    throw typeError(MSG_INVALID_VERIFIER_KEY);
+  }
+};
+
+function checkIsPrivateKey(key) {
+  if (Buffer.isBuffer(key)) {
+    return;
+  }
+
+  if (typeof key === 'string') {
+    return;
+  }
+
+  if (typeof key === 'object') {
+    return;
+  }
+
+  throw typeError(MSG_INVALID_SIGNER_KEY);
+};
+
+function checkIsSecretKey(key) {
+  if (Buffer.isBuffer(key)) {
+    return;
+  }
+
+  if (typeof key === 'string') {
+    return key;
+  }
+
+  if (!supportsKeyObjects) {
+    throw typeError(MSG_INVALID_SECRET);
+  }
+
+  if (typeof key !== 'object') {
+    throw typeError(MSG_INVALID_SECRET);
+  }
+
+  if (key.type !== 'secret') {
+    throw typeError(MSG_INVALID_SECRET);
+  }
+
+  if (typeof key.export !== 'function') {
+    throw typeError(MSG_INVALID_SECRET);
+  }
+}
+
+function fromBase64(base64) {
+  return base64
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
+
+function toBase64(base64url) {
+  base64url = base64url.toString();
+
+  var padding = 4 - base64url.length % 4;
+  if (padding !== 4) {
+    for (var i = 0; i < padding; ++i) {
+      base64url += '=';
+    }
+  }
+
+  return base64url
+    .replace(/\-/g, '+')
+    .replace(/_/g, '/');
+}
+
+function typeError(template) {
+  var args = [].slice.call(arguments, 1);
+  var errMsg = util.format.bind(util, template).apply(null, args);
+  return new TypeError(errMsg);
+}
+
+function bufferOrString(obj) {
+  return Buffer.isBuffer(obj) || typeof obj === 'string';
+}
+
+function normalizeInput(thing) {
+  if (!bufferOrString(thing))
+    thing = JSON.stringify(thing);
+  return thing;
+}
+
+function createHmacSigner(bits) {
+  return function sign(thing, secret) {
+    checkIsSecretKey(secret);
+    thing = normalizeInput(thing);
+    var hmac = crypto.createHmac('sha' + bits, secret);
+    var sig = (hmac.update(thing), hmac.digest('base64'))
+    return fromBase64(sig);
+  }
+}
+
+function createHmacVerifier(bits) {
+  return function verify(thing, signature, secret) {
+    var computedSig = createHmacSigner(bits)(thing, secret);
+    return bufferEqual(Buffer.from(signature), Buffer.from(computedSig));
+  }
+}
+
+function createKeySigner(bits) {
+ return function sign(thing, privateKey) {
+    checkIsPrivateKey(privateKey);
+    thing = normalizeInput(thing);
+    // Even though we are specifying "RSA" here, this works with ECDSA
+    // keys as well.
+    var signer = crypto.createSign('RSA-SHA' + bits);
+    var sig = (signer.update(thing), signer.sign(privateKey, 'base64'));
+    return fromBase64(sig);
+  }
+}
+
+function createKeyVerifier(bits) {
+  return function verify(thing, signature, publicKey) {
+    checkIsPublicKey(publicKey);
+    thing = normalizeInput(thing);
+    signature = toBase64(signature);
+    var verifier = crypto.createVerify('RSA-SHA' + bits);
+    verifier.update(thing);
+    return verifier.verify(publicKey, signature, 'base64');
+  }
+}
+
+function createPSSKeySigner(bits) {
+  return function sign(thing, privateKey) {
+    checkIsPrivateKey(privateKey);
+    thing = normalizeInput(thing);
+    var signer = crypto.createSign('RSA-SHA' + bits);
+    var sig = (signer.update(thing), signer.sign({
+      key: privateKey,
+      padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
+      saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST
+    }, 'base64'));
+    return fromBase64(sig);
+  }
+}
+
+function createPSSKeyVerifier(bits) {
+  return function verify(thing, signature, publicKey) {
+    checkIsPublicKey(publicKey);
+    thing = normalizeInput(thing);
+    signature = toBase64(signature);
+    var verifier = crypto.createVerify('RSA-SHA' + bits);
+    verifier.update(thing);
+    return verifier.verify({
+      key: publicKey,
+      padding: crypto.constants.RSA_PKCS1_PSS_PADDING,
+      saltLength: crypto.constants.RSA_PSS_SALTLEN_DIGEST
+    }, signature, 'base64');
+  }
+}
+
+function createECDSASigner(bits) {
+  var inner = createKeySigner(bits);
+  return function sign() {
+    var signature = inner.apply(null, arguments);
+    signature = formatEcdsa.derToJose(signature, 'ES' + bits);
+    return signature;
+  };
+}
+
+function createECDSAVerifer(bits) {
+  var inner = createKeyVerifier(bits);
+  return function verify(thing, signature, publicKey) {
+    signature = formatEcdsa.joseToDer(signature, 'ES' + bits).toString('base64');
+    var result = inner(thing, signature, publicKey);
+    return result;
+  };
+}
+
+function createNoneSigner() {
+  return function sign() {
+    return '';
+  }
+}
+
+function createNoneVerifier() {
+  return function verify(thing, signature) {
+    return signature === '';
+  }
+}
+
+module.exports = function jwa(algorithm) {
+  var signerFactories = {
+    hs: createHmacSigner,
+    rs: createKeySigner,
+    ps: createPSSKeySigner,
+    es: createECDSASigner,
+    none: createNoneSigner,
+  }
+  var verifierFactories = {
+    hs: createHmacVerifier,
+    rs: createKeyVerifier,
+    ps: createPSSKeyVerifier,
+    es: createECDSAVerifer,
+    none: createNoneVerifier,
+  }
+  var match = algorithm.match(/^(RS|PS|ES|HS)(256|384|512)$|^(none)$/);
+  if (!match)
+    throw typeError(MSG_INVALID_ALGORITHM, algorithm);
+  var algo = (match[1] || match[3]).toLowerCase();
+  var bits = match[2];
+
+  return {
+    sign: signerFactories[algo](bits),
+    verify: verifierFactories[algo](bits),
+  }
+};
+
+
+/***/ }),
+
+/***/ 4636:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+/*global exports*/
+var SignStream = __nccwpck_require__(3334);
+var VerifyStream = __nccwpck_require__(5522);
+
+var ALGORITHMS = [
+  'HS256', 'HS384', 'HS512',
+  'RS256', 'RS384', 'RS512',
+  'PS256', 'PS384', 'PS512',
+  'ES256', 'ES384', 'ES512'
+];
+
+exports.ALGORITHMS = ALGORITHMS;
+exports.sign = SignStream.sign;
+exports.verify = VerifyStream.verify;
+exports.decode = VerifyStream.decode;
+exports.isValid = VerifyStream.isValid;
+exports.createSign = function createSign(opts) {
+  return new SignStream(opts);
+};
+exports.createVerify = function createVerify(opts) {
+  return new VerifyStream(opts);
+};
+
+
+/***/ }),
+
+/***/ 1868:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+/*global module, process*/
+var Buffer = (__nccwpck_require__(1867).Buffer);
+var Stream = __nccwpck_require__(2781);
+var util = __nccwpck_require__(3837);
+
+function DataStream(data) {
+  this.buffer = null;
+  this.writable = true;
+  this.readable = true;
+
+  // No input
+  if (!data) {
+    this.buffer = Buffer.alloc(0);
+    return this;
+  }
+
+  // Stream
+  if (typeof data.pipe === 'function') {
+    this.buffer = Buffer.alloc(0);
+    data.pipe(this);
+    return this;
+  }
+
+  // Buffer or String
+  // or Object (assumedly a passworded key)
+  if (data.length || typeof data === 'object') {
+    this.buffer = data;
+    this.writable = false;
+    process.nextTick(function () {
+      this.emit('end', data);
+      this.readable = false;
+      this.emit('close');
+    }.bind(this));
+    return this;
+  }
+
+  throw new TypeError('Unexpected data type ('+ typeof data + ')');
+}
+util.inherits(DataStream, Stream);
+
+DataStream.prototype.write = function write(data) {
+  this.buffer = Buffer.concat([this.buffer, Buffer.from(data)]);
+  this.emit('data', data);
+};
+
+DataStream.prototype.end = function end(data) {
+  if (data)
+    this.write(data);
+  this.emit('end', data);
+  this.emit('close');
+  this.writable = false;
+  this.readable = false;
+};
+
+module.exports = DataStream;
+
+
+/***/ }),
+
+/***/ 3334:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+/*global module*/
+var Buffer = (__nccwpck_require__(1867).Buffer);
+var DataStream = __nccwpck_require__(1868);
+var jwa = __nccwpck_require__(6010);
+var Stream = __nccwpck_require__(2781);
+var toString = __nccwpck_require__(5292);
+var util = __nccwpck_require__(3837);
+
+function base64url(string, encoding) {
+  return Buffer
+    .from(string, encoding)
+    .toString('base64')
+    .replace(/=/g, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+}
+
+function jwsSecuredInput(header, payload, encoding) {
+  encoding = encoding || 'utf8';
+  var encodedHeader = base64url(toString(header), 'binary');
+  var encodedPayload = base64url(toString(payload), encoding);
+  return util.format('%s.%s', encodedHeader, encodedPayload);
+}
+
+function jwsSign(opts) {
+  var header = opts.header;
+  var payload = opts.payload;
+  var secretOrKey = opts.secret || opts.privateKey;
+  var encoding = opts.encoding;
+  var algo = jwa(header.alg);
+  var securedInput = jwsSecuredInput(header, payload, encoding);
+  var signature = algo.sign(securedInput, secretOrKey);
+  return util.format('%s.%s', securedInput, signature);
+}
+
+function SignStream(opts) {
+  var secret = opts.secret||opts.privateKey||opts.key;
+  var secretStream = new DataStream(secret);
+  this.readable = true;
+  this.header = opts.header;
+  this.encoding = opts.encoding;
+  this.secret = this.privateKey = this.key = secretStream;
+  this.payload = new DataStream(opts.payload);
+  this.secret.once('close', function () {
+    if (!this.payload.writable && this.readable)
+      this.sign();
+  }.bind(this));
+
+  this.payload.once('close', function () {
+    if (!this.secret.writable && this.readable)
+      this.sign();
+  }.bind(this));
+}
+util.inherits(SignStream, Stream);
+
+SignStream.prototype.sign = function sign() {
+  try {
+    var signature = jwsSign({
+      header: this.header,
+      payload: this.payload.buffer,
+      secret: this.secret.buffer,
+      encoding: this.encoding
+    });
+    this.emit('done', signature);
+    this.emit('data', signature);
+    this.emit('end');
+    this.readable = false;
+    return signature;
+  } catch (e) {
+    this.readable = false;
+    this.emit('error', e);
+    this.emit('close');
+  }
+};
+
+SignStream.sign = jwsSign;
+
+module.exports = SignStream;
+
+
+/***/ }),
+
+/***/ 5292:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+/*global module*/
+var Buffer = (__nccwpck_require__(4300).Buffer);
+
+module.exports = function toString(obj) {
+  if (typeof obj === 'string')
+    return obj;
+  if (typeof obj === 'number' || Buffer.isBuffer(obj))
+    return obj.toString();
+  return JSON.stringify(obj);
+};
+
+
+/***/ }),
+
+/***/ 5522:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+/*global module*/
+var Buffer = (__nccwpck_require__(1867).Buffer);
+var DataStream = __nccwpck_require__(1868);
+var jwa = __nccwpck_require__(6010);
+var Stream = __nccwpck_require__(2781);
+var toString = __nccwpck_require__(5292);
+var util = __nccwpck_require__(3837);
+var JWS_REGEX = /^[a-zA-Z0-9\-_]+?\.[a-zA-Z0-9\-_]+?\.([a-zA-Z0-9\-_]+)?$/;
+
+function isObject(thing) {
+  return Object.prototype.toString.call(thing) === '[object Object]';
+}
+
+function safeJsonParse(thing) {
+  if (isObject(thing))
+    return thing;
+  try { return JSON.parse(thing); }
+  catch (e) { return undefined; }
+}
+
+function headerFromJWS(jwsSig) {
+  var encodedHeader = jwsSig.split('.', 1)[0];
+  return safeJsonParse(Buffer.from(encodedHeader, 'base64').toString('binary'));
+}
+
+function securedInputFromJWS(jwsSig) {
+  return jwsSig.split('.', 2).join('.');
+}
+
+function signatureFromJWS(jwsSig) {
+  return jwsSig.split('.')[2];
+}
+
+function payloadFromJWS(jwsSig, encoding) {
+  encoding = encoding || 'utf8';
+  var payload = jwsSig.split('.')[1];
+  return Buffer.from(payload, 'base64').toString(encoding);
+}
+
+function isValidJws(string) {
+  return JWS_REGEX.test(string) && !!headerFromJWS(string);
+}
+
+function jwsVerify(jwsSig, algorithm, secretOrKey) {
+  if (!algorithm) {
+    var err = new Error("Missing algorithm parameter for jws.verify");
+    err.code = "MISSING_ALGORITHM";
+    throw err;
+  }
+  jwsSig = toString(jwsSig);
+  var signature = signatureFromJWS(jwsSig);
+  var securedInput = securedInputFromJWS(jwsSig);
+  var algo = jwa(algorithm);
+  return algo.verify(securedInput, signature, secretOrKey);
+}
+
+function jwsDecode(jwsSig, opts) {
+  opts = opts || {};
+  jwsSig = toString(jwsSig);
+
+  if (!isValidJws(jwsSig))
+    return null;
+
+  var header = headerFromJWS(jwsSig);
+
+  if (!header)
+    return null;
+
+  var payload = payloadFromJWS(jwsSig);
+  if (header.typ === 'JWT' || opts.json)
+    payload = JSON.parse(payload, opts.encoding);
+
+  return {
+    header: header,
+    payload: payload,
+    signature: signatureFromJWS(jwsSig)
+  };
+}
+
+function VerifyStream(opts) {
+  opts = opts || {};
+  var secretOrKey = opts.secret||opts.publicKey||opts.key;
+  var secretStream = new DataStream(secretOrKey);
+  this.readable = true;
+  this.algorithm = opts.algorithm;
+  this.encoding = opts.encoding;
+  this.secret = this.publicKey = this.key = secretStream;
+  this.signature = new DataStream(opts.signature);
+  this.secret.once('close', function () {
+    if (!this.signature.writable && this.readable)
+      this.verify();
+  }.bind(this));
+
+  this.signature.once('close', function () {
+    if (!this.secret.writable && this.readable)
+      this.verify();
+  }.bind(this));
+}
+util.inherits(VerifyStream, Stream);
+VerifyStream.prototype.verify = function verify() {
+  try {
+    var valid = jwsVerify(this.signature.buffer, this.algorithm, this.key.buffer);
+    var obj = jwsDecode(this.signature.buffer, this.encoding);
+    this.emit('done', valid, obj);
+    this.emit('data', valid);
+    this.emit('end');
+    this.readable = false;
+    return valid;
+  } catch (e) {
+    this.readable = false;
+    this.emit('error', e);
+    this.emit('close');
+  }
+};
+
+VerifyStream.decode = jwsDecode;
+VerifyStream.isValid = isValidJws;
+VerifyStream.verify = jwsVerify;
+
+module.exports = VerifyStream;
+
+
+/***/ }),
+
+/***/ 900:
+/***/ ((module) => {
+
+/**
+ * Helpers.
+ */
+
+var s = 1000;
+var m = s * 60;
+var h = m * 60;
+var d = h * 24;
+var w = d * 7;
+var y = d * 365.25;
+
+/**
+ * Parse or format the given `val`.
+ *
+ * Options:
+ *
+ *  - `long` verbose formatting [false]
+ *
+ * @param {String|Number} val
+ * @param {Object} [options]
+ * @throws {Error} throw an error if val is not a non-empty string or a number
+ * @return {String|Number}
+ * @api public
+ */
+
+module.exports = function (val, options) {
+  options = options || {};
+  var type = typeof val;
+  if (type === 'string' && val.length > 0) {
+    return parse(val);
+  } else if (type === 'number' && isFinite(val)) {
+    return options.long ? fmtLong(val) : fmtShort(val);
+  }
+  throw new Error(
+    'val is not a non-empty string or a valid number. val=' +
+      JSON.stringify(val)
+  );
+};
+
+/**
+ * Parse the given `str` and return milliseconds.
+ *
+ * @param {String} str
+ * @return {Number}
+ * @api private
+ */
+
+function parse(str) {
+  str = String(str);
+  if (str.length > 100) {
+    return;
+  }
+  var match = /^(-?(?:\d+)?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)?$/i.exec(
+    str
+  );
+  if (!match) {
+    return;
+  }
+  var n = parseFloat(match[1]);
+  var type = (match[2] || 'ms').toLowerCase();
+  switch (type) {
+    case 'years':
+    case 'year':
+    case 'yrs':
+    case 'yr':
+    case 'y':
+      return n * y;
+    case 'weeks':
+    case 'week':
+    case 'w':
+      return n * w;
+    case 'days':
+    case 'day':
+    case 'd':
+      return n * d;
+    case 'hours':
+    case 'hour':
+    case 'hrs':
+    case 'hr':
+    case 'h':
+      return n * h;
+    case 'minutes':
+    case 'minute':
+    case 'mins':
+    case 'min':
+    case 'm':
+      return n * m;
+    case 'seconds':
+    case 'second':
+    case 'secs':
+    case 'sec':
+    case 's':
+      return n * s;
+    case 'milliseconds':
+    case 'millisecond':
+    case 'msecs':
+    case 'msec':
+    case 'ms':
+      return n;
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Short format for `ms`.
+ *
+ * @param {Number} ms
+ * @return {String}
+ * @api private
+ */
+
+function fmtShort(ms) {
+  var msAbs = Math.abs(ms);
+  if (msAbs >= d) {
+    return Math.round(ms / d) + 'd';
+  }
+  if (msAbs >= h) {
+    return Math.round(ms / h) + 'h';
+  }
+  if (msAbs >= m) {
+    return Math.round(ms / m) + 'm';
+  }
+  if (msAbs >= s) {
+    return Math.round(ms / s) + 's';
+  }
+  return ms + 'ms';
+}
+
+/**
+ * Long format for `ms`.
+ *
+ * @param {Number} ms
+ * @return {String}
+ * @api private
+ */
+
+function fmtLong(ms) {
+  var msAbs = Math.abs(ms);
+  if (msAbs >= d) {
+    return plural(ms, msAbs, d, 'day');
+  }
+  if (msAbs >= h) {
+    return plural(ms, msAbs, h, 'hour');
+  }
+  if (msAbs >= m) {
+    return plural(ms, msAbs, m, 'minute');
+  }
+  if (msAbs >= s) {
+    return plural(ms, msAbs, s, 'second');
+  }
+  return ms + ' ms';
+}
+
+/**
+ * Pluralization helper.
+ */
+
+function plural(ms, msAbs, n, name) {
+  var isPlural = msAbs >= n * 1.5;
+  return Math.round(ms / n) + ' ' + name + (isPlural ? 's' : '');
+}
 
 
 /***/ }),
@@ -11981,6 +26745,78 @@ function _typeof(obj){"@babel/helpers - typeof";return _typeof="function"==typeo
 
 /***/ }),
 
+/***/ 1867:
+/***/ ((module, exports, __nccwpck_require__) => {
+
+/*! safe-buffer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> */
+/* eslint-disable node/no-deprecated-api */
+var buffer = __nccwpck_require__(4300)
+var Buffer = buffer.Buffer
+
+// alternative to using Object.keys for old browsers
+function copyProps (src, dst) {
+  for (var key in src) {
+    dst[key] = src[key]
+  }
+}
+if (Buffer.from && Buffer.alloc && Buffer.allocUnsafe && Buffer.allocUnsafeSlow) {
+  module.exports = buffer
+} else {
+  // Copy properties from require('buffer')
+  copyProps(buffer, exports)
+  exports.Buffer = SafeBuffer
+}
+
+function SafeBuffer (arg, encodingOrOffset, length) {
+  return Buffer(arg, encodingOrOffset, length)
+}
+
+SafeBuffer.prototype = Object.create(Buffer.prototype)
+
+// Copy static methods from Buffer
+copyProps(Buffer, SafeBuffer)
+
+SafeBuffer.from = function (arg, encodingOrOffset, length) {
+  if (typeof arg === 'number') {
+    throw new TypeError('Argument must not be a number')
+  }
+  return Buffer(arg, encodingOrOffset, length)
+}
+
+SafeBuffer.alloc = function (size, fill, encoding) {
+  if (typeof size !== 'number') {
+    throw new TypeError('Argument must be a number')
+  }
+  var buf = Buffer(size)
+  if (fill !== undefined) {
+    if (typeof encoding === 'string') {
+      buf.fill(fill, encoding)
+    } else {
+      buf.fill(fill)
+    }
+  } else {
+    buf.fill(0)
+  }
+  return buf
+}
+
+SafeBuffer.allocUnsafe = function (size) {
+  if (typeof size !== 'number') {
+    throw new TypeError('Argument must be a number')
+  }
+  return Buffer(size)
+}
+
+SafeBuffer.allocUnsafeSlow = function (size) {
+  if (typeof size !== 'number') {
+    throw new TypeError('Argument must be a number')
+  }
+  return buffer.SlowBuffer(size)
+}
+
+
+/***/ }),
+
 /***/ 707:
 /***/ ((module) => {
 
@@ -12110,6 +26946,148 @@ module.exports["default"] = parse
 module.exports.parse = parse
 module.exports.safeParse = safeParse
 module.exports.scan = filter
+
+
+/***/ }),
+
+/***/ 9318:
+/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
+
+
+const os = __nccwpck_require__(2037);
+const tty = __nccwpck_require__(6224);
+const hasFlag = __nccwpck_require__(1621);
+
+const {env} = process;
+
+let forceColor;
+if (hasFlag('no-color') ||
+	hasFlag('no-colors') ||
+	hasFlag('color=false') ||
+	hasFlag('color=never')) {
+	forceColor = 0;
+} else if (hasFlag('color') ||
+	hasFlag('colors') ||
+	hasFlag('color=true') ||
+	hasFlag('color=always')) {
+	forceColor = 1;
+}
+
+if ('FORCE_COLOR' in env) {
+	if (env.FORCE_COLOR === 'true') {
+		forceColor = 1;
+	} else if (env.FORCE_COLOR === 'false') {
+		forceColor = 0;
+	} else {
+		forceColor = env.FORCE_COLOR.length === 0 ? 1 : Math.min(parseInt(env.FORCE_COLOR, 10), 3);
+	}
+}
+
+function translateLevel(level) {
+	if (level === 0) {
+		return false;
+	}
+
+	return {
+		level,
+		hasBasic: true,
+		has256: level >= 2,
+		has16m: level >= 3
+	};
+}
+
+function supportsColor(haveStream, streamIsTTY) {
+	if (forceColor === 0) {
+		return 0;
+	}
+
+	if (hasFlag('color=16m') ||
+		hasFlag('color=full') ||
+		hasFlag('color=truecolor')) {
+		return 3;
+	}
+
+	if (hasFlag('color=256')) {
+		return 2;
+	}
+
+	if (haveStream && !streamIsTTY && forceColor === undefined) {
+		return 0;
+	}
+
+	const min = forceColor || 0;
+
+	if (env.TERM === 'dumb') {
+		return min;
+	}
+
+	if (process.platform === 'win32') {
+		// Windows 10 build 10586 is the first Windows release that supports 256 colors.
+		// Windows 10 build 14931 is the first release that supports 16m/TrueColor.
+		const osRelease = os.release().split('.');
+		if (
+			Number(osRelease[0]) >= 10 &&
+			Number(osRelease[2]) >= 10586
+		) {
+			return Number(osRelease[2]) >= 14931 ? 3 : 2;
+		}
+
+		return 1;
+	}
+
+	if ('CI' in env) {
+		if (['TRAVIS', 'CIRCLECI', 'APPVEYOR', 'GITLAB_CI', 'GITHUB_ACTIONS', 'BUILDKITE'].some(sign => sign in env) || env.CI_NAME === 'codeship') {
+			return 1;
+		}
+
+		return min;
+	}
+
+	if ('TEAMCITY_VERSION' in env) {
+		return /^(9\.(0*[1-9]\d*)\.|\d{2,}\.)/.test(env.TEAMCITY_VERSION) ? 1 : 0;
+	}
+
+	if (env.COLORTERM === 'truecolor') {
+		return 3;
+	}
+
+	if ('TERM_PROGRAM' in env) {
+		const version = parseInt((env.TERM_PROGRAM_VERSION || '').split('.')[0], 10);
+
+		switch (env.TERM_PROGRAM) {
+			case 'iTerm.app':
+				return version >= 3 ? 3 : 2;
+			case 'Apple_Terminal':
+				return 2;
+			// No default
+		}
+	}
+
+	if (/-256(color)?$/i.test(env.TERM)) {
+		return 2;
+	}
+
+	if (/^screen|^xterm|^vt100|^vt220|^rxvt|color|ansi|cygwin|linux/i.test(env.TERM)) {
+		return 1;
+	}
+
+	if ('COLORTERM' in env) {
+		return 1;
+	}
+
+	return min;
+}
+
+function getSupportLevel(stream) {
+	const level = supportsColor(stream, stream && stream.isTTY);
+	return translateLevel(level);
+}
+
+module.exports = {
+	supportsColor: getSupportLevel,
+	stdout: translateLevel(supportsColor(true, tty.isatty(1))),
+	stderr: translateLevel(supportsColor(true, tty.isatty(2)))
+};
 
 
 /***/ }),
@@ -34706,6 +49684,671 @@ exports.getUserAgent = getUserAgent;
 
 /***/ }),
 
+/***/ 5840:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+
+Object.defineProperty(exports, "__esModule", ({
+  value: true
+}));
+Object.defineProperty(exports, "NIL", ({
+  enumerable: true,
+  get: function () {
+    return _nil.default;
+  }
+}));
+Object.defineProperty(exports, "parse", ({
+  enumerable: true,
+  get: function () {
+    return _parse.default;
+  }
+}));
+Object.defineProperty(exports, "stringify", ({
+  enumerable: true,
+  get: function () {
+    return _stringify.default;
+  }
+}));
+Object.defineProperty(exports, "v1", ({
+  enumerable: true,
+  get: function () {
+    return _v.default;
+  }
+}));
+Object.defineProperty(exports, "v3", ({
+  enumerable: true,
+  get: function () {
+    return _v2.default;
+  }
+}));
+Object.defineProperty(exports, "v4", ({
+  enumerable: true,
+  get: function () {
+    return _v3.default;
+  }
+}));
+Object.defineProperty(exports, "v5", ({
+  enumerable: true,
+  get: function () {
+    return _v4.default;
+  }
+}));
+Object.defineProperty(exports, "validate", ({
+  enumerable: true,
+  get: function () {
+    return _validate.default;
+  }
+}));
+Object.defineProperty(exports, "version", ({
+  enumerable: true,
+  get: function () {
+    return _version.default;
+  }
+}));
+
+var _v = _interopRequireDefault(__nccwpck_require__(8628));
+
+var _v2 = _interopRequireDefault(__nccwpck_require__(6409));
+
+var _v3 = _interopRequireDefault(__nccwpck_require__(5122));
+
+var _v4 = _interopRequireDefault(__nccwpck_require__(9120));
+
+var _nil = _interopRequireDefault(__nccwpck_require__(5332));
+
+var _version = _interopRequireDefault(__nccwpck_require__(1595));
+
+var _validate = _interopRequireDefault(__nccwpck_require__(6900));
+
+var _stringify = _interopRequireDefault(__nccwpck_require__(8950));
+
+var _parse = _interopRequireDefault(__nccwpck_require__(2746));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/***/ }),
+
+/***/ 4569:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+
+Object.defineProperty(exports, "__esModule", ({
+  value: true
+}));
+exports["default"] = void 0;
+
+var _crypto = _interopRequireDefault(__nccwpck_require__(6113));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function md5(bytes) {
+  if (Array.isArray(bytes)) {
+    bytes = Buffer.from(bytes);
+  } else if (typeof bytes === 'string') {
+    bytes = Buffer.from(bytes, 'utf8');
+  }
+
+  return _crypto.default.createHash('md5').update(bytes).digest();
+}
+
+var _default = md5;
+exports["default"] = _default;
+
+/***/ }),
+
+/***/ 2054:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+
+Object.defineProperty(exports, "__esModule", ({
+  value: true
+}));
+exports["default"] = void 0;
+
+var _crypto = _interopRequireDefault(__nccwpck_require__(6113));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+var _default = {
+  randomUUID: _crypto.default.randomUUID
+};
+exports["default"] = _default;
+
+/***/ }),
+
+/***/ 5332:
+/***/ ((__unused_webpack_module, exports) => {
+
+
+
+Object.defineProperty(exports, "__esModule", ({
+  value: true
+}));
+exports["default"] = void 0;
+var _default = '00000000-0000-0000-0000-000000000000';
+exports["default"] = _default;
+
+/***/ }),
+
+/***/ 2746:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+
+Object.defineProperty(exports, "__esModule", ({
+  value: true
+}));
+exports["default"] = void 0;
+
+var _validate = _interopRequireDefault(__nccwpck_require__(6900));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function parse(uuid) {
+  if (!(0, _validate.default)(uuid)) {
+    throw TypeError('Invalid UUID');
+  }
+
+  let v;
+  const arr = new Uint8Array(16); // Parse ########-....-....-....-............
+
+  arr[0] = (v = parseInt(uuid.slice(0, 8), 16)) >>> 24;
+  arr[1] = v >>> 16 & 0xff;
+  arr[2] = v >>> 8 & 0xff;
+  arr[3] = v & 0xff; // Parse ........-####-....-....-............
+
+  arr[4] = (v = parseInt(uuid.slice(9, 13), 16)) >>> 8;
+  arr[5] = v & 0xff; // Parse ........-....-####-....-............
+
+  arr[6] = (v = parseInt(uuid.slice(14, 18), 16)) >>> 8;
+  arr[7] = v & 0xff; // Parse ........-....-....-####-............
+
+  arr[8] = (v = parseInt(uuid.slice(19, 23), 16)) >>> 8;
+  arr[9] = v & 0xff; // Parse ........-....-....-....-############
+  // (Use "/" to avoid 32-bit truncation when bit-shifting high-order bytes)
+
+  arr[10] = (v = parseInt(uuid.slice(24, 36), 16)) / 0x10000000000 & 0xff;
+  arr[11] = v / 0x100000000 & 0xff;
+  arr[12] = v >>> 24 & 0xff;
+  arr[13] = v >>> 16 & 0xff;
+  arr[14] = v >>> 8 & 0xff;
+  arr[15] = v & 0xff;
+  return arr;
+}
+
+var _default = parse;
+exports["default"] = _default;
+
+/***/ }),
+
+/***/ 814:
+/***/ ((__unused_webpack_module, exports) => {
+
+
+
+Object.defineProperty(exports, "__esModule", ({
+  value: true
+}));
+exports["default"] = void 0;
+var _default = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|00000000-0000-0000-0000-000000000000)$/i;
+exports["default"] = _default;
+
+/***/ }),
+
+/***/ 807:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+
+Object.defineProperty(exports, "__esModule", ({
+  value: true
+}));
+exports["default"] = rng;
+
+var _crypto = _interopRequireDefault(__nccwpck_require__(6113));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+const rnds8Pool = new Uint8Array(256); // # of random values to pre-allocate
+
+let poolPtr = rnds8Pool.length;
+
+function rng() {
+  if (poolPtr > rnds8Pool.length - 16) {
+    _crypto.default.randomFillSync(rnds8Pool);
+
+    poolPtr = 0;
+  }
+
+  return rnds8Pool.slice(poolPtr, poolPtr += 16);
+}
+
+/***/ }),
+
+/***/ 5274:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+
+Object.defineProperty(exports, "__esModule", ({
+  value: true
+}));
+exports["default"] = void 0;
+
+var _crypto = _interopRequireDefault(__nccwpck_require__(6113));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function sha1(bytes) {
+  if (Array.isArray(bytes)) {
+    bytes = Buffer.from(bytes);
+  } else if (typeof bytes === 'string') {
+    bytes = Buffer.from(bytes, 'utf8');
+  }
+
+  return _crypto.default.createHash('sha1').update(bytes).digest();
+}
+
+var _default = sha1;
+exports["default"] = _default;
+
+/***/ }),
+
+/***/ 8950:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+
+Object.defineProperty(exports, "__esModule", ({
+  value: true
+}));
+exports["default"] = void 0;
+exports.unsafeStringify = unsafeStringify;
+
+var _validate = _interopRequireDefault(__nccwpck_require__(6900));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+/**
+ * Convert array of 16 byte values to UUID string format of the form:
+ * XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX
+ */
+const byteToHex = [];
+
+for (let i = 0; i < 256; ++i) {
+  byteToHex.push((i + 0x100).toString(16).slice(1));
+}
+
+function unsafeStringify(arr, offset = 0) {
+  // Note: Be careful editing this code!  It's been tuned for performance
+  // and works in ways you may not expect. See https://github.com/uuidjs/uuid/pull/434
+  return byteToHex[arr[offset + 0]] + byteToHex[arr[offset + 1]] + byteToHex[arr[offset + 2]] + byteToHex[arr[offset + 3]] + '-' + byteToHex[arr[offset + 4]] + byteToHex[arr[offset + 5]] + '-' + byteToHex[arr[offset + 6]] + byteToHex[arr[offset + 7]] + '-' + byteToHex[arr[offset + 8]] + byteToHex[arr[offset + 9]] + '-' + byteToHex[arr[offset + 10]] + byteToHex[arr[offset + 11]] + byteToHex[arr[offset + 12]] + byteToHex[arr[offset + 13]] + byteToHex[arr[offset + 14]] + byteToHex[arr[offset + 15]];
+}
+
+function stringify(arr, offset = 0) {
+  const uuid = unsafeStringify(arr, offset); // Consistency check for valid UUID.  If this throws, it's likely due to one
+  // of the following:
+  // - One or more input array values don't map to a hex octet (leading to
+  // "undefined" in the uuid)
+  // - Invalid input values for the RFC `version` or `variant` fields
+
+  if (!(0, _validate.default)(uuid)) {
+    throw TypeError('Stringified UUID is invalid');
+  }
+
+  return uuid;
+}
+
+var _default = stringify;
+exports["default"] = _default;
+
+/***/ }),
+
+/***/ 8628:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+
+Object.defineProperty(exports, "__esModule", ({
+  value: true
+}));
+exports["default"] = void 0;
+
+var _rng = _interopRequireDefault(__nccwpck_require__(807));
+
+var _stringify = __nccwpck_require__(8950);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+// **`v1()` - Generate time-based UUID**
+//
+// Inspired by https://github.com/LiosK/UUID.js
+// and http://docs.python.org/library/uuid.html
+let _nodeId;
+
+let _clockseq; // Previous uuid creation time
+
+
+let _lastMSecs = 0;
+let _lastNSecs = 0; // See https://github.com/uuidjs/uuid for API details
+
+function v1(options, buf, offset) {
+  let i = buf && offset || 0;
+  const b = buf || new Array(16);
+  options = options || {};
+  let node = options.node || _nodeId;
+  let clockseq = options.clockseq !== undefined ? options.clockseq : _clockseq; // node and clockseq need to be initialized to random values if they're not
+  // specified.  We do this lazily to minimize issues related to insufficient
+  // system entropy.  See #189
+
+  if (node == null || clockseq == null) {
+    const seedBytes = options.random || (options.rng || _rng.default)();
+
+    if (node == null) {
+      // Per 4.5, create and 48-bit node id, (47 random bits + multicast bit = 1)
+      node = _nodeId = [seedBytes[0] | 0x01, seedBytes[1], seedBytes[2], seedBytes[3], seedBytes[4], seedBytes[5]];
+    }
+
+    if (clockseq == null) {
+      // Per 4.2.2, randomize (14 bit) clockseq
+      clockseq = _clockseq = (seedBytes[6] << 8 | seedBytes[7]) & 0x3fff;
+    }
+  } // UUID timestamps are 100 nano-second units since the Gregorian epoch,
+  // (1582-10-15 00:00).  JSNumbers aren't precise enough for this, so
+  // time is handled internally as 'msecs' (integer milliseconds) and 'nsecs'
+  // (100-nanoseconds offset from msecs) since unix epoch, 1970-01-01 00:00.
+
+
+  let msecs = options.msecs !== undefined ? options.msecs : Date.now(); // Per 4.2.1.2, use count of uuid's generated during the current clock
+  // cycle to simulate higher resolution clock
+
+  let nsecs = options.nsecs !== undefined ? options.nsecs : _lastNSecs + 1; // Time since last uuid creation (in msecs)
+
+  const dt = msecs - _lastMSecs + (nsecs - _lastNSecs) / 10000; // Per 4.2.1.2, Bump clockseq on clock regression
+
+  if (dt < 0 && options.clockseq === undefined) {
+    clockseq = clockseq + 1 & 0x3fff;
+  } // Reset nsecs if clock regresses (new clockseq) or we've moved onto a new
+  // time interval
+
+
+  if ((dt < 0 || msecs > _lastMSecs) && options.nsecs === undefined) {
+    nsecs = 0;
+  } // Per 4.2.1.2 Throw error if too many uuids are requested
+
+
+  if (nsecs >= 10000) {
+    throw new Error("uuid.v1(): Can't create more than 10M uuids/sec");
+  }
+
+  _lastMSecs = msecs;
+  _lastNSecs = nsecs;
+  _clockseq = clockseq; // Per 4.1.4 - Convert from unix epoch to Gregorian epoch
+
+  msecs += 12219292800000; // `time_low`
+
+  const tl = ((msecs & 0xfffffff) * 10000 + nsecs) % 0x100000000;
+  b[i++] = tl >>> 24 & 0xff;
+  b[i++] = tl >>> 16 & 0xff;
+  b[i++] = tl >>> 8 & 0xff;
+  b[i++] = tl & 0xff; // `time_mid`
+
+  const tmh = msecs / 0x100000000 * 10000 & 0xfffffff;
+  b[i++] = tmh >>> 8 & 0xff;
+  b[i++] = tmh & 0xff; // `time_high_and_version`
+
+  b[i++] = tmh >>> 24 & 0xf | 0x10; // include version
+
+  b[i++] = tmh >>> 16 & 0xff; // `clock_seq_hi_and_reserved` (Per 4.2.2 - include variant)
+
+  b[i++] = clockseq >>> 8 | 0x80; // `clock_seq_low`
+
+  b[i++] = clockseq & 0xff; // `node`
+
+  for (let n = 0; n < 6; ++n) {
+    b[i + n] = node[n];
+  }
+
+  return buf || (0, _stringify.unsafeStringify)(b);
+}
+
+var _default = v1;
+exports["default"] = _default;
+
+/***/ }),
+
+/***/ 6409:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+
+Object.defineProperty(exports, "__esModule", ({
+  value: true
+}));
+exports["default"] = void 0;
+
+var _v = _interopRequireDefault(__nccwpck_require__(5998));
+
+var _md = _interopRequireDefault(__nccwpck_require__(4569));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+const v3 = (0, _v.default)('v3', 0x30, _md.default);
+var _default = v3;
+exports["default"] = _default;
+
+/***/ }),
+
+/***/ 5998:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+
+Object.defineProperty(exports, "__esModule", ({
+  value: true
+}));
+exports.URL = exports.DNS = void 0;
+exports["default"] = v35;
+
+var _stringify = __nccwpck_require__(8950);
+
+var _parse = _interopRequireDefault(__nccwpck_require__(2746));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function stringToBytes(str) {
+  str = unescape(encodeURIComponent(str)); // UTF8 escape
+
+  const bytes = [];
+
+  for (let i = 0; i < str.length; ++i) {
+    bytes.push(str.charCodeAt(i));
+  }
+
+  return bytes;
+}
+
+const DNS = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+exports.DNS = DNS;
+const URL = '6ba7b811-9dad-11d1-80b4-00c04fd430c8';
+exports.URL = URL;
+
+function v35(name, version, hashfunc) {
+  function generateUUID(value, namespace, buf, offset) {
+    var _namespace;
+
+    if (typeof value === 'string') {
+      value = stringToBytes(value);
+    }
+
+    if (typeof namespace === 'string') {
+      namespace = (0, _parse.default)(namespace);
+    }
+
+    if (((_namespace = namespace) === null || _namespace === void 0 ? void 0 : _namespace.length) !== 16) {
+      throw TypeError('Namespace must be array-like (16 iterable integer values, 0-255)');
+    } // Compute hash of namespace and value, Per 4.3
+    // Future: Use spread syntax when supported on all platforms, e.g. `bytes =
+    // hashfunc([...namespace, ... value])`
+
+
+    let bytes = new Uint8Array(16 + value.length);
+    bytes.set(namespace);
+    bytes.set(value, namespace.length);
+    bytes = hashfunc(bytes);
+    bytes[6] = bytes[6] & 0x0f | version;
+    bytes[8] = bytes[8] & 0x3f | 0x80;
+
+    if (buf) {
+      offset = offset || 0;
+
+      for (let i = 0; i < 16; ++i) {
+        buf[offset + i] = bytes[i];
+      }
+
+      return buf;
+    }
+
+    return (0, _stringify.unsafeStringify)(bytes);
+  } // Function#name is not settable on some platforms (#270)
+
+
+  try {
+    generateUUID.name = name; // eslint-disable-next-line no-empty
+  } catch (err) {} // For CommonJS default export support
+
+
+  generateUUID.DNS = DNS;
+  generateUUID.URL = URL;
+  return generateUUID;
+}
+
+/***/ }),
+
+/***/ 5122:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+
+Object.defineProperty(exports, "__esModule", ({
+  value: true
+}));
+exports["default"] = void 0;
+
+var _native = _interopRequireDefault(__nccwpck_require__(2054));
+
+var _rng = _interopRequireDefault(__nccwpck_require__(807));
+
+var _stringify = __nccwpck_require__(8950);
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function v4(options, buf, offset) {
+  if (_native.default.randomUUID && !buf && !options) {
+    return _native.default.randomUUID();
+  }
+
+  options = options || {};
+
+  const rnds = options.random || (options.rng || _rng.default)(); // Per 4.4, set bits for version and `clock_seq_hi_and_reserved`
+
+
+  rnds[6] = rnds[6] & 0x0f | 0x40;
+  rnds[8] = rnds[8] & 0x3f | 0x80; // Copy bytes to buffer, if provided
+
+  if (buf) {
+    offset = offset || 0;
+
+    for (let i = 0; i < 16; ++i) {
+      buf[offset + i] = rnds[i];
+    }
+
+    return buf;
+  }
+
+  return (0, _stringify.unsafeStringify)(rnds);
+}
+
+var _default = v4;
+exports["default"] = _default;
+
+/***/ }),
+
+/***/ 9120:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+
+Object.defineProperty(exports, "__esModule", ({
+  value: true
+}));
+exports["default"] = void 0;
+
+var _v = _interopRequireDefault(__nccwpck_require__(5998));
+
+var _sha = _interopRequireDefault(__nccwpck_require__(5274));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+const v5 = (0, _v.default)('v5', 0x50, _sha.default);
+var _default = v5;
+exports["default"] = _default;
+
+/***/ }),
+
+/***/ 6900:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+
+Object.defineProperty(exports, "__esModule", ({
+  value: true
+}));
+exports["default"] = void 0;
+
+var _regex = _interopRequireDefault(__nccwpck_require__(814));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function validate(uuid) {
+  return typeof uuid === 'string' && _regex.default.test(uuid);
+}
+
+var _default = validate;
+exports["default"] = _default;
+
+/***/ }),
+
+/***/ 1595:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+
+Object.defineProperty(exports, "__esModule", ({
+  value: true
+}));
+exports["default"] = void 0;
+
+var _validate = _interopRequireDefault(__nccwpck_require__(6900));
+
+function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { default: obj }; }
+
+function version(uuid) {
+  if (!(0, _validate.default)(uuid)) {
+    throw TypeError('Invalid UUID');
+  }
+
+  return parseInt(uuid.slice(14, 15), 16);
+}
+
+var _default = version;
+exports["default"] = _default;
+
+/***/ }),
+
 /***/ 4886:
 /***/ ((module) => {
 
@@ -36891,6 +52534,13 @@ module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("tls");
 
 /***/ }),
 
+/***/ 6224:
+/***/ ((module) => {
+
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("tty");
+
+/***/ }),
+
 /***/ 7310:
 /***/ ((module) => {
 
@@ -38539,6 +54189,2725 @@ module.exports = parseParams
 
 /***/ }),
 
+/***/ 5641:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.countTokens = void 0;
+const errors_1 = __nccwpck_require__(7573);
+const constants = __nccwpck_require__(6691);
+const post_fetch_processing_1 = __nccwpck_require__(5551);
+const post_request_1 = __nccwpck_require__(1882);
+/**
+ * Make a async request to count tokens.
+ * @param request A CountTokensRequest object with the request contents.
+ * @returns The CountTokensResponse object with the token count.
+ */
+async function countTokens(location, resourcePath, token, request, apiEndpoint, requestOptions) {
+    const response = await (0, post_request_1.postRequest)({
+        region: location,
+        resourcePath: resourcePath,
+        resourceMethod: constants.COUNT_TOKENS_METHOD,
+        token: await token,
+        data: request,
+        apiEndpoint: apiEndpoint,
+        requestOptions: requestOptions,
+    }).catch(e => {
+        throw new errors_1.GoogleGenerativeAIError('exception posting request', e);
+    });
+    await (0, post_fetch_processing_1.throwErrorIfNotOK)(response).catch(e => {
+        throw e;
+    });
+    return (0, post_fetch_processing_1.processCountTokenResponse)(response);
+}
+exports.countTokens = countTokens;
+//# sourceMappingURL=count_tokens.js.map
+
+/***/ }),
+
+/***/ 9079:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.generateContentStream = exports.generateContent = void 0;
+const errors_1 = __nccwpck_require__(7573);
+const constants = __nccwpck_require__(6691);
+const post_fetch_processing_1 = __nccwpck_require__(5551);
+const post_request_1 = __nccwpck_require__(1882);
+const pre_fetch_processing_1 = __nccwpck_require__(6207);
+/**
+ * Make a async call to generate content.
+ * @param request A GenerateContentRequest object with the request contents.
+ * @returns The GenerateContentResponse object with the response candidates.
+ */
+async function generateContent(location, resourcePath, token, request, apiEndpoint, generationConfig, safetySettings, tools, toolConfig, requestOptions) {
+    var _a, _b, _c, _d;
+    request = (0, pre_fetch_processing_1.formatContentRequest)(request, generationConfig, safetySettings);
+    (0, pre_fetch_processing_1.validateGenerateContentRequest)(request);
+    if (request.generationConfig) {
+        request.generationConfig = (0, pre_fetch_processing_1.validateGenerationConfig)(request.generationConfig);
+    }
+    const generateContentRequest = {
+        contents: request.contents,
+        systemInstruction: request.systemInstruction,
+        cachedContent: request.cachedContent,
+        generationConfig: (_a = request.generationConfig) !== null && _a !== void 0 ? _a : generationConfig,
+        safetySettings: (_b = request.safetySettings) !== null && _b !== void 0 ? _b : safetySettings,
+        tools: (_c = request.tools) !== null && _c !== void 0 ? _c : tools,
+        toolConfig: (_d = request.toolConfig) !== null && _d !== void 0 ? _d : toolConfig,
+    };
+    const response = await (0, post_request_1.postRequest)({
+        region: location,
+        resourcePath,
+        resourceMethod: constants.GENERATE_CONTENT_METHOD,
+        token: await token,
+        data: generateContentRequest,
+        apiEndpoint,
+        requestOptions,
+        apiVersion: (0, pre_fetch_processing_1.getApiVersion)(request),
+    }).catch(e => {
+        throw new errors_1.GoogleGenerativeAIError('exception posting request to model', e);
+    });
+    await (0, post_fetch_processing_1.throwErrorIfNotOK)(response).catch(e => {
+        throw e;
+    });
+    return (0, post_fetch_processing_1.processUnary)(response);
+}
+exports.generateContent = generateContent;
+/**
+ * Make an async stream request to generate content. The response will be
+ * returned in stream.
+ * @param {GenerateContentRequest} request - {@link GenerateContentRequest}
+ * @returns {Promise<StreamGenerateContentResult>} Promise of {@link
+ *     StreamGenerateContentResult}
+ */
+async function generateContentStream(location, resourcePath, token, request, apiEndpoint, generationConfig, safetySettings, tools, toolConfig, requestOptions) {
+    var _a, _b, _c, _d;
+    request = (0, pre_fetch_processing_1.formatContentRequest)(request, generationConfig, safetySettings);
+    (0, pre_fetch_processing_1.validateGenerateContentRequest)(request);
+    if (request.generationConfig) {
+        request.generationConfig = (0, pre_fetch_processing_1.validateGenerationConfig)(request.generationConfig);
+    }
+    const generateContentRequest = {
+        contents: request.contents,
+        systemInstruction: request.systemInstruction,
+        cachedContent: request.cachedContent,
+        generationConfig: (_a = request.generationConfig) !== null && _a !== void 0 ? _a : generationConfig,
+        safetySettings: (_b = request.safetySettings) !== null && _b !== void 0 ? _b : safetySettings,
+        tools: (_c = request.tools) !== null && _c !== void 0 ? _c : tools,
+        toolConfig: (_d = request.toolConfig) !== null && _d !== void 0 ? _d : toolConfig,
+    };
+    const response = await (0, post_request_1.postRequest)({
+        region: location,
+        resourcePath,
+        resourceMethod: constants.STREAMING_GENERATE_CONTENT_METHOD,
+        token: await token,
+        data: generateContentRequest,
+        apiEndpoint,
+        requestOptions,
+        apiVersion: (0, pre_fetch_processing_1.getApiVersion)(request),
+    }).catch(e => {
+        throw new errors_1.GoogleGenerativeAIError('exception posting request', e);
+    });
+    await (0, post_fetch_processing_1.throwErrorIfNotOK)(response).catch(e => {
+        throw e;
+    });
+    return (0, post_fetch_processing_1.processStream)(response);
+}
+exports.generateContentStream = generateContentStream;
+//# sourceMappingURL=generate_content.js.map
+
+/***/ }),
+
+/***/ 5551:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.processCountTokenResponse = exports.processUnary = exports.aggregateResponses = exports.processStream = exports.throwErrorIfNotOK = void 0;
+const util_1 = __nccwpck_require__(9044);
+const errors_1 = __nccwpck_require__(7573);
+async function throwErrorIfNotOK(response) {
+    if (response === undefined) {
+        throw new errors_1.GoogleGenerativeAIError('response is undefined');
+    }
+    if (!response.ok) {
+        const status = response.status;
+        const statusText = response.statusText;
+        const errorBody = await response.json();
+        const errorMessage = `got status: ${status} ${statusText}. ${JSON.stringify(errorBody)}`;
+        if (status >= 400 && status < 500) {
+            const error = new errors_1.ClientError(errorMessage, new errors_1.GoogleApiError(errorBody.error.message, errorBody.error.code, errorBody.error.status, errorBody.error.details));
+            throw error;
+        }
+        throw new errors_1.GoogleGenerativeAIError(errorMessage);
+    }
+}
+exports.throwErrorIfNotOK = throwErrorIfNotOK;
+const responseLineRE = /^data: (.*)(?:\n\n|\r\r|\r\n\r\n)/;
+async function* generateResponseSequence(stream) {
+    const reader = stream.getReader();
+    while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+            break;
+        }
+        yield addMissingIndexAndRole(value);
+    }
+}
+/**
+ * Process a response.body stream from the backend and return an
+ * iterator that provides one complete GenerateContentResponse at a time
+ * and a promise that resolves with a single aggregated
+ * GenerateContentResponse.
+ *
+ * @param response - Response from a fetch call
+ * @ignore
+ */
+async function processStream(response) {
+    if (response === undefined) {
+        throw new errors_1.GoogleGenerativeAIError('Error processing stream because response === undefined');
+    }
+    if (!response.body) {
+        throw new errors_1.GoogleGenerativeAIError('Error processing stream because response.body not found');
+    }
+    const inputStream = response.body.pipeThrough(new TextDecoderStream('utf8', { fatal: true }));
+    const responseStream = getResponseStream(inputStream);
+    const [stream1, stream2] = responseStream.tee();
+    return Promise.resolve({
+        stream: generateResponseSequence(stream1),
+        response: getResponsePromise(stream2),
+    });
+}
+exports.processStream = processStream;
+async function getResponsePromise(stream) {
+    const allResponses = [];
+    const reader = stream.getReader();
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+            return aggregateResponses(allResponses);
+        }
+        allResponses.push(value);
+    }
+}
+/**
+ * Reads a raw stream from the fetch response and join incomplete
+ * chunks, returning a new stream that provides a single complete
+ * GenerateContentResponse in each iteration.
+ * @ignore
+ */
+function getResponseStream(inputStream) {
+    const reader = inputStream.getReader();
+    const stream = new ReadableStream({
+        start(controller) {
+            let currentText = '';
+            return pump();
+            function pump() {
+                return reader.read().then(({ value, done }) => {
+                    if (done) {
+                        if (currentText.trim()) {
+                            controller.error(new errors_1.GoogleGenerativeAIError(`Failed to parse final chunk of stream: ${currentText}`));
+                            return;
+                        }
+                        controller.close();
+                        return;
+                    }
+                    currentText += value;
+                    let match = currentText.match(responseLineRE);
+                    let parsedResponse;
+                    while (match) {
+                        try {
+                            parsedResponse = JSON.parse(match[1]);
+                        }
+                        catch (e) {
+                            controller.error(new errors_1.GoogleGenerativeAIError(`Error parsing JSON response from stream chunk: "${match[1]}"`));
+                            return;
+                        }
+                        controller.enqueue(parsedResponse);
+                        currentText = currentText.substring(match[0].length);
+                        match = currentText.match(responseLineRE);
+                    }
+                    return pump();
+                });
+            }
+        },
+    });
+    return stream;
+}
+/**
+ * Aggregates an array of `GenerateContentResponse`s into a single
+ * GenerateContentResponse.
+ * @ignore
+ * @VisibleForTesting
+ */
+function aggregateResponses(responses) {
+    var _a, _b, _c;
+    const lastResponse = responses[responses.length - 1];
+    if (lastResponse === undefined) {
+        throw new errors_1.GoogleGenerativeAIError('Error aggregating stream chunks because the final response in stream chunk is undefined');
+    }
+    const aggregatedResponse = {};
+    if (lastResponse.promptFeedback) {
+        aggregatedResponse.promptFeedback = lastResponse.promptFeedback;
+    }
+    if (lastResponse.usageMetadata) {
+        aggregatedResponse.usageMetadata = lastResponse.usageMetadata;
+    }
+    for (const response of responses) {
+        if (!response.candidates || response.candidates.length === 0) {
+            continue;
+        }
+        for (let i = 0; i < response.candidates.length; i++) {
+            if (!aggregatedResponse.candidates) {
+                aggregatedResponse.candidates = [];
+            }
+            if (!aggregatedResponse.candidates[i]) {
+                aggregatedResponse.candidates[i] = {
+                    index: (_a = response.candidates[i].index) !== null && _a !== void 0 ? _a : i,
+                    content: {
+                        role: (_c = (_b = response.candidates[i].content) === null || _b === void 0 ? void 0 : _b.role) !== null && _c !== void 0 ? _c : util_1.constants.MODEL_ROLE,
+                        parts: [{ text: '' }],
+                    },
+                };
+            }
+            const citationMetadataAggregated = aggregateCitationMetadataForCandidate(response.candidates[i], aggregatedResponse.candidates[i]);
+            if (citationMetadataAggregated) {
+                aggregatedResponse.candidates[i].citationMetadata =
+                    citationMetadataAggregated;
+            }
+            const finishResonOfChunk = response.candidates[i].finishReason;
+            if (finishResonOfChunk) {
+                aggregatedResponse.candidates[i].finishReason =
+                    response.candidates[i].finishReason;
+            }
+            const finishMessageOfChunk = response.candidates[i].finishMessage;
+            if (finishMessageOfChunk) {
+                aggregatedResponse.candidates[i].finishMessage = finishMessageOfChunk;
+            }
+            const safetyRatingsOfChunk = response.candidates[i].safetyRatings;
+            if (safetyRatingsOfChunk) {
+                aggregatedResponse.candidates[i].safetyRatings = safetyRatingsOfChunk;
+            }
+            if (response.candidates[i].content &&
+                response.candidates[i].content.parts &&
+                response.candidates[i].content.parts.length > 0) {
+                for (const part of response.candidates[i].content.parts) {
+                    if (part.text) {
+                        aggregatedResponse.candidates[i].content.parts[0].text += part.text;
+                    }
+                    if (part.functionCall) {
+                        aggregatedResponse.candidates[i].content.parts[0].functionCall =
+                            part.functionCall;
+                        // the empty 'text' key should be removed if functionCall is in the
+                        // response
+                        delete aggregatedResponse.candidates[i].content.parts[0].text;
+                    }
+                }
+            }
+            const groundingMetadataAggregated = aggregateGroundingMetadataForCandidate(response.candidates[i], aggregatedResponse.candidates[i]);
+            if (groundingMetadataAggregated) {
+                aggregatedResponse.candidates[i].groundingMetadata =
+                    groundingMetadataAggregated;
+            }
+        }
+    }
+    return aggregatedResponse;
+}
+exports.aggregateResponses = aggregateResponses;
+function aggregateCitationMetadataForCandidate(candidateChunk, aggregatedCandidate) {
+    var _a;
+    if (!candidateChunk.citationMetadata) {
+        return;
+    }
+    const emptyCitationMetadata = {
+        citations: [],
+    };
+    const citationMetadataAggregated = (_a = aggregatedCandidate.citationMetadata) !== null && _a !== void 0 ? _a : emptyCitationMetadata;
+    const citationMetadataChunk = candidateChunk.citationMetadata;
+    if (citationMetadataChunk.citations) {
+        citationMetadataAggregated.citations =
+            citationMetadataAggregated.citations.concat(citationMetadataChunk.citations);
+    }
+    return citationMetadataAggregated;
+}
+function aggregateGroundingMetadataForCandidate(candidateChunk, aggregatedCandidate) {
+    var _a;
+    if (!candidateChunk.groundingMetadata) {
+        return;
+    }
+    const emptyGroundingMetadata = {
+        webSearchQueries: [],
+        retrievalQueries: [],
+        groundingChunks: [],
+        groundingSupports: [],
+    };
+    const groundingMetadataAggregated = (_a = aggregatedCandidate.groundingMetadata) !== null && _a !== void 0 ? _a : emptyGroundingMetadata;
+    const groundingMetadataChunk = candidateChunk.groundingMetadata;
+    if (groundingMetadataChunk.webSearchQueries) {
+        groundingMetadataAggregated.webSearchQueries =
+            groundingMetadataAggregated.webSearchQueries.concat(groundingMetadataChunk.webSearchQueries);
+    }
+    if (groundingMetadataChunk.retrievalQueries) {
+        groundingMetadataAggregated.retrievalQueries =
+            groundingMetadataAggregated.retrievalQueries.concat(groundingMetadataChunk.retrievalQueries);
+    }
+    if (groundingMetadataChunk.groundingChunks) {
+        groundingMetadataAggregated.groundingChunks =
+            groundingMetadataAggregated.groundingChunks.concat(groundingMetadataChunk.groundingChunks);
+    }
+    if (groundingMetadataChunk.groundingSupports) {
+        groundingMetadataAggregated.groundingSupports =
+            groundingMetadataAggregated.groundingSupports.concat(groundingMetadataChunk.groundingSupports);
+    }
+    if (groundingMetadataChunk.searchEntryPoint) {
+        groundingMetadataAggregated.searchEntryPoint =
+            groundingMetadataChunk.searchEntryPoint;
+    }
+    return groundingMetadataAggregated;
+}
+function addMissingIndexAndRole(response) {
+    const generateContentResponse = response;
+    if (generateContentResponse.candidates &&
+        generateContentResponse.candidates.length > 0) {
+        generateContentResponse.candidates.forEach((candidate, index) => {
+            if (candidate.index === undefined) {
+                generateContentResponse.candidates[index].index = index;
+            }
+            if (candidate.content === undefined) {
+                generateContentResponse.candidates[index].content = {};
+            }
+            if (candidate.content.role === undefined) {
+                generateContentResponse.candidates[index].content.role =
+                    util_1.constants.MODEL_ROLE;
+            }
+        });
+    }
+    return generateContentResponse;
+}
+/**
+ * Process model responses from generateContent
+ * @ignore
+ */
+async function processUnary(response) {
+    if (response !== undefined) {
+        // ts-ignore
+        const responseJson = await response.json();
+        const generateContentResponse = addMissingIndexAndRole(responseJson);
+        return Promise.resolve({
+            response: generateContentResponse,
+        });
+    }
+    return Promise.resolve({
+        response: {},
+    });
+}
+exports.processUnary = processUnary;
+/**
+ * Process model responses from countTokens
+ * @ignore
+ */
+async function processCountTokenResponse(response) {
+    if (response) {
+        // ts-ignore
+        return response.json();
+    }
+    return Promise.resolve({});
+}
+exports.processCountTokenResponse = processCountTokenResponse;
+//# sourceMappingURL=post_fetch_processing.js.map
+
+/***/ }),
+
+/***/ 1882:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.postRequest = void 0;
+const API_BASE_PATH = 'aiplatform.googleapis.com';
+const GOOGLE_INTERNAL_ENDPOINT = 'googleapis.com';
+const AUTHORIZATION_HEADER = 'Authorization';
+const CONTENT_TYPE_HEADER = 'Content-Type';
+const USER_AGENT_HEADER = 'User-Agent';
+const X_GOOG_API_CLIENT_HEADER = 'X-Goog-Api-Client';
+const SERVER_RESERVED_HEADERS = [AUTHORIZATION_HEADER, CONTENT_TYPE_HEADER];
+const errors_1 = __nccwpck_require__(7573);
+const constants = __nccwpck_require__(6691);
+/**
+ * Makes a POST request to a Vertex service
+ * @ignore
+ */
+async function postRequest({ region, resourcePath, resourceMethod, token, data, apiEndpoint, requestOptions, apiVersion = 'v1', }) {
+    const vertexBaseEndpoint = apiEndpoint !== null && apiEndpoint !== void 0 ? apiEndpoint : `${region}-${API_BASE_PATH}`;
+    let vertexEndpoint = `https://${vertexBaseEndpoint}/${apiVersion}/${resourcePath}:${resourceMethod}`;
+    // Use server sent events for streamGenerateContent
+    if (resourceMethod === constants.STREAMING_GENERATE_CONTENT_METHOD) {
+        vertexEndpoint += '?alt=sse';
+    }
+    const necessaryHeaders = new Headers({
+        [AUTHORIZATION_HEADER]: `Bearer ${token}`,
+        [CONTENT_TYPE_HEADER]: 'application/json',
+        [USER_AGENT_HEADER]: constants.USER_AGENT,
+    });
+    const totalHeaders = getExtraHeaders(vertexBaseEndpoint, necessaryHeaders, requestOptions);
+    return fetch(vertexEndpoint, {
+        ...getFetchOptions(requestOptions),
+        method: 'POST',
+        headers: totalHeaders,
+        body: JSON.stringify(data),
+    });
+}
+exports.postRequest = postRequest;
+function getFetchOptions(requestOptions) {
+    const fetchOptions = {};
+    if (!requestOptions ||
+        requestOptions.timeout === undefined ||
+        requestOptions.timeout < 0) {
+        return fetchOptions;
+    }
+    const abortController = new AbortController();
+    const signal = abortController.signal;
+    setTimeout(() => abortController.abort(), requestOptions.timeout);
+    fetchOptions.signal = signal;
+    return fetchOptions;
+}
+function stringHasLineBreak(header) {
+    if (header === null || header === undefined) {
+        return false;
+    }
+    return header.includes('\n') || header.includes('\r');
+}
+function headersHasLineBreak(customHeaders) {
+    if (!customHeaders) {
+        return false;
+    }
+    for (const [key, value] of customHeaders.entries()) {
+        if (stringHasLineBreak(key) || stringHasLineBreak(value)) {
+            return true;
+        }
+    }
+    return false;
+}
+function getExtraHeaders(vertexBaseEndpoint, necessaryHeaders, requestOptions) {
+    var _a;
+    if (stringHasLineBreak(requestOptions === null || requestOptions === void 0 ? void 0 : requestOptions.apiClient)) {
+        throw new errors_1.ClientError('Found line break in apiClient request option field, please remove ' +
+            'the line break and try again.');
+    }
+    if (headersHasLineBreak(requestOptions === null || requestOptions === void 0 ? void 0 : requestOptions.customHeaders)) {
+        throw new errors_1.ClientError('Found line break in customerHeaders request option field, please remove ' +
+            'the line break and try again.');
+    }
+    const totalHeaders = new Headers(necessaryHeaders);
+    const customHeaders = (_a = requestOptions === null || requestOptions === void 0 ? void 0 : requestOptions.customHeaders) !== null && _a !== void 0 ? _a : new Headers();
+    for (const [key, val] of customHeaders.entries()) {
+        totalHeaders.append(key, val);
+    }
+    if (requestOptions === null || requestOptions === void 0 ? void 0 : requestOptions.apiClient) {
+        totalHeaders.append(X_GOOG_API_CLIENT_HEADER, requestOptions === null || requestOptions === void 0 ? void 0 : requestOptions.apiClient);
+    }
+    // Resolve header conflicts.
+    let goldenHeaders;
+    if (vertexBaseEndpoint.endsWith(GOOGLE_INTERNAL_ENDPOINT)) {
+        goldenHeaders = necessaryHeaders;
+    }
+    else {
+        goldenHeaders = customHeaders;
+    }
+    for (const header of SERVER_RESERVED_HEADERS) {
+        if (goldenHeaders.has(header)) {
+            totalHeaders.set(header, goldenHeaders.get(header));
+        }
+    }
+    return totalHeaders;
+}
+//# sourceMappingURL=post_request.js.map
+
+/***/ }),
+
+/***/ 6207:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.hasVertexAISearch = exports.hasVertexRagStore = exports.getApiVersion = exports.validateGenerationConfig = exports.validateGenerateContentRequest = exports.formatContentRequest = void 0;
+const errors_1 = __nccwpck_require__(7573);
+const constants = __nccwpck_require__(6691);
+function formatContentRequest(request, generationConfig, safetySettings) {
+    if (typeof request === 'string') {
+        return {
+            contents: [{ role: constants.USER_ROLE, parts: [{ text: request }] }],
+            generationConfig: generationConfig,
+            safetySettings: safetySettings,
+        };
+    }
+    else {
+        return request;
+    }
+}
+exports.formatContentRequest = formatContentRequest;
+function validateGenerateContentRequest(request) {
+    const contents = request.contents;
+    for (const content of contents) {
+        for (const part of content.parts) {
+            if ('fileData' in part) {
+                // @ts-ignore
+                const uri = part['fileData']['fileUri'];
+                if (!uri.startsWith('gs://')) {
+                    throw new URIError(`Found invalid Google Cloud Storage URI ${uri}, Google Cloud Storage URIs must start with gs://`);
+                }
+            }
+        }
+    }
+    if (hasVertexAISearch(request) && hasVertexRagStore(request)) {
+        throw new errors_1.ClientError('Found both vertexAiSearch and vertexRagStore field are set in tool. Either set vertexAiSearch or vertexRagStore.');
+    }
+}
+exports.validateGenerateContentRequest = validateGenerateContentRequest;
+function validateGenerationConfig(generationConfig) {
+    if ('topK' in generationConfig) {
+        if (!(generationConfig.topK > 0) || !(generationConfig.topK <= 40)) {
+            delete generationConfig.topK;
+        }
+    }
+    return generationConfig;
+}
+exports.validateGenerationConfig = validateGenerationConfig;
+function getApiVersion(request) {
+    return hasVertexRagStore(request) || hasCachedContent(request)
+        ? 'v1beta1'
+        : 'v1';
+}
+exports.getApiVersion = getApiVersion;
+function hasVertexRagStore(request) {
+    var _a;
+    for (const tool of (_a = request === null || request === void 0 ? void 0 : request.tools) !== null && _a !== void 0 ? _a : []) {
+        const retrieval = tool.retrieval;
+        if (!retrieval)
+            continue;
+        if (retrieval.vertexRagStore) {
+            return true;
+        }
+    }
+    return false;
+}
+exports.hasVertexRagStore = hasVertexRagStore;
+function hasCachedContent(request) {
+    return !!request.cachedContent;
+}
+function hasVertexAISearch(request) {
+    var _a;
+    for (const tool of (_a = request === null || request === void 0 ? void 0 : request.tools) !== null && _a !== void 0 ? _a : []) {
+        const retrieval = tool.retrieval;
+        if (!retrieval)
+            continue;
+        if (retrieval.vertexAiSearch) {
+            return true;
+        }
+    }
+    return false;
+}
+exports.hasVertexAISearch = hasVertexAISearch;
+//# sourceMappingURL=pre_fetch_processing.js.map
+
+/***/ }),
+
+/***/ 4453:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.formulateSystemInstructionIntoContent = void 0;
+const util_1 = __nccwpck_require__(9044);
+function formulateSystemInstructionIntoContent(systemInstruction) {
+    if (typeof systemInstruction === 'string') {
+        return {
+            role: util_1.constants.SYSTEM_ROLE,
+            parts: [{ text: systemInstruction }],
+        };
+    }
+    systemInstruction.role = util_1.constants.SYSTEM_ROLE;
+    return systemInstruction;
+}
+exports.formulateSystemInstructionIntoContent = formulateSystemInstructionIntoContent;
+//# sourceMappingURL=util.js.map
+
+/***/ }),
+
+/***/ 8871:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.VertexAI = void 0;
+var vertex_ai_1 = __nccwpck_require__(6569);
+Object.defineProperty(exports, "VertexAI", ({ enumerable: true, get: function () { return vertex_ai_1.VertexAI; } }));
+__exportStar(__nccwpck_require__(8723), exports);
+__exportStar(__nccwpck_require__(6958), exports);
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 856:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ChatSessionPreview = exports.ChatSession = void 0;
+const util_1 = __nccwpck_require__(4453);
+const generate_content_1 = __nccwpck_require__(9079);
+const errors_1 = __nccwpck_require__(7573);
+const util_2 = __nccwpck_require__(9044);
+/**
+ * The `ChatSession` class is used to make multiturn send message requests. You
+ * can instantiate this class by using the `startChat` method in the
+ * `GenerativeModel` class. The `sendMessage` method makes an async call to get
+ * the response of a chat message at at once. The `sendMessageStream` method
+ * makes an async call to stream the response of a chat message as it's being
+ * generated.
+ */
+class ChatSession {
+    async getHistory() {
+        return Promise.resolve(this.historyInternal);
+    }
+    /**
+     * @constructor
+     * @param request - {@link StartChatSessionRequest}
+     */
+    constructor(request, requestOptions) {
+        var _a;
+        this.sendStreamPromise = Promise.resolve();
+        this.project = request.project;
+        this.location = request.location;
+        this.googleAuth = request.googleAuth;
+        this.resourcePath = request.resourcePath;
+        this.historyInternal = (_a = request.history) !== null && _a !== void 0 ? _a : [];
+        this.generationConfig = request.generationConfig;
+        this.safetySettings = request.safetySettings;
+        this.tools = request.tools;
+        this.toolConfig = request.toolConfig;
+        this.apiEndpoint = request.apiEndpoint;
+        this.requestOptions = requestOptions !== null && requestOptions !== void 0 ? requestOptions : {};
+        if (request.systemInstruction) {
+            this.systemInstruction = (0, util_1.formulateSystemInstructionIntoContent)(request.systemInstruction);
+        }
+    }
+    /**
+     * Gets access token from GoogleAuth. Throws {@link GoogleAuthError} when
+     * fails.
+     * @returns Promise of token.
+     */
+    fetchToken() {
+        const tokenPromise = this.googleAuth.getAccessToken().catch(e => {
+            throw new errors_1.GoogleAuthError(util_2.constants.CREDENTIAL_ERROR_MESSAGE, e);
+        });
+        return tokenPromise;
+    }
+    /**
+     * Makes an async call to send chat message.
+     *
+     * The response is returned in {@link
+     * GenerateContentResult.response}.
+     *
+     * @example
+     * ```
+     * const chat = generativeModel.startChat();
+     * const result1 = await chat.sendMessage("How can I learn more about Node.js?");
+     * console.log('Response: ', JSON.stringify(result1.response));
+     *
+     * const result2 = await chat.sendMessage("What about python?");
+     * console.log('Response: ', JSON.stringify(result2.response));
+     * ```
+     *
+     * @param request - send message request.
+     * @returns Promise of {@link GenerateContentResult}.
+     */
+    async sendMessage(request) {
+        const newContent = formulateNewContentFromSendMessageRequest(request);
+        const generateContentrequest = {
+            contents: this.historyInternal.concat(newContent),
+            safetySettings: this.safetySettings,
+            generationConfig: this.generationConfig,
+            tools: this.tools,
+            toolConfig: this.toolConfig,
+            systemInstruction: this.systemInstruction,
+        };
+        const generateContentResult = await (0, generate_content_1.generateContent)(this.location, this.resourcePath, this.fetchToken(), generateContentrequest, this.apiEndpoint, this.generationConfig, this.safetySettings, this.tools, this.toolConfig, this.requestOptions).catch(e => {
+            throw e;
+        });
+        const generateContentResponse = await generateContentResult.response;
+        // Only push the latest message to history if the response returns a result
+        if (generateContentResponse.candidates &&
+            generateContentResponse.candidates.length !== 0) {
+            this.historyInternal = this.historyInternal.concat(newContent);
+            const contentFromModel = generateContentResponse.candidates[0].content;
+            this.historyInternal.push(contentFromModel);
+        }
+        return Promise.resolve(generateContentResult);
+    }
+    async appendHistory(streamGenerateContentResultPromise, newContent) {
+        const streamGenerateContentResult = await streamGenerateContentResultPromise;
+        const streamGenerateContentResponse = await streamGenerateContentResult.response;
+        // Only push the latest message to history if the response returned a result
+        if (streamGenerateContentResponse.candidates &&
+            streamGenerateContentResponse.candidates.length !== 0) {
+            this.historyInternal = this.historyInternal.concat(newContent);
+            const contentFromModel = streamGenerateContentResponse.candidates[0].content;
+            this.historyInternal.push(contentFromModel);
+        }
+    }
+    /**
+     * Makes an async call to stream send message.
+     *
+     * The response is streamed chunk by chunk in
+     * {@link StreamGenerateContentResult.stream}. The aggregated response is
+     * avaliable in {@link StreamGenerateContentResult.response} after all chunks
+     * are returned.
+     *
+     * @example
+     * ```
+     * const chat = generativeModel.startChat();
+     * const chatInput = "How can I learn more about Node.js?";
+     * const result = await chat.sendMessageStream(chatInput);
+     * for await (const item of result.stream) {
+     *   console.log(item.candidates[0].content.parts[0].text);
+     * }
+     * const response = await result.response;
+     * console.log('aggregated response: ', JSON.stringify(result.response));
+     * ```
+     *
+     * @param request - send message request.
+     * @returns Promise of {@link StreamGenerateContentResult}.
+     */
+    async sendMessageStream(request) {
+        const newContent = formulateNewContentFromSendMessageRequest(request);
+        const generateContentrequest = {
+            contents: this.historyInternal.concat(newContent),
+            safetySettings: this.safetySettings,
+            generationConfig: this.generationConfig,
+            tools: this.tools,
+            toolConfig: this.toolConfig,
+            systemInstruction: this.systemInstruction,
+        };
+        const streamGenerateContentResultPromise = (0, generate_content_1.generateContentStream)(this.location, this.resourcePath, this.fetchToken(), generateContentrequest, this.apiEndpoint, this.generationConfig, this.safetySettings, this.tools, this.toolConfig, this.requestOptions).catch(e => {
+            throw e;
+        });
+        this.sendStreamPromise = this.appendHistory(streamGenerateContentResultPromise, newContent).catch(e => {
+            // Errors from remote endpoint will be catchable by user from streamGenerateContentResultPromise
+            // Errors in appendHistory should not throw to cause user's programe exit with code 1
+            console.error(e);
+        });
+        return streamGenerateContentResultPromise;
+    }
+}
+exports.ChatSession = ChatSession;
+/**
+ * The `ChatSessionPreview` class is used to make multiturn send message requests. You
+ * can instantiate this class by using the `startChat` method in the
+ * `GenerativeModelPreview` class. The `sendMessage` method makes an async call to get
+ * the response of a chat message at at once. The `sendMessageStream` method
+ * makes an async call to stream the response of a chat message as it's being
+ * generated.
+ */
+class ChatSessionPreview {
+    async getHistory() {
+        return Promise.resolve(this.historyInternal);
+    }
+    /**
+     * @constructor
+     * @param request - {@link StartChatSessionRequest}
+     */
+    constructor(request, requestOptions) {
+        var _a;
+        this.sendStreamPromise = Promise.resolve();
+        this.project = request.project;
+        this.location = request.location;
+        this.googleAuth = request.googleAuth;
+        this.resourcePath = request.resourcePath;
+        this.historyInternal = (_a = request.history) !== null && _a !== void 0 ? _a : [];
+        this.generationConfig = request.generationConfig;
+        this.safetySettings = request.safetySettings;
+        this.tools = request.tools;
+        this.toolConfig = request.toolConfig;
+        this.apiEndpoint = request.apiEndpoint;
+        this.requestOptions = requestOptions !== null && requestOptions !== void 0 ? requestOptions : {};
+        this.cachedContent = request.cachedContent;
+        if (request.systemInstruction) {
+            this.systemInstruction = (0, util_1.formulateSystemInstructionIntoContent)(request.systemInstruction);
+        }
+    }
+    /**
+     * Gets access token from GoogleAuth. Throws GoogleAuthError when fails.
+     * @returns Promise of token.
+     */
+    fetchToken() {
+        const tokenPromise = this.googleAuth.getAccessToken().catch(e => {
+            throw new errors_1.GoogleAuthError(util_2.constants.CREDENTIAL_ERROR_MESSAGE, e);
+        });
+        return tokenPromise;
+    }
+    /**
+     * Makes an async call to send chat message.
+     *
+     * The response is returned in {@link
+     * GenerateContentResult.response}.
+     *
+     * @example
+     * ```
+     * const chat = generativeModelPreview.startChat();
+     * const result1 = await chat.sendMessage("How can I learn more about Node.js?");
+     * console.log('Response: ', JSON.stringify(result1.response));
+     *
+     * const result2 = await chat.sendMessage("What about python?");
+     * console.log('Response: ', JSON.stringify(result2.response));
+     * ```
+     *
+     * @param request - send message request.
+     * @returns Promise of {@link GenerateContentResult}.
+     */
+    async sendMessage(request) {
+        const newContent = formulateNewContentFromSendMessageRequest(request);
+        const generateContentrequest = {
+            contents: this.historyInternal.concat(newContent),
+            safetySettings: this.safetySettings,
+            generationConfig: this.generationConfig,
+            tools: this.tools,
+            toolConfig: this.toolConfig,
+            systemInstruction: this.systemInstruction,
+        };
+        const generateContentResult = await (0, generate_content_1.generateContent)(this.location, this.resourcePath, this.fetchToken(), generateContentrequest, this.apiEndpoint, this.generationConfig, this.safetySettings, this.tools, this.toolConfig, this.requestOptions).catch(e => {
+            throw e;
+        });
+        const generateContentResponse = await generateContentResult.response;
+        // Only push the latest message to history if the response returned a result
+        if (generateContentResponse.candidates &&
+            generateContentResponse.candidates.length !== 0) {
+            this.historyInternal = this.historyInternal.concat(newContent);
+            const contentFromAssistant = generateContentResponse.candidates[0].content;
+            this.historyInternal.push(contentFromAssistant);
+        }
+        return Promise.resolve(generateContentResult);
+    }
+    async appendHistory(streamGenerateContentResultPromise, newContent) {
+        const streamGenerateContentResult = await streamGenerateContentResultPromise;
+        const streamGenerateContentResponse = await streamGenerateContentResult.response;
+        // Only push the latest message to history if the response returned a result
+        if (streamGenerateContentResponse.candidates &&
+            streamGenerateContentResponse.candidates.length !== 0) {
+            this.historyInternal = this.historyInternal.concat(newContent);
+            const contentFromAssistant = streamGenerateContentResponse.candidates[0].content;
+            this.historyInternal.push(contentFromAssistant);
+        }
+    }
+    /**
+     * Makes an async call to stream send message.
+     *
+     * The response is streamed chunk by chunk in
+     * {@link StreamGenerateContentResult.stream}. The aggregated response is
+     * avaliable in {@link StreamGenerateContentResult.response} after all chunks
+     * are returned.
+     *
+     * @example
+     * ```
+     * const chat = generativeModel.startChat();
+     * const chatInput = "How can I learn more about Node.js?";
+     * const result = await chat.sendMessageStream(chatInput);
+     * for await (const item of result.stream) {
+     *   console.log(item.candidates[0].content.parts[0].text);
+     * }
+     * const response = await result.response;
+     * console.log('aggregated response: ', JSON.stringify(result.response));
+     * ```
+     *
+     * @param request - send message request.
+     * @returns Promise of {@link StreamGenerateContentResult}.
+     */
+    async sendMessageStream(request) {
+        const newContent = formulateNewContentFromSendMessageRequest(request);
+        const generateContentRequest = {
+            contents: this.historyInternal.concat(newContent),
+            safetySettings: this.safetySettings,
+            generationConfig: this.generationConfig,
+            tools: this.tools,
+            toolConfig: this.toolConfig,
+            systemInstruction: this.systemInstruction,
+            cachedContent: this.cachedContent,
+        };
+        const streamGenerateContentResultPromise = (0, generate_content_1.generateContentStream)(this.location, this.resourcePath, this.fetchToken(), generateContentRequest, this.apiEndpoint, this.generationConfig, this.safetySettings, this.tools, this.toolConfig, this.requestOptions).catch(e => {
+            throw e;
+        });
+        this.sendStreamPromise = this.appendHistory(streamGenerateContentResultPromise, newContent).catch(e => {
+            // Errors from remote endpoint will be catchable by user from streamGenerateContentResultPromise
+            // Errors in appendHistory should not throw to cause user's programe exit with code 1
+            console.error(e);
+        });
+        return streamGenerateContentResultPromise;
+    }
+}
+exports.ChatSessionPreview = ChatSessionPreview;
+function formulateNewContentFromSendMessageRequest(request) {
+    let newParts = [];
+    if (typeof request === 'string') {
+        newParts = [{ text: request }];
+    }
+    else if (Array.isArray(request)) {
+        for (const item of request) {
+            if (typeof item === 'string') {
+                newParts.push({ text: item });
+            }
+            else {
+                newParts.push(item);
+            }
+        }
+    }
+    return assignRoleToPartsAndValidateSendMessageRequest(newParts);
+}
+/**
+ * When multiple Part types (i.e. FunctionResponsePart and TextPart) are
+ * passed in a single Part array, we may need to assign different roles to each
+ * part. Currently only FunctionResponsePart requires a role other than 'user'.
+ * @ignore
+ * @param parts Array of parts to pass to the model
+ * @returns Array of content items
+ */
+function assignRoleToPartsAndValidateSendMessageRequest(parts) {
+    const userContent = { role: util_2.constants.USER_ROLE, parts: [] };
+    const functionContent = { role: util_2.constants.USER_ROLE, parts: [] };
+    let hasUserContent = false;
+    let hasFunctionContent = false;
+    for (const part of parts) {
+        if ('functionResponse' in part) {
+            functionContent.parts.push(part);
+            hasFunctionContent = true;
+        }
+        else {
+            userContent.parts.push(part);
+            hasUserContent = true;
+        }
+    }
+    if (hasUserContent && hasFunctionContent) {
+        throw new errors_1.ClientError('Within a single message, FunctionResponse cannot be mixed with other type of part in the request for sending chat message.');
+    }
+    if (!hasUserContent && !hasFunctionContent) {
+        throw new errors_1.ClientError('No content is provided for sending chat message.');
+    }
+    if (hasUserContent) {
+        return [userContent];
+    }
+    return [functionContent];
+}
+//# sourceMappingURL=chat_session.js.map
+
+/***/ }),
+
+/***/ 2045:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GenerativeModelPreview = exports.GenerativeModel = void 0;
+const util_1 = __nccwpck_require__(4453);
+const count_tokens_1 = __nccwpck_require__(5641);
+const generate_content_1 = __nccwpck_require__(9079);
+const errors_1 = __nccwpck_require__(7573);
+const util_2 = __nccwpck_require__(9044);
+const chat_session_1 = __nccwpck_require__(856);
+/**
+ * The `GenerativeModel` class is the base class for the generative models on
+ * Vertex AI.
+ * NOTE: Don't instantiate this class directly. Use
+ * `vertexai.getGenerativeModel()` instead.
+ */
+class GenerativeModel {
+    /**
+     * @constructor
+     * @param getGenerativeModelParams - {@link GetGenerativeModelParams}
+     */
+    constructor(getGenerativeModelParams) {
+        var _a;
+        this.project = getGenerativeModelParams.project;
+        this.location = getGenerativeModelParams.location;
+        this.apiEndpoint = getGenerativeModelParams.apiEndpoint;
+        this.googleAuth = getGenerativeModelParams.googleAuth;
+        this.model = getGenerativeModelParams.model;
+        this.generationConfig = getGenerativeModelParams.generationConfig;
+        this.safetySettings = getGenerativeModelParams.safetySettings;
+        this.tools = getGenerativeModelParams.tools;
+        this.toolConfig = getGenerativeModelParams.toolConfig;
+        this.requestOptions = (_a = getGenerativeModelParams.requestOptions) !== null && _a !== void 0 ? _a : {};
+        if (getGenerativeModelParams.systemInstruction) {
+            this.systemInstruction = (0, util_1.formulateSystemInstructionIntoContent)(getGenerativeModelParams.systemInstruction);
+        }
+        this.resourcePath = formulateResourcePathFromModel(this.model, this.project, this.location);
+        // publisherModelEndpoint is deprecated
+        this.publisherModelEndpoint = this.resourcePath;
+    }
+    /**
+     * Gets access token from GoogleAuth. Throws {@link GoogleAuthError} when
+     * fails.
+     * @returns Promise of token string.
+     */
+    fetchToken() {
+        const tokenPromise = this.googleAuth.getAccessToken().catch(e => {
+            throw new errors_1.GoogleAuthError(util_2.constants.CREDENTIAL_ERROR_MESSAGE, e);
+        });
+        return tokenPromise;
+    }
+    /**
+     * Makes an async call to generate content.
+     *
+     * The response will be returned in {@link
+     * GenerateContentResult.response}.
+     *
+     * @example
+     * ```
+     * const request = {
+     *   contents: [{role: 'user', parts: [{text: 'How are you doing today?'}]}],
+     * };
+     * const result = await generativeModel.generateContent(request);
+     * console.log('Response: ', JSON.stringify(result.response));
+     * ```
+     *
+     * @param request - A GenerateContentRequest object with the request contents.
+     * @returns The GenerateContentResponse object with the response candidates.
+     */
+    async generateContent(request) {
+        request = formulateRequestToGenerateContentRequest(request);
+        const formulatedRequest = formulateSystemInstructionIntoGenerateContentRequest(request, this.systemInstruction);
+        return (0, generate_content_1.generateContent)(this.location, this.resourcePath, this.fetchToken(), formulatedRequest, this.apiEndpoint, this.generationConfig, this.safetySettings, this.tools, this.toolConfig, this.requestOptions);
+    }
+    /**
+     * Makes an async stream request to generate content.
+     *
+     * The response is returned chunk by chunk as it's being generated in {@link
+     * StreamGenerateContentResult.stream}. After all chunks of the response are
+     * returned, the aggregated response is available in
+     * {@link StreamGenerateContentResult.response}.
+     *
+     * @example
+     * ```
+     * const request = {
+     *   contents: [{role: 'user', parts: [{text: 'How are you doing today?'}]}],
+     * };
+     * const streamingResult = await generativeModel.generateContentStream(request);
+     * for await (const item of streamingResult.stream) {
+     *   console.log('stream chunk: ', JSON.stringify(item));
+     * }
+     * const aggregatedResponse = await streamingResult.response;
+     * console.log('aggregated response: ', JSON.stringify(aggregatedResponse));
+     * ```
+     *
+     * @param request - {@link GenerateContentRequest}
+     * @returns Promise of {@link StreamGenerateContentResult}
+     */
+    async generateContentStream(request) {
+        request = formulateRequestToGenerateContentRequest(request);
+        const formulatedRequest = formulateSystemInstructionIntoGenerateContentRequest(request, this.systemInstruction);
+        return (0, generate_content_1.generateContentStream)(this.location, this.resourcePath, this.fetchToken(), formulatedRequest, this.apiEndpoint, this.generationConfig, this.safetySettings, this.tools, this.toolConfig, this.requestOptions);
+    }
+    /**
+     * Makes an async request to count tokens.
+     *
+     * The `countTokens` function returns the token count and the number of
+     * billable characters for a prompt.
+     *
+     * @example
+     * ```
+     * const request = {
+     *   contents: [{role: 'user', parts: [{text: 'How are you doing today?'}]}],
+     * };
+     * const resp = await generativeModel.countTokens(request);
+     * console.log('count tokens response: ', resp);
+     * ```
+     *
+     * @param request - A CountTokensRequest object with the request contents.
+     * @returns The CountTokensResponse object with the token count.
+     */
+    async countTokens(request) {
+        return (0, count_tokens_1.countTokens)(this.location, this.resourcePath, this.fetchToken(), request, this.apiEndpoint, this.requestOptions);
+    }
+    /**
+     * Instantiates a {@link ChatSession}.
+     *
+     * The {@link ChatSession} class is a stateful class that holds the state of
+     * the conversation with the model and provides methods to interact with the
+     * model in chat mode. Calling this method doesn't make any calls to a remote
+     * endpoint. To make remote call, use {@link ChatSession.sendMessage} or
+     * @link ChatSession.sendMessageStream}.
+     *
+     * @example
+     * ```
+     * const chat = generativeModel.startChat();
+     * const result1 = await chat.sendMessage("How can I learn more about Node.js?");
+     * const response1 = await result1.response;
+     * console.log('Response: ', JSON.stringify(response1));
+     *
+     * const result2 = await chat.sendMessageStream("What about python?");
+     * const response2 = await result2.response;
+     * console.log('Response: ', JSON.stringify(await response2));
+     * ```
+     *
+     * @param request - {@link StartChatParams}
+     * @returns {@link ChatSession}
+     */
+    startChat(request) {
+        var _a, _b, _c, _d, _e;
+        const startChatRequest = {
+            project: this.project,
+            location: this.location,
+            googleAuth: this.googleAuth,
+            publisherModelEndpoint: this.publisherModelEndpoint,
+            resourcePath: this.resourcePath,
+            tools: this.tools,
+            toolConfig: this.toolConfig,
+            systemInstruction: this.systemInstruction,
+        };
+        if (request) {
+            startChatRequest.history = request.history;
+            startChatRequest.generationConfig =
+                (_a = request.generationConfig) !== null && _a !== void 0 ? _a : this.generationConfig;
+            startChatRequest.safetySettings =
+                (_b = request.safetySettings) !== null && _b !== void 0 ? _b : this.safetySettings;
+            startChatRequest.tools = (_c = request.tools) !== null && _c !== void 0 ? _c : this.tools;
+            startChatRequest.apiEndpoint = (_d = request.apiEndpoint) !== null && _d !== void 0 ? _d : this.apiEndpoint;
+            startChatRequest.systemInstruction =
+                (_e = request.systemInstruction) !== null && _e !== void 0 ? _e : this.systemInstruction;
+        }
+        return new chat_session_1.ChatSession(startChatRequest, this.requestOptions);
+    }
+}
+exports.GenerativeModel = GenerativeModel;
+/**
+ * The `GenerativeModelPreview` class is the base class for the generative models
+ * that are in preview.
+ * NOTE: Don't instantiate this class directly. Use
+ * `vertexai.preview.getGenerativeModel()` instead.
+ */
+class GenerativeModelPreview {
+    /**
+     * @constructor
+     * @param getGenerativeModelParams - {@link GetGenerativeModelParams}
+     */
+    constructor(getGenerativeModelParams) {
+        var _a;
+        this.project = getGenerativeModelParams.project;
+        this.location = getGenerativeModelParams.location;
+        this.apiEndpoint = getGenerativeModelParams.apiEndpoint;
+        this.googleAuth = getGenerativeModelParams.googleAuth;
+        this.model = getGenerativeModelParams.model;
+        this.generationConfig = getGenerativeModelParams.generationConfig;
+        this.safetySettings = getGenerativeModelParams.safetySettings;
+        this.tools = getGenerativeModelParams.tools;
+        this.toolConfig = getGenerativeModelParams.toolConfig;
+        this.cachedContent = getGenerativeModelParams.cachedContent;
+        this.requestOptions = (_a = getGenerativeModelParams.requestOptions) !== null && _a !== void 0 ? _a : {};
+        if (getGenerativeModelParams.systemInstruction) {
+            this.systemInstruction = (0, util_1.formulateSystemInstructionIntoContent)(getGenerativeModelParams.systemInstruction);
+        }
+        this.resourcePath = formulateResourcePathFromModel(this.model, this.project, this.location);
+        // publisherModelEndpoint is deprecated
+        this.publisherModelEndpoint = this.resourcePath;
+    }
+    /**
+     * Gets access token from GoogleAuth. Throws {@link GoogleAuthError} when
+     * fails.
+     * @returns Promise of token string.
+     */
+    fetchToken() {
+        const tokenPromise = this.googleAuth.getAccessToken().catch(e => {
+            throw new errors_1.GoogleAuthError(util_2.constants.CREDENTIAL_ERROR_MESSAGE, e);
+        });
+        return tokenPromise;
+    }
+    /**
+     * Makes an async call to generate content.
+     *
+     * The response will be returned in {@link GenerateContentResult.response}.
+     *
+     * @example
+     * ```
+     * const request = {
+     *   contents: [{role: 'user', parts: [{text: 'How are you doing today?'}]}],
+     * };
+     * const result = await generativeModelPreview.generateContent(request);
+     * console.log('Response: ', JSON.stringify(result.response));
+     * ```
+     *
+     * @param request - A GenerateContentRequest object with the request contents.
+     * @returns The GenerateContentResponse object with the response candidates.
+     */
+    async generateContent(request) {
+        var _a;
+        request = formulateRequestToGenerateContentRequest(request);
+        const formulatedRequest = {
+            ...formulateSystemInstructionIntoGenerateContentRequest(request, this.systemInstruction),
+            cachedContent: (_a = this.cachedContent) === null || _a === void 0 ? void 0 : _a.name,
+        };
+        return (0, generate_content_1.generateContent)(this.location, this.resourcePath, this.fetchToken(), formulatedRequest, this.apiEndpoint, this.generationConfig, this.safetySettings, this.tools, this.toolConfig, this.requestOptions);
+    }
+    /**
+     * Makes an async stream request to generate content.
+     *
+     * The response is returned chunk by chunk as it's being generated in {@link
+     * StreamGenerateContentResult.stream}. After all chunks of the response are
+     * returned, the aggregated response is available in
+     * {@link StreamGenerateContentResult.response}.
+     *
+     * @example
+     * ```
+     * const request = {
+     *   contents: [{role: 'user', parts: [{text: 'How are you doing today?'}]}],
+     * };
+     * const streamingResult = await generativeModelPreview.generateContentStream(request);
+     * for await (const item of streamingResult.stream) {
+     *   console.log('stream chunk: ', JSON.stringify(item));
+     * }
+     * const aggregatedResponse = await streamingResult.response;
+     * console.log('aggregated response: ', JSON.stringify(aggregatedResponse));
+     * ```
+     *
+     * @param request - {@link GenerateContentRequest}
+     * @returns Promise of {@link StreamGenerateContentResult}
+     */
+    async generateContentStream(request) {
+        var _a;
+        request = formulateRequestToGenerateContentRequest(request);
+        const formulatedRequest = {
+            ...formulateSystemInstructionIntoGenerateContentRequest(request, this.systemInstruction),
+            cachedContent: (_a = this.cachedContent) === null || _a === void 0 ? void 0 : _a.name,
+        };
+        return (0, generate_content_1.generateContentStream)(this.location, this.resourcePath, this.fetchToken(), formulatedRequest, this.apiEndpoint, this.generationConfig, this.safetySettings, this.tools, this.toolConfig, this.requestOptions);
+    }
+    /**
+     * Makes an async request to count tokens.
+     *
+     * The `countTokens` function returns the token count and the number of
+     * billable characters for a prompt.
+     *
+     * @example
+     * ```
+     * const request = {
+     *   contents: [{role: 'user', parts: [{text: 'How are you doing today?'}]}],
+     * };
+     * const resp = await generativeModelPreview.countTokens(request);
+     * console.log('count tokens response: ', resp);
+     * ```
+     *
+     * @param request - A CountTokensRequest object with the request contents.
+     * @returns The CountTokensResponse object with the token count.
+     */
+    async countTokens(request) {
+        return (0, count_tokens_1.countTokens)(this.location, this.resourcePath, this.fetchToken(), request, this.apiEndpoint, this.requestOptions);
+    }
+    /**
+     * Instantiates a {@link ChatSessionPreview}.
+     *
+     * The {@link ChatSessionPreview} class is a stateful class that holds the state of
+     * the conversation with the model and provides methods to interact with the
+     * model in chat mode. Calling this method doesn't make any calls to a remote
+     * endpoint. To make remote call, use {@link ChatSessionPreview.sendMessage} or
+     * {@link ChatSessionPreview.sendMessageStream}.
+     *
+     * @example
+     * ```
+     * const chat = generativeModelPreview.startChat();
+     * const result1 = await chat.sendMessage("How can I learn more about Node.js?");
+     * const response1 = await result1.response;
+     * console.log('Response: ', JSON.stringify(response1));
+     *
+     * const result2 = await chat.sendMessageStream("What about python?");
+     * const response2 = await result2.response;
+     * console.log('Response: ', JSON.stringify(await response2));
+     * ```
+     *
+     * @param request - {@link StartChatParams}
+     * @returns {@link ChatSessionPreview}
+     */
+    startChat(request) {
+        var _a, _b, _c, _d, _e, _f, _g;
+        const startChatRequest = {
+            project: this.project,
+            location: this.location,
+            googleAuth: this.googleAuth,
+            publisherModelEndpoint: this.publisherModelEndpoint,
+            resourcePath: this.resourcePath,
+            tools: this.tools,
+            systemInstruction: this.systemInstruction,
+            cachedContent: (_a = this.cachedContent) === null || _a === void 0 ? void 0 : _a.name,
+        };
+        if (request) {
+            startChatRequest.history = request.history;
+            startChatRequest.generationConfig =
+                (_b = request.generationConfig) !== null && _b !== void 0 ? _b : this.generationConfig;
+            startChatRequest.safetySettings =
+                (_c = request.safetySettings) !== null && _c !== void 0 ? _c : this.safetySettings;
+            startChatRequest.tools = (_d = request.tools) !== null && _d !== void 0 ? _d : this.tools;
+            startChatRequest.systemInstruction =
+                (_e = request.systemInstruction) !== null && _e !== void 0 ? _e : this.systemInstruction;
+            startChatRequest.cachedContent =
+                (_f = request.cachedContent) !== null && _f !== void 0 ? _f : (_g = this.cachedContent) === null || _g === void 0 ? void 0 : _g.name;
+        }
+        return new chat_session_1.ChatSessionPreview(startChatRequest, this.requestOptions);
+    }
+    getModelName() {
+        return this.model;
+    }
+    getCachedContent() {
+        return this.cachedContent;
+    }
+    getSystemInstruction() {
+        return this.systemInstruction;
+    }
+}
+exports.GenerativeModelPreview = GenerativeModelPreview;
+function formulateResourcePathFromModel(model, project, location) {
+    let resourcePath;
+    if (!model) {
+        throw new errors_1.ClientError('model parameter must not be empty.');
+    }
+    if (!model.includes('/')) {
+        // example 'gemini-1.0-pro'
+        resourcePath = `projects/${project}/locations/${location}/publishers/google/models/${model}`;
+    }
+    else if (model.startsWith('models/')) {
+        // example 'models/gemini-1.0-pro'
+        resourcePath = `projects/${project}/locations/${location}/publishers/google/${model}`;
+    }
+    else if (model.startsWith('projects/')) {
+        // example 'projects/my-project/locations/my-location/models/my-tuned-model'
+        resourcePath = model;
+    }
+    else {
+        throw new errors_1.ClientError('model parameter must be either a Model Garden model ID or a full resource name.');
+    }
+    return resourcePath;
+}
+function formulateRequestToGenerateContentRequest(request) {
+    if (typeof request === 'string') {
+        return {
+            contents: [{ role: util_2.constants.USER_ROLE, parts: [{ text: request }] }],
+        };
+    }
+    return request;
+}
+function formulateSystemInstructionIntoGenerateContentRequest(methodRequest, classSystemInstruction) {
+    if (methodRequest.systemInstruction) {
+        methodRequest.systemInstruction = (0, util_1.formulateSystemInstructionIntoContent)(methodRequest.systemInstruction);
+        return methodRequest;
+    }
+    if (classSystemInstruction) {
+        methodRequest.systemInstruction = classSystemInstruction;
+    }
+    return methodRequest;
+}
+//# sourceMappingURL=generative_models.js.map
+
+/***/ }),
+
+/***/ 6958:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GenerativeModelPreview = exports.GenerativeModel = exports.ChatSessionPreview = exports.ChatSession = void 0;
+var chat_session_1 = __nccwpck_require__(856);
+Object.defineProperty(exports, "ChatSession", ({ enumerable: true, get: function () { return chat_session_1.ChatSession; } }));
+Object.defineProperty(exports, "ChatSessionPreview", ({ enumerable: true, get: function () { return chat_session_1.ChatSessionPreview; } }));
+var generative_models_1 = __nccwpck_require__(2045);
+Object.defineProperty(exports, "GenerativeModel", ({ enumerable: true, get: function () { return generative_models_1.GenerativeModel; } }));
+Object.defineProperty(exports, "GenerativeModelPreview", ({ enumerable: true, get: function () { return generative_models_1.GenerativeModelPreview; } }));
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 6125:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.CachedContents = exports.inferModelName = exports.inferFullResourceName = void 0;
+const util_1 = __nccwpck_require__(4453);
+const types_1 = __nccwpck_require__(8723);
+function camelToSnake(str) {
+    return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+}
+class CachedContentsClient {
+    constructor(apiClient) {
+        this.apiClient = apiClient;
+    }
+    create(cachedContent) {
+        return this.apiClient.unaryApiCall(new URL(this.apiClient.getBaseUrl() +
+            '/' +
+            this.apiClient.getBaseResourePath() +
+            '/cachedContents'), {
+            body: JSON.stringify(cachedContent),
+        }, 'POST');
+    }
+    update(cachedContent, updateMask) {
+        const url = new URL(this.apiClient.getBaseUrl() + '/' + cachedContent.name);
+        url.searchParams.append('updateMask', updateMask.map(e => camelToSnake(e)).join(','));
+        return this.apiClient.unaryApiCall(url, {
+            body: JSON.stringify(cachedContent),
+        }, 'PATCH');
+    }
+    delete(name) {
+        return this.apiClient.unaryApiCall(new URL(this.apiClient.getBaseUrl() + '/' + name), {}, 'DELETE');
+    }
+    list(pageSize, pageToken) {
+        const url = new URL(this.apiClient.getBaseUrl() +
+            '/' +
+            this.apiClient.getBaseResourePath() +
+            '/cachedContents');
+        if (pageSize)
+            url.searchParams.append('pageSize', String(pageSize));
+        if (pageToken)
+            url.searchParams.append('pageToken', pageToken);
+        return this.apiClient.unaryApiCall(url, {}, 'GET');
+    }
+    get(name) {
+        return this.apiClient.unaryApiCall(new URL(this.apiClient.getBaseUrl() + '/' + name), {}, 'GET');
+    }
+}
+function inferFullResourceName(project, location, cachedContentId) {
+    if (cachedContentId.startsWith('projects/')) {
+        return cachedContentId;
+    }
+    if (cachedContentId.startsWith('locations/')) {
+        return `projects/${project}/${cachedContentId}`;
+    }
+    if (cachedContentId.startsWith('cachedContents/')) {
+        return `projects/${project}/locations/${location}/${cachedContentId}`;
+    }
+    if (!cachedContentId.includes('/')) {
+        return `projects/${project}/locations/${location}/cachedContents/${cachedContentId}`;
+    }
+    throw new types_1.ClientError(`Invalid CachedContent.name: ${cachedContentId}. CachedContent.name should start with 'projects/', 'locations/', 'cachedContents/' or is a number type.`);
+}
+exports.inferFullResourceName = inferFullResourceName;
+/**
+ * Infers the full model name based on the provided project, location, and model.
+ *
+ * @internal
+ */
+function inferModelName(project, location, model) {
+    if (!model) {
+        throw new types_1.ClientError('Model name is required.');
+    }
+    if (model.startsWith('publishers/')) {
+        return `projects/${project}/locations/${location}/${model}`;
+    }
+    if (!model.startsWith('projects/')) {
+        return `projects/${project}/locations/${location}/publishers/google/models/${model}`;
+    }
+    return model;
+}
+exports.inferModelName = inferModelName;
+/**
+ * This class is for managing Vertex AI's CachedContent resource.
+ * @public
+ */
+class CachedContents {
+    constructor(client) {
+        this.client = new CachedContentsClient(client);
+    }
+    /**
+     * Creates cached content, this call will initialize the cached content in the data storage, and users need to pay for the cache data storage.
+     * @param cachedContent
+     * @param parent - Required. The parent resource where the cached content will be created.
+     */
+    create(cachedContent) {
+        const curatedCachedContent = {
+            ...cachedContent,
+            systemInstruction: cachedContent.systemInstruction
+                ? (0, util_1.formulateSystemInstructionIntoContent)(cachedContent.systemInstruction)
+                : undefined,
+            model: inferModelName(this.client.apiClient.project, this.client.apiClient.location, cachedContent.model),
+        };
+        return this.client.create(curatedCachedContent);
+    }
+    /**
+     * Updates cached content configurations
+     *
+     * @param updateMask - Required. The list of fields to update. Format: google-fieldmask. See {@link https://cloud.google.com/docs/discovery/type-format}
+     * @param name - Immutable. Identifier. The server-generated resource name of the cached content Format: projects/{project}/locations/{location}/cachedContents/{cached_content}.
+     */
+    update(cachedContent, updateMask) {
+        if (!cachedContent.name) {
+            throw new types_1.ClientError('Cached content name is required for update.');
+        }
+        if (!updateMask || updateMask.length === 0) {
+            throw new types_1.ClientError('Update mask is required for update. Fields set in cachedContent but not in updateMask will be ignored. Examples: ["ttl"] or ["expireTime"].');
+        }
+        const curatedCachedContent = {
+            ...cachedContent,
+            systemInstruction: cachedContent.systemInstruction
+                ? (0, util_1.formulateSystemInstructionIntoContent)(cachedContent.systemInstruction)
+                : undefined,
+            name: inferFullResourceName(this.client.apiClient.project, this.client.apiClient.location, cachedContent.name),
+        };
+        return this.client.update(curatedCachedContent, updateMask);
+    }
+    /**
+     * Deletes cached content.
+     *
+     * @param name - Required. The resource name referring to the cached content.
+     */
+    delete(name) {
+        return this.client.delete(inferFullResourceName(this.client.apiClient.project, this.client.apiClient.location, name));
+    }
+    /**
+     * Lists cached contents in a project.
+     *
+     * @param pageSize - Optional. The maximum number of cached contents to return. The service may return fewer than this value. If unspecified, some default (under maximum) number of items will be returned. The maximum value is 1000; values above 1000 will be coerced to 1000.
+     * @param pageToken - Optional. A page token, received from a previous `ListCachedContents` call. Provide this to retrieve the subsequent page. When paginating, all other parameters provided to `ListCachedContents` must match the call that provided the page token.
+     */
+    list(pageSize, pageToken) {
+        return this.client.list(pageSize, pageToken);
+    }
+    /**
+     * Gets cached content configurations.
+     *
+     * @param name - Required. The resource name referring to the cached content.
+     */
+    get(name) {
+        return this.client.get(inferFullResourceName(this.client.apiClient.project, this.client.apiClient.location, name));
+    }
+}
+exports.CachedContents = CachedContents;
+//# sourceMappingURL=cached_contents.js.map
+
+/***/ }),
+
+/***/ 3207:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ApiClient = exports.CachedContents = void 0;
+var cached_contents_1 = __nccwpck_require__(6125);
+Object.defineProperty(exports, "CachedContents", ({ enumerable: true, get: function () { return cached_contents_1.CachedContents; } }));
+var api_client_1 = __nccwpck_require__(7725);
+Object.defineProperty(exports, "ApiClient", ({ enumerable: true, get: function () { return api_client_1.ApiClient; } }));
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 7725:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ApiClient = void 0;
+const util_1 = __nccwpck_require__(9044);
+const types_1 = __nccwpck_require__(8723);
+const AUTHORIZATION_HEADER = 'Authorization';
+const CONTENT_TYPE_HEADER = 'Content-Type';
+const USER_AGENT_HEADER = 'User-Agent';
+class ApiClient {
+    constructor(project, location, apiVersion, googleAuth) {
+        this.project = project;
+        this.location = location;
+        this.apiVersion = apiVersion;
+        this.googleAuth = googleAuth;
+    }
+    /**
+     * Gets access token from GoogleAuth. Throws {@link GoogleAuthError} when
+     * fails.
+     * @returns Promise of token string.
+     */
+    fetchToken() {
+        const tokenPromise = this.googleAuth.getAccessToken().catch(e => {
+            throw new types_1.GoogleAuthError(util_1.constants.CREDENTIAL_ERROR_MESSAGE, e);
+        });
+        return tokenPromise;
+    }
+    getBaseUrl() {
+        return `https://${this.location}-aiplatform.googleapis.com/${this.apiVersion}`;
+    }
+    getBaseResourePath() {
+        return `projects/${this.project}/locations/${this.location}`;
+    }
+    async unaryApiCall(url, requestInit, httpMethod) {
+        const token = await this.getHeaders();
+        return this.apiCall(url.toString(), {
+            ...requestInit,
+            method: httpMethod,
+            headers: token,
+        });
+    }
+    async apiCall(url, requestInit) {
+        const response = await fetch(url, requestInit).catch(e => {
+            throw new types_1.GoogleGenerativeAIError(`exception sending request to url: ${url} with requestInit: ${JSON.stringify(requestInit)}}`, e);
+        });
+        await throwErrorIfNotOK(response, url, requestInit).catch(e => {
+            throw e;
+        });
+        try {
+            return await response.json();
+        }
+        catch (e) {
+            throw new types_1.GoogleGenerativeAIError(JSON.stringify(response), e);
+        }
+    }
+    async getHeaders() {
+        const token = await this.fetchToken();
+        return new Headers({
+            [AUTHORIZATION_HEADER]: `Bearer ${token}`,
+            [CONTENT_TYPE_HEADER]: 'application/json',
+            [USER_AGENT_HEADER]: util_1.constants.USER_AGENT,
+        });
+    }
+}
+exports.ApiClient = ApiClient;
+async function throwErrorIfNotOK(response, url, requestInit) {
+    var _a;
+    if (response === undefined) {
+        throw new types_1.GoogleGenerativeAIError('response is undefined');
+    }
+    if (!response.ok) {
+        const status = response.status;
+        const statusText = response.statusText;
+        let errorBody;
+        if ((_a = response.headers.get('content-type')) === null || _a === void 0 ? void 0 : _a.includes('application/json')) {
+            errorBody = await response.json();
+        }
+        else {
+            errorBody = {
+                error: {
+                    message: `exception sending request to url: ${url} with requestInit: ${JSON.stringify(requestInit)}}`,
+                    code: response.status,
+                    status: response.statusText,
+                },
+            };
+        }
+        const errorMessage = `got status: ${status} ${statusText}. ${JSON.stringify(errorBody)}`;
+        if (status >= 400 && status < 500) {
+            const error = new types_1.ClientError(errorMessage, new types_1.GoogleApiError(errorBody.error.message, errorBody.error.code, errorBody.error.status, errorBody.error.details));
+            throw error;
+        }
+        throw new types_1.GoogleGenerativeAIError(errorMessage);
+    }
+}
+//# sourceMappingURL=api_client.js.map
+
+/***/ }),
+
+/***/ 4013:
+/***/ ((__unused_webpack_module, exports) => {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.SchemaType = void 0;
+/** This file contains interfaces that are usable in the types folder. */
+/**
+ * The list of OpenAPI data types
+ * as defined by https://swagger.io/docs/specification/data-models/data-types/
+ */
+var SchemaType;
+(function (SchemaType) {
+    /** String type. */
+    SchemaType["STRING"] = "STRING";
+    /** Number type. */
+    SchemaType["NUMBER"] = "NUMBER";
+    /** Integer type. */
+    SchemaType["INTEGER"] = "INTEGER";
+    /** Boolean type. */
+    SchemaType["BOOLEAN"] = "BOOLEAN";
+    /** Array type. */
+    SchemaType["ARRAY"] = "ARRAY";
+    /** Object type. */
+    SchemaType["OBJECT"] = "OBJECT";
+})(SchemaType || (exports.SchemaType = SchemaType = {}));
+//# sourceMappingURL=common.js.map
+
+/***/ }),
+
+/***/ 6079:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.FunctionDeclarationSchemaType = exports.FinishReason = exports.BlockedReason = exports.HarmSeverity = exports.HarmProbability = exports.HarmBlockThreshold = exports.HarmCategory = void 0;
+const common_1 = __nccwpck_require__(4013);
+/**
+ * Harm categories that will block the content.
+ */
+var HarmCategory;
+(function (HarmCategory) {
+    /** The harm category is unspecified. */
+    HarmCategory["HARM_CATEGORY_UNSPECIFIED"] = "HARM_CATEGORY_UNSPECIFIED";
+    /** The harm category is hate speech. */
+    HarmCategory["HARM_CATEGORY_HATE_SPEECH"] = "HARM_CATEGORY_HATE_SPEECH";
+    /** The harm category is dangerous content. */
+    HarmCategory["HARM_CATEGORY_DANGEROUS_CONTENT"] = "HARM_CATEGORY_DANGEROUS_CONTENT";
+    /** The harm category is harassment. */
+    HarmCategory["HARM_CATEGORY_HARASSMENT"] = "HARM_CATEGORY_HARASSMENT";
+    /** The harm category is sexually explicit content. */
+    HarmCategory["HARM_CATEGORY_SEXUALLY_EXPLICIT"] = "HARM_CATEGORY_SEXUALLY_EXPLICIT";
+})(HarmCategory || (exports.HarmCategory = HarmCategory = {}));
+/**
+ * Probability based thresholds levels for blocking.
+ */
+var HarmBlockThreshold;
+(function (HarmBlockThreshold) {
+    /** Unspecified harm block threshold. */
+    HarmBlockThreshold["HARM_BLOCK_THRESHOLD_UNSPECIFIED"] = "HARM_BLOCK_THRESHOLD_UNSPECIFIED";
+    /** Block low threshold and above (i.e. block more). */
+    HarmBlockThreshold["BLOCK_LOW_AND_ABOVE"] = "BLOCK_LOW_AND_ABOVE";
+    /** Block medium threshold and above. */
+    HarmBlockThreshold["BLOCK_MEDIUM_AND_ABOVE"] = "BLOCK_MEDIUM_AND_ABOVE";
+    /** Block only high threshold (i.e. block less). */
+    HarmBlockThreshold["BLOCK_ONLY_HIGH"] = "BLOCK_ONLY_HIGH";
+    /** Block none. */
+    HarmBlockThreshold["BLOCK_NONE"] = "BLOCK_NONE";
+})(HarmBlockThreshold || (exports.HarmBlockThreshold = HarmBlockThreshold = {}));
+/**
+ * Harm probability levels in the content.
+ */
+var HarmProbability;
+(function (HarmProbability) {
+    /** Harm probability unspecified. */
+    HarmProbability["HARM_PROBABILITY_UNSPECIFIED"] = "HARM_PROBABILITY_UNSPECIFIED";
+    HarmProbability["NEGLIGIBLE"] = "NEGLIGIBLE";
+    /** Low level of harm. */
+    HarmProbability["LOW"] = "LOW";
+    /** Medium level of harm. */
+    HarmProbability["MEDIUM"] = "MEDIUM";
+    /** High level of harm. */
+    HarmProbability["HIGH"] = "HIGH";
+})(HarmProbability || (exports.HarmProbability = HarmProbability = {}));
+/**
+ * Harm severity levels
+ */
+var HarmSeverity;
+(function (HarmSeverity) {
+    /** Harm severity unspecified. */
+    HarmSeverity["HARM_SEVERITY_UNSPECIFIED"] = "HARM_SEVERITY_UNSPECIFIED";
+    /** Negligible level of harm severity. */
+    HarmSeverity["HARM_SEVERITY_NEGLIGIBLE"] = "HARM_SEVERITY_NEGLIGIBLE";
+    /** Low level of harm severity. */
+    HarmSeverity["HARM_SEVERITY_LOW"] = "HARM_SEVERITY_LOW";
+    /** Medium level of harm severity. */
+    HarmSeverity["HARM_SEVERITY_MEDIUM"] = "HARM_SEVERITY_MEDIUM";
+    /** High level of harm severity. */
+    HarmSeverity["HARM_SEVERITY_HIGH"] = "HARM_SEVERITY_HIGH";
+})(HarmSeverity || (exports.HarmSeverity = HarmSeverity = {}));
+/**
+ * The reason why the reponse is blocked.
+ */
+var BlockedReason;
+(function (BlockedReason) {
+    /** Unspecified blocked reason. */
+    BlockedReason["BLOCKED_REASON_UNSPECIFIED"] = "BLOCK_REASON_UNSPECIFIED";
+    /** Candidates blocked due to safety. */
+    BlockedReason["SAFETY"] = "SAFETY";
+    /** Candidates blocked due to other reason. */
+    BlockedReason["OTHER"] = "OTHER";
+    /** terminology blocklist. */
+    BlockedReason["BLOCKLIST"] = "BLOCKLIST";
+    /** Candidates blocked due to prohibited content. */
+    BlockedReason["PROHIBITED_CONTENT"] = "PROHIBITED_CONTENT";
+})(BlockedReason || (exports.BlockedReason = BlockedReason = {}));
+/**
+ * The reason why the model stopped generating tokens.
+ * If empty, the model has not stopped generating the tokens.
+ */
+var FinishReason;
+(function (FinishReason) {
+    /** The finish reason is unspecified. */
+    FinishReason["FINISH_REASON_UNSPECIFIED"] = "FINISH_REASON_UNSPECIFIED";
+    /** Natural stop point of the model or provided stop sequence. */
+    FinishReason["STOP"] = "STOP";
+    /** The maximum number of tokens as specified in the request was reached. */
+    FinishReason["MAX_TOKENS"] = "MAX_TOKENS";
+    /**
+     * The token generation was stopped as the response was flagged for safety
+     * reasons.
+     */
+    FinishReason["SAFETY"] = "SAFETY";
+    /**
+     * The token generation was stopped as the response was flagged for
+     * unauthorized citations.
+     */
+    FinishReason["RECITATION"] = "RECITATION";
+    /** All other reasons that stopped the token generation. */
+    FinishReason["OTHER"] = "OTHER";
+    /**
+     * The token generation was stopped as the response was flagged for the
+     * terms which are included from the terminology blocklist.
+     */
+    FinishReason["BLOCKLIST"] = "BLOCKLIST";
+    /**
+     * The token generation was stopped as the response was flagged for
+     * the prohibited contents.
+     */
+    FinishReason["PROHIBITED_CONTENT"] = "PROHIBITED_CONTENT";
+    /**
+     * The token generation was stopped as the response was flagged for
+     * Sensitive Personally Identifiable Information (SPII) contents.
+     */
+    FinishReason["SPII"] = "SPII";
+})(FinishReason || (exports.FinishReason = FinishReason = {}));
+exports.FunctionDeclarationSchemaType = { ...common_1.SchemaType };
+//# sourceMappingURL=content.js.map
+
+/***/ }),
+
+/***/ 7573:
+/***/ ((__unused_webpack_module, exports) => {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.IllegalArgumentError = exports.GoogleGenerativeAIError = exports.GoogleAuthError = exports.GoogleApiError = exports.ClientError = void 0;
+/**
+ * GoogleAuthError is thrown when there is authentication issue with the request
+ */
+class GoogleAuthError extends Error {
+    constructor(message, stackTrace) {
+        super(message, { cause: stackTrace });
+        this.message = constructErrorMessage('GoogleAuthError', message);
+        this.name = 'GoogleAuthError';
+        this.stackTrace = stackTrace;
+    }
+}
+exports.GoogleAuthError = GoogleAuthError;
+/**
+ * ClientError is thrown when http 4XX status is received.
+ * For details please refer to https://developer.mozilla.org/en-US/docs/Web/HTTP/Status#client_error_responses
+ */
+class ClientError extends Error {
+    constructor(message, stackTrace) {
+        super(message, { cause: stackTrace });
+        this.message = constructErrorMessage('ClientError', message);
+        this.name = 'ClientError';
+        this.stackTrace = stackTrace;
+    }
+}
+exports.ClientError = ClientError;
+/**
+ * GoogleApiError is thrown when http 4XX status is received.
+ * See https://cloud.google.com/apis/design/errors
+ */
+class GoogleApiError extends Error {
+    constructor(message, code, status, errorDetails) {
+        super(message);
+        this.code = code;
+        this.status = status;
+        this.errorDetails = errorDetails;
+    }
+}
+exports.GoogleApiError = GoogleApiError;
+/**
+ * GoogleGenerativeAIError is thrown when http response is not ok and status code is not 4XX
+ * For details please refer to https://developer.mozilla.org/en-US/docs/Web/HTTP/Status
+ */
+class GoogleGenerativeAIError extends Error {
+    constructor(message, stackTrace) {
+        super(message, { cause: stackTrace });
+        this.message = constructErrorMessage('GoogleGenerativeAIError', message);
+        this.name = 'GoogleGenerativeAIError';
+        this.stackTrace = stackTrace;
+    }
+}
+exports.GoogleGenerativeAIError = GoogleGenerativeAIError;
+/**
+ * IllegalArgumentError is thrown when the request or operation is invalid
+ */
+class IllegalArgumentError extends Error {
+    constructor(message, stackTrace) {
+        super(message, { cause: stackTrace });
+        this.message = constructErrorMessage('IllegalArgumentError', message);
+        this.name = 'IllegalArgumentError';
+        this.stackTrace = stackTrace;
+    }
+}
+exports.IllegalArgumentError = IllegalArgumentError;
+function constructErrorMessage(exceptionClass, message) {
+    return `[VertexAI.${exceptionClass}]: ${message}`;
+}
+//# sourceMappingURL=errors.js.map
+
+/***/ }),
+
+/***/ 648:
+/***/ ((__unused_webpack_module, exports) => {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GenerateContentResponseHandler = void 0;
+/** Helper class to render any extra properties out of
+ * {@link GenerateContentResponse} or properties of {@link GenerateContentResponse}
+ */
+class GenerateContentResponseHandler {
+    /**
+     * Extracts function calls from a {@link GenerateContentCandidate}.
+     *
+     * @param candidate - The candidate to extract function calls from.
+     * @returns the array of function calls in a {@link GenerateContentCandidate}.
+     */
+    static getFunctionCallsFromCandidate(candidate) {
+        if (!candidate)
+            return [];
+        return candidate.content.parts
+            .filter((part) => !!part && !!part.functionCall)
+            .map((part) => part.functionCall);
+    }
+}
+exports.GenerateContentResponseHandler = GenerateContentResponseHandler;
+//# sourceMappingURL=generate_content_response_handler.js.map
+
+/***/ }),
+
+/***/ 8723:
+/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __exportStar = (this && this.__exportStar) || function(m, exports) {
+    for (var p in m) if (p !== "default" && !Object.prototype.hasOwnProperty.call(exports, p)) __createBinding(exports, m, p);
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.GenerateContentResponseHandler = void 0;
+__exportStar(__nccwpck_require__(6079), exports);
+__exportStar(__nccwpck_require__(7573), exports);
+__exportStar(__nccwpck_require__(9089), exports);
+__exportStar(__nccwpck_require__(4013), exports);
+var generate_content_response_handler_1 = __nccwpck_require__(648);
+Object.defineProperty(exports, "GenerateContentResponseHandler", ({ enumerable: true, get: function () { return generate_content_response_handler_1.GenerateContentResponseHandler; } }));
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 9089:
+/***/ ((__unused_webpack_module, exports) => {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.FunctionCallingMode = void 0;
+/** Function calling mode. */
+var FunctionCallingMode;
+(function (FunctionCallingMode) {
+    /** Unspecified function calling mode. This value should not be used. */
+    FunctionCallingMode["MODE_UNSPECIFIED"] = "MODE_UNSPECIFIED";
+    /**
+     * Default model behavior, model decides to predict either function calls
+     * or natural language response.
+     */
+    FunctionCallingMode["AUTO"] = "AUTO";
+    /**
+     * Model is constrained to always predicting function calls only.
+     * If "allowedFunctionNames" are set, the predicted function calls will be
+     * limited to any one of "allowedFunctionNames", else the predicted
+     * function calls will be any one of the provided "function_declarations".
+     */
+    FunctionCallingMode["ANY"] = "ANY";
+    /**
+     * Model will not predict any function calls. Model behavior is same as when
+     * not passing any function declarations.
+     */
+    FunctionCallingMode["NONE"] = "NONE";
+})(FunctionCallingMode || (exports.FunctionCallingMode = FunctionCallingMode = {}));
+//# sourceMappingURL=tool.js.map
+
+/***/ }),
+
+/***/ 6691:
+/***/ ((__unused_webpack_module, exports) => {
+
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.CREDENTIAL_ERROR_MESSAGE = exports.USER_AGENT = exports.SYSTEM_ROLE = exports.MODEL_ROLE = exports.USER_ROLE = exports.COUNT_TOKENS_METHOD = exports.STREAMING_GENERATE_CONTENT_METHOD = exports.GENERATE_CONTENT_METHOD = void 0;
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+exports.GENERATE_CONTENT_METHOD = 'generateContent';
+exports.STREAMING_GENERATE_CONTENT_METHOD = 'streamGenerateContent';
+exports.COUNT_TOKENS_METHOD = 'countTokens';
+exports.USER_ROLE = 'user';
+exports.MODEL_ROLE = 'model';
+exports.SYSTEM_ROLE = 'system';
+const USER_AGENT_PRODUCT = 'model-builder';
+const CLIENT_LIBRARY_VERSION = '1.9.0'; // x-release-please-version
+const CLIENT_LIBRARY_LANGUAGE = `grpc-node/${CLIENT_LIBRARY_VERSION}`;
+exports.USER_AGENT = `${USER_AGENT_PRODUCT}/${CLIENT_LIBRARY_VERSION} ${CLIENT_LIBRARY_LANGUAGE}`;
+exports.CREDENTIAL_ERROR_MESSAGE = '\nUnable to authenticate your request\
+        \nDepending on your run time environment, you can get authentication by\
+        \n- if in local instance or cloud shell: `!gcloud auth login`\
+        \n- if in Colab:\
+        \n    -`from google.colab import auth`\
+        \n    -`auth.authenticate_user()`\
+        \n- if in service account or other: please follow guidance in https://cloud.google.com/docs/authentication';
+//# sourceMappingURL=constants.js.map
+
+/***/ }),
+
+/***/ 9044:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.constants = void 0;
+exports.constants = __nccwpck_require__(6691);
+//# sourceMappingURL=index.js.map
+
+/***/ }),
+
+/***/ 6569:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+
+/**
+ * @license
+ * Copyright 2024 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.VertexAI = void 0;
+/* tslint:disable */
+const google_auth_library_1 = __nccwpck_require__(810);
+const models_1 = __nccwpck_require__(6958);
+const errors_1 = __nccwpck_require__(7573);
+const Resources = __nccwpck_require__(3207);
+const cached_contents_1 = __nccwpck_require__(6125);
+/**
+ * The `VertexAI` class is the base class for authenticating to Vertex AI.
+ * To use Vertex AI's generative AI models, use the `getGenerativeModel` method.
+ * To use generative AI features that are in Preview, use the `preview`
+ * namespace.
+ */
+class VertexAI {
+    /**
+     * @constructor
+     * @param init - assign authentication related information,
+     *     including the project and location strings, to instantiate a Vertex AI
+     * client.
+     * @throws {IllegalArgumentError}
+  
+     */
+    constructor(init) {
+        const opts = validateGoogleAuthOptions(init.project, init.googleAuthOptions);
+        this.location = resolveLocation(init.location);
+        this.project = resolveProject(init.project);
+        this.googleAuth = new google_auth_library_1.GoogleAuth(opts);
+        this.apiEndpoint = init.apiEndpoint;
+        this.preview = new VertexAIPreview(this.project, this.location, this.googleAuth, this.apiEndpoint);
+    }
+    /**
+     * Gets the GenerativeModel class instance.
+     *
+     * This method creates a new instance of the `GenerativeModel` class with the
+     * platform initialization parameters provided in {@link VertexInit} and model
+     * initialization parameters provided in {@link ModelParams}. You can
+     * optionally provide {@link RequestOptions} to override the default request
+     * options.
+     *
+     * @example
+     * ```
+     * const project = 'your-cloud-project';
+     * const location = 'us-central1';
+     * const textModel =  'gemini-1.0-pro';
+     * const visionModel = 'gemini-1.0-pro-vision';
+     *
+     * const vertexAI = new VertexAI({project: project, location: location});
+     *
+     * // Instantiate models
+     * const generativeModel = vertexAI.getGenerativeModel({
+     *   model: textModel,
+     *   // The following parameters are optional
+     *   // They can also be passed to individual content generation requests
+     *   safetySettings: [{
+     *                      category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+     *                      threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE
+     *                     }],
+     *   generationConfig: {maxOutputTokens: 256},
+     * });
+     *
+     * const generativeVisionModel = vertexAI.getGenerativeModel({
+     *   model: visionModel,
+     * });
+     *
+     * const generativeModelPreview = vertexAI.preview.getGenerativeModel({
+     *   model: textModel,
+     * });
+     * ```
+     *
+     * @param modelParams - {@link ModelParams} Parameters to
+     *     specify the generative model.
+     * @param requestOptions - {@link RequestOptions} Parameters to specify
+     *     request options
+     * @returns Instance of the GenerativeModel class.
+     */
+    getGenerativeModel(modelParams, requestOptions) {
+        const getGenerativeModelParams = {
+            model: modelParams.model,
+            project: this.project,
+            location: this.location,
+            googleAuth: this.googleAuth,
+            apiEndpoint: this.apiEndpoint,
+            safetySettings: modelParams.safetySettings,
+            generationConfig: modelParams.generationConfig,
+            tools: modelParams.tools,
+            toolConfig: modelParams.toolConfig,
+            requestOptions: requestOptions,
+            systemInstruction: modelParams.systemInstruction,
+        };
+        return new models_1.GenerativeModel(getGenerativeModelParams);
+    }
+    getProject() {
+        return this.project;
+    }
+    getLocation() {
+        return this.location;
+    }
+}
+exports.VertexAI = VertexAI;
+/**
+ * The preview namespace for VertexAI. Users invoke the `getGenerativeModel`
+ * method to start using generative AI features that are in preview.
+ */
+class VertexAIPreview {
+    /**
+     * @constructor
+     * @param project - The Google Cloud project to use for the request
+     * @param location - location The Google Cloud project location to use for the
+     *     request
+     * @param googleAuth - The GoogleAuthen class instance from
+     *     google-auth-library.
+     *        Complete list of authentication options is documented in the
+     * GoogleAuthOptions interface:
+     *        https://github.com/googleapis/google-auth-library-nodejs/blob/main/src/auth/googleauth.ts
+     * @param apiEndpoint - [apiEndpoint] The base Vertex AI endpoint to use for
+     *     the request. If
+     *        not provided, the default regionalized endpoint
+     *        (i.e. us-central1-aiplatform.googleapis.com) will be used.
+     */
+    constructor(project, location, googleAuth, apiEndpoint) {
+        this.project = project;
+        this.location = location;
+        this.googleAuth = googleAuth;
+        this.apiEndpoint = apiEndpoint;
+        this.apiClient = new Resources.ApiClient(this.project, this.location, 'v1beta1', this.googleAuth);
+        this.cachedContents = new Resources.CachedContents(this.apiClient);
+    }
+    /**
+     * @param modelParams - {@link ModelParams} Parameters to
+     *     specify the generative model.
+     * @returns Instance of the GenerativeModelPreview class.
+     */
+    getGenerativeModel(modelParams, requestOptions) {
+        const getGenerativeModelParams = {
+            model: modelParams.model,
+            project: this.project,
+            location: this.location,
+            googleAuth: this.googleAuth,
+            apiEndpoint: this.apiEndpoint,
+            safetySettings: modelParams.safetySettings,
+            generationConfig: modelParams.generationConfig,
+            tools: modelParams.tools,
+            toolConfig: modelParams.toolConfig,
+            requestOptions: requestOptions,
+            systemInstruction: modelParams.systemInstruction,
+        };
+        return new models_1.GenerativeModelPreview(getGenerativeModelParams);
+    }
+    getGenerativeModelFromCachedContent(cachedContent, modelParams, requestOptions) {
+        if (!cachedContent.name) {
+            throw new errors_1.ClientError('Cached content must contain a `name` field.');
+        }
+        if (!cachedContent.model) {
+            throw new errors_1.ClientError('Cached content must contain a `model` field.');
+        }
+        validateCachedContentModel(cachedContent.model);
+        /**
+         * Not checking tools and toolConfig for now as it would require a deep
+         * equality comparison and isn't likely to be a common case.
+         */
+        const disallowedDuplicates = ['model', 'systemInstruction'];
+        for (const key of disallowedDuplicates) {
+            if ((modelParams === null || modelParams === void 0 ? void 0 : modelParams[key]) &&
+                cachedContent[key] &&
+                (modelParams === null || modelParams === void 0 ? void 0 : modelParams[key]) !== cachedContent[key]) {
+                if (key === 'model') {
+                    const modelParamsComp = parseModelName(modelParams[key]);
+                    const cachedContentComp = parseModelName(cachedContent[key]);
+                    if (modelParamsComp === cachedContentComp) {
+                        continue;
+                    }
+                }
+                throw new errors_1.ClientError(`Different value for "${key}" specified in modelParams` +
+                    ` (${modelParams[key]}) and cachedContent (${cachedContent[key]})`);
+            }
+        }
+        cachedContent.name = (0, cached_contents_1.inferFullResourceName)(this.project, this.location, cachedContent.name);
+        const modelParamsFromCache = {
+            model: cachedContent.model,
+            project: this.project,
+            location: this.location,
+            googleAuth: this.googleAuth,
+            apiEndpoint: this.apiEndpoint,
+            safetySettings: modelParams === null || modelParams === void 0 ? void 0 : modelParams.safetySettings,
+            generationConfig: modelParams === null || modelParams === void 0 ? void 0 : modelParams.generationConfig,
+            tools: cachedContent.tools,
+            toolConfig: cachedContent.toolConfig,
+            requestOptions: requestOptions,
+            systemInstruction: cachedContent.systemInstruction,
+            cachedContent,
+        };
+        return new models_1.GenerativeModelPreview(modelParamsFromCache);
+    }
+}
+function validateCachedContentModel(modelName) {
+    if (modelName.startsWith('models/') ||
+        (modelName.startsWith('projects/') &&
+            modelName.includes('/publishers/google/models/')) ||
+        !modelName.includes('/')) {
+        return;
+    }
+    throw new errors_1.ClientError(`Cached content model name must start with "models/" or match "projects/.*/publishers/google/models/.*" or is a model name listed at https://cloud.google.com/vertex-ai/generative-ai/docs/learn/model-versions. Received: ${modelName}`);
+}
+function parseModelName(modelName) {
+    if (!modelName.includes('/')) {
+        return modelName;
+    }
+    return modelName.split('/').pop();
+}
+function validateGoogleAuthOptions(project, googleAuthOptions) {
+    let opts;
+    const requiredScope = 'https://www.googleapis.com/auth/cloud-platform';
+    if (!googleAuthOptions) {
+        opts = {
+            scopes: requiredScope,
+        };
+        return opts;
+    }
+    if (googleAuthOptions.projectId && googleAuthOptions.projectId !== project) {
+        throw new Error(`inconsistent project ID values. argument project got value ${project} but googleAuthOptions.projectId got value ${googleAuthOptions.projectId}`);
+    }
+    opts = googleAuthOptions;
+    if (!opts.scopes) {
+        opts.scopes = requiredScope;
+        return opts;
+    }
+    if ((typeof opts.scopes === 'string' && opts.scopes !== requiredScope) ||
+        (Array.isArray(opts.scopes) && opts.scopes.indexOf(requiredScope) < 0)) {
+        throw new errors_1.GoogleAuthError(`input GoogleAuthOptions.scopes ${opts.scopes} doesn't contain required scope ${requiredScope}, please include ${requiredScope} into GoogleAuthOptions.scopes or leave GoogleAuthOptions.scopes undefined`);
+    }
+    return opts;
+}
+function resolveProject(projectFromInput) {
+    const projectNotFoundErrorMessage = 'Unable to infer your project.' +
+        'Please provide a project Id by one of the following:' +
+        '\n- Passing a constructor argument by using new VertexAI({project: my-project})' +
+        '\n- Setting project using `gcloud config set project my-project`';
+    if (projectFromInput) {
+        return projectFromInput;
+    }
+    const inferredProjectFromEnv = process.env['GOOGLE_CLOUD_PROJECT'];
+    if (inferredProjectFromEnv) {
+        return inferredProjectFromEnv;
+    }
+    throw new errors_1.IllegalArgumentError(projectNotFoundErrorMessage);
+}
+function resolveLocation(locationFromInput) {
+    if (locationFromInput) {
+        return locationFromInput;
+    }
+    const inferredLocation = process.env['GOOGLE_CLOUD_REGION'] || process.env['CLOUD_ML_REGION'];
+    if (inferredLocation) {
+        return inferredLocation;
+    }
+    return 'us-central1';
+}
+//# sourceMappingURL=vertex_ai.js.map
+
+/***/ }),
+
+/***/ 6318:
+/***/ ((module) => {
+
+module.exports = JSON.parse('{"name":"gaxios","version":"6.7.1","description":"A simple common HTTP client specifically for Google APIs and services.","main":"build/src/index.js","types":"build/src/index.d.ts","files":["build/src"],"scripts":{"lint":"gts check","test":"c8 mocha build/test","presystem-test":"npm run compile","system-test":"mocha build/system-test --timeout 80000","compile":"tsc -p .","fix":"gts fix","prepare":"npm run compile","pretest":"npm run compile","webpack":"webpack","prebrowser-test":"npm run compile","browser-test":"node build/browser-test/browser-test-runner.js","docs":"compodoc src/","docs-test":"linkinator docs","predocs-test":"npm run docs","samples-test":"cd samples/ && npm link ../ && npm test && cd ../","prelint":"cd samples; npm link ../; npm install","clean":"gts clean","precompile":"gts clean"},"repository":"googleapis/gaxios","keywords":["google"],"engines":{"node":">=14"},"author":"Google, LLC","license":"Apache-2.0","devDependencies":{"@babel/plugin-proposal-private-methods":"^7.18.6","@compodoc/compodoc":"1.1.19","@types/cors":"^2.8.6","@types/express":"^4.16.1","@types/extend":"^3.0.1","@types/mocha":"^9.0.0","@types/multiparty":"0.0.36","@types/mv":"^2.1.0","@types/ncp":"^2.0.1","@types/node":"^20.0.0","@types/node-fetch":"^2.5.7","@types/sinon":"^17.0.0","@types/tmp":"0.2.6","@types/uuid":"^10.0.0","abort-controller":"^3.0.0","assert":"^2.0.0","browserify":"^17.0.0","c8":"^8.0.0","cheerio":"1.0.0-rc.10","cors":"^2.8.5","execa":"^5.0.0","express":"^4.16.4","form-data":"^4.0.0","gts":"^5.0.0","is-docker":"^2.0.0","karma":"^6.0.0","karma-chrome-launcher":"^3.0.0","karma-coverage":"^2.0.0","karma-firefox-launcher":"^2.0.0","karma-mocha":"^2.0.0","karma-remap-coverage":"^0.1.5","karma-sourcemap-loader":"^0.4.0","karma-webpack":"5.0.0","linkinator":"^3.0.0","mocha":"^8.0.0","multiparty":"^4.2.1","mv":"^2.1.1","ncp":"^2.0.0","nock":"^13.0.0","null-loader":"^4.0.0","puppeteer":"^19.0.0","sinon":"^18.0.0","stream-browserify":"^3.0.0","tmp":"0.2.3","ts-loader":"^8.0.0","typescript":"^5.1.6","webpack":"^5.35.0","webpack-cli":"^4.0.0"},"dependencies":{"extend":"^3.0.2","https-proxy-agent":"^7.0.1","is-stream":"^2.0.0","node-fetch":"^2.6.9","uuid":"^9.0.1"}}');
+
+/***/ }),
+
+/***/ 1402:
+/***/ ((module) => {
+
+module.exports = JSON.parse('{"name":"google-auth-library","version":"9.15.0","author":"Google Inc.","description":"Google APIs Authentication Client Library for Node.js","engines":{"node":">=14"},"main":"./build/src/index.js","types":"./build/src/index.d.ts","repository":"googleapis/google-auth-library-nodejs.git","keywords":["google","api","google apis","client","client library"],"dependencies":{"base64-js":"^1.3.0","ecdsa-sig-formatter":"^1.0.11","gaxios":"^6.1.1","gcp-metadata":"^6.1.0","gtoken":"^7.0.0","jws":"^4.0.0"},"devDependencies":{"@types/base64-js":"^1.2.5","@types/chai":"^4.1.7","@types/jws":"^3.1.0","@types/mocha":"^9.0.0","@types/mv":"^2.1.0","@types/ncp":"^2.0.1","@types/node":"^20.4.2","@types/sinon":"^17.0.0","assert-rejects":"^1.0.0","c8":"^8.0.0","chai":"^4.2.0","cheerio":"1.0.0-rc.12","codecov":"^3.0.2","execa":"^5.0.0","gts":"^5.0.0","is-docker":"^2.0.0","jsdoc":"^4.0.0","jsdoc-fresh":"^3.0.0","jsdoc-region-tag":"^3.0.0","karma":"^6.0.0","karma-chrome-launcher":"^3.0.0","karma-coverage":"^2.0.0","karma-firefox-launcher":"^2.0.0","karma-mocha":"^2.0.0","karma-sourcemap-loader":"^0.4.0","karma-webpack":"5.0.0","keypair":"^1.0.4","linkinator":"^4.0.0","mocha":"^9.2.2","mv":"^2.1.1","ncp":"^2.0.0","nock":"^13.0.0","null-loader":"^4.0.0","pdfmake":"0.2.12","puppeteer":"^21.0.0","sinon":"^18.0.0","ts-loader":"^8.0.0","typescript":"^5.1.6","webpack":"^5.21.2","webpack-cli":"^4.0.0"},"files":["build/src","!build/src/**/*.map"],"scripts":{"test":"c8 mocha build/test","clean":"gts clean","prepare":"npm run compile","lint":"gts check","compile":"tsc -p .","fix":"gts fix","pretest":"npm run compile -- --sourceMap","docs":"jsdoc -c .jsdoc.json","samples-setup":"cd samples/ && npm link ../ && npm run setup && cd ../","samples-test":"cd samples/ && npm link ../ && npm test && cd ../","system-test":"mocha build/system-test --timeout 60000","presystem-test":"npm run compile -- --sourceMap","webpack":"webpack","browser-test":"karma start","docs-test":"linkinator docs","predocs-test":"npm run docs","prelint":"cd samples; npm link ../; npm install","precompile":"gts clean"},"license":"Apache-2.0"}');
+
+/***/ }),
+
 /***/ 2020:
 /***/ ((module) => {
 
@@ -38592,7 +56961,7 @@ var __webpack_exports__ = {};
 const external_node_fs_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:fs");
 // EXTERNAL MODULE: ./node_modules/@actions/core/lib/core.js
 var core = __nccwpck_require__(2186);
-;// CONCATENATED MODULE: ./node_modules/@ai-sdk/provider/dist/index.mjs
+;// CONCATENATED MODULE: ./node_modules/@ai-sdk/anthropic/node_modules/@ai-sdk/provider/dist/index.mjs
 // src/errors/ai-sdk-error.ts
 var marker = "vercel.ai.error";
 var symbol = Symbol.for(marker);
@@ -38628,18 +56997,6 @@ var _AISDKError = class _AISDKError extends Error {
     const markerSymbol = Symbol.for(marker15);
     return error != null && typeof error === "object" && markerSymbol in error && typeof error[markerSymbol] === "boolean" && error[markerSymbol] === true;
   }
-  /**
-   * Returns a JSON representation of the error.
-   * @returns {Object} An object containing the error's name, message, and cause.
-   *
-   * @deprecated Do not use this method. It will be removed in the next major version.
-   */
-  toJSON() {
-    return {
-      name: this.name,
-      message: this.message
-    };
-  }
 };
 _a = symbol;
 var AISDKError = _AISDKError;
@@ -38649,7 +57006,7 @@ var dist_name = "AI_APICallError";
 var marker2 = `vercel.ai.error.${dist_name}`;
 var symbol2 = Symbol.for(marker2);
 var _a2;
-var APICallError = class extends AISDKError {
+var dist_APICallError = class extends AISDKError {
   constructor({
     message,
     url,
@@ -38678,29 +57035,6 @@ var APICallError = class extends AISDKError {
   static isInstance(error) {
     return AISDKError.hasMarker(error, marker2);
   }
-  /**
-   * @deprecated Use isInstance instead.
-   */
-  static isAPICallError(error) {
-    return error instanceof Error && error.name === dist_name && typeof error.url === "string" && typeof error.requestBodyValues === "object" && (error.statusCode == null || typeof error.statusCode === "number") && (error.responseHeaders == null || typeof error.responseHeaders === "object") && (error.responseBody == null || typeof error.responseBody === "string") && (error.cause == null || typeof error.cause === "object") && typeof error.isRetryable === "boolean" && (error.data == null || typeof error.data === "object");
-  }
-  /**
-   * @deprecated Do not use this method. It will be removed in the next major version.
-   */
-  toJSON() {
-    return {
-      name: this.name,
-      message: this.message,
-      url: this.url,
-      requestBodyValues: this.requestBodyValues,
-      statusCode: this.statusCode,
-      responseHeaders: this.responseHeaders,
-      responseBody: this.responseBody,
-      cause: this.cause,
-      isRetryable: this.isRetryable,
-      data: this.data
-    };
-  }
 };
 _a2 = symbol2;
 
@@ -38717,12 +57051,6 @@ var dist_EmptyResponseBodyError = class extends AISDKError {
   }
   static isInstance(error) {
     return AISDKError.hasMarker(error, marker3);
-  }
-  /**
-   * @deprecated use `isInstance` instead
-   */
-  static isEmptyResponseBodyError(error) {
-    return error instanceof Error && error.name === name2;
   }
 };
 _a3 = symbol3;
@@ -38767,35 +57095,18 @@ var name4 = "AI_InvalidPromptError";
 var marker5 = `vercel.ai.error.${name4}`;
 var symbol5 = Symbol.for(marker5);
 var _a5;
-var InvalidPromptError = class extends AISDKError {
+var InvalidPromptError = class extends (/* unused pure expression or super */ null && (AISDKError)) {
   constructor({
-    prompt: prompt2,
+    prompt,
     message,
     cause
   }) {
     super({ name: name4, message: `Invalid prompt: ${message}`, cause });
     this[_a5] = true;
-    this.prompt = prompt2;
+    this.prompt = prompt;
   }
   static isInstance(error) {
     return AISDKError.hasMarker(error, marker5);
-  }
-  /**
-   * @deprecated use `isInstance` instead
-   */
-  static isInvalidPromptError(error) {
-    return error instanceof Error && error.name === name4 && prompt != null;
-  }
-  /**
-   * @deprecated Do not use this method. It will be removed in the next major version.
-   */
-  toJSON() {
-    return {
-      name: this.name,
-      message: this.message,
-      stack: this.stack,
-      prompt: this.prompt
-    };
   }
 };
 _a5 = symbol5;
@@ -38805,7 +57116,7 @@ var name5 = "AI_InvalidResponseDataError";
 var marker6 = `vercel.ai.error.${name5}`;
 var symbol6 = Symbol.for(marker6);
 var _a6;
-var InvalidResponseDataError = class extends AISDKError {
+var InvalidResponseDataError = class extends (/* unused pure expression or super */ null && (AISDKError)) {
   constructor({
     data,
     message = `Invalid response data: ${JSON.stringify(data)}.`
@@ -38817,23 +57128,6 @@ var InvalidResponseDataError = class extends AISDKError {
   static isInstance(error) {
     return AISDKError.hasMarker(error, marker6);
   }
-  /**
-   * @deprecated use `isInstance` instead
-   */
-  static isInvalidResponseDataError(error) {
-    return error instanceof Error && error.name === name5 && error.data != null;
-  }
-  /**
-   * @deprecated Do not use this method. It will be removed in the next major version.
-   */
-  toJSON() {
-    return {
-      name: this.name,
-      message: this.message,
-      stack: this.stack,
-      data: this.data
-    };
-  }
 };
 _a6 = symbol6;
 
@@ -38842,7 +57136,7 @@ var name6 = "AI_JSONParseError";
 var marker7 = `vercel.ai.error.${name6}`;
 var symbol7 = Symbol.for(marker7);
 var _a7;
-var JSONParseError = class extends AISDKError {
+var dist_JSONParseError = class extends AISDKError {
   constructor({ text, cause }) {
     super({
       name: name6,
@@ -38856,24 +57150,6 @@ Error message: ${getErrorMessage(cause)}`,
   static isInstance(error) {
     return AISDKError.hasMarker(error, marker7);
   }
-  /**
-   * @deprecated use `isInstance` instead
-   */
-  static isJSONParseError(error) {
-    return error instanceof Error && error.name === name6 && "text" in error && typeof error.text === "string";
-  }
-  /**
-   * @deprecated Do not use this method. It will be removed in the next major version.
-   */
-  toJSON() {
-    return {
-      name: this.name,
-      message: this.message,
-      cause: this.cause,
-      stack: this.stack,
-      valueText: this.text
-    };
-  }
 };
 _a7 = symbol7;
 
@@ -38882,7 +57158,7 @@ var name7 = "AI_LoadAPIKeyError";
 var marker8 = `vercel.ai.error.${name7}`;
 var symbol8 = Symbol.for(marker8);
 var _a8;
-var LoadAPIKeyError = class extends AISDKError {
+var dist_LoadAPIKeyError = class extends AISDKError {
   // used in isInstance
   constructor({ message }) {
     super({ name: name7, message });
@@ -38890,12 +57166,6 @@ var LoadAPIKeyError = class extends AISDKError {
   }
   static isInstance(error) {
     return AISDKError.hasMarker(error, marker8);
-  }
-  /**
-   * @deprecated Use isInstance instead.
-   */
-  static isLoadAPIKeyError(error) {
-    return error instanceof Error && error.name === name7;
   }
 };
 _a8 = symbol8;
@@ -38913,12 +57183,6 @@ var dist_LoadSettingError = class extends (/* unused pure expression or super */
   }
   static isInstance(error) {
     return AISDKError.hasMarker(error, marker9);
-  }
-  /**
-   * @deprecated Use isInstance instead.
-   */
-  static isLoadSettingError(error) {
-    return error instanceof Error && error.name === name8;
   }
 };
 _a9 = symbol9;
@@ -38938,23 +57202,6 @@ var NoContentGeneratedError = class extends (/* unused pure expression or super 
   }
   static isInstance(error) {
     return AISDKError.hasMarker(error, marker10);
-  }
-  /**
-   * @deprecated Use isInstance instead.
-   */
-  static isNoContentGeneratedError(error) {
-    return error instanceof Error && error.name === name9;
-  }
-  /**
-   * @deprecated Do not use this method. It will be removed in the next major version.
-   */
-  toJSON() {
-    return {
-      name: this.name,
-      cause: this.cause,
-      message: this.message,
-      stack: this.stack
-    };
   }
 };
 _a10 = symbol10;
@@ -38979,24 +57226,6 @@ var NoSuchModelError = class extends AISDKError {
   static isInstance(error) {
     return AISDKError.hasMarker(error, marker11);
   }
-  /**
-   * @deprecated use `isInstance` instead
-   */
-  static isNoSuchModelError(error) {
-    return error instanceof Error && error.name === name10 && typeof error.modelId === "string" && typeof error.modelType === "string";
-  }
-  /**
-   * @deprecated Do not use this method. It will be removed in the next major version.
-   */
-  toJSON() {
-    return {
-      name: this.name,
-      message: this.message,
-      stack: this.stack,
-      modelId: this.modelId,
-      modelType: this.modelType
-    };
-  }
 };
 _a11 = symbol11;
 
@@ -39005,7 +57234,7 @@ var name11 = "AI_TooManyEmbeddingValuesForCallError";
 var marker12 = `vercel.ai.error.${name11}`;
 var symbol12 = Symbol.for(marker12);
 var _a12;
-var TooManyEmbeddingValuesForCallError = class extends AISDKError {
+var TooManyEmbeddingValuesForCallError = class extends (/* unused pure expression or super */ null && (AISDKError)) {
   constructor(options) {
     super({
       name: name11,
@@ -39019,26 +57248,6 @@ var TooManyEmbeddingValuesForCallError = class extends AISDKError {
   }
   static isInstance(error) {
     return AISDKError.hasMarker(error, marker12);
-  }
-  /**
-   * @deprecated use `isInstance` instead
-   */
-  static isTooManyEmbeddingValuesForCallError(error) {
-    return error instanceof Error && error.name === name11 && "provider" in error && typeof error.provider === "string" && "modelId" in error && typeof error.modelId === "string" && "maxEmbeddingsPerCall" in error && typeof error.maxEmbeddingsPerCall === "number" && "values" in error && Array.isArray(error.values);
-  }
-  /**
-   * @deprecated Do not use this method. It will be removed in the next major version.
-   */
-  toJSON() {
-    return {
-      name: this.name,
-      message: this.message,
-      stack: this.stack,
-      provider: this.provider,
-      modelId: this.modelId,
-      maxEmbeddingsPerCall: this.maxEmbeddingsPerCall,
-      values: this.values
-    };
   }
 };
 _a12 = symbol12;
@@ -39078,24 +57287,6 @@ Error message: ${getErrorMessage(cause)}`,
   }) {
     return _TypeValidationError.isInstance(cause) && cause.value === value ? cause : new _TypeValidationError({ value, cause });
   }
-  /**
-   * @deprecated use `isInstance` instead
-   */
-  static isTypeValidationError(error) {
-    return error instanceof Error && error.name === name12;
-  }
-  /**
-   * @deprecated Do not use this method. It will be removed in the next major version.
-   */
-  toJSON() {
-    return {
-      name: this.name,
-      message: this.message,
-      cause: this.cause,
-      stack: this.stack,
-      value: this.value
-    };
-  }
 };
 _a13 = symbol13;
 var dist_TypeValidationError = _TypeValidationError;
@@ -39116,23 +57307,6 @@ var dist_UnsupportedFunctionalityError = class extends AISDKError {
   }
   static isInstance(error) {
     return AISDKError.hasMarker(error, marker14);
-  }
-  /**
-   * @deprecated Use isInstance instead.
-   */
-  static isUnsupportedFunctionalityError(error) {
-    return error instanceof Error && error.name === name13 && typeof error.functionality === "string";
-  }
-  /**
-   * @deprecated Do not use this method. It will be removed in the next major version.
-   */
-  toJSON() {
-    return {
-      name: this.name,
-      message: this.message,
-      stack: this.stack,
-      functionality: this.functionality
-    };
   }
 };
 _a14 = symbol14;
@@ -39187,141 +57361,119 @@ let nanoid = (size = 21) => {
 
 // EXTERNAL MODULE: ./node_modules/secure-json-parse/index.js
 var secure_json_parse = __nccwpck_require__(707);
-;// CONCATENATED MODULE: ./node_modules/eventsource-parser/dist/index.js
-function dist_createParser(onParse) {
-  let isFirstChunk;
-  let buffer;
-  let startingPosition;
-  let startingFieldLength;
-  let eventId;
-  let eventName;
-  let data;
-  reset();
-  return {
-    feed,
-    reset
-  };
-  function reset() {
-    isFirstChunk = true;
-    buffer = "";
-    startingPosition = 0;
-    startingFieldLength = -1;
-    eventId = void 0;
-    eventName = void 0;
-    data = "";
-  }
-  function feed(chunk) {
-    buffer = buffer ? buffer + chunk : chunk;
-    if (isFirstChunk && hasBom(buffer)) {
-      buffer = buffer.slice(BOM.length);
-    }
-    isFirstChunk = false;
-    const length = buffer.length;
-    let position = 0;
-    let discardTrailingNewline = false;
-    while (position < length) {
-      if (discardTrailingNewline) {
-        if (buffer[position] === "\n") {
-          ++position;
-        }
-        discardTrailingNewline = false;
-      }
-      let lineLength = -1;
-      let fieldLength = startingFieldLength;
-      let character;
-      for (let index = startingPosition; lineLength < 0 && index < length; ++index) {
-        character = buffer[index];
-        if (character === ":" && fieldLength < 0) {
-          fieldLength = index - position;
-        } else if (character === "\r") {
-          discardTrailingNewline = true;
-          lineLength = index - position;
-        } else if (character === "\n") {
-          lineLength = index - position;
-        }
-      }
-      if (lineLength < 0) {
-        startingPosition = length - position;
-        startingFieldLength = fieldLength;
-        break;
-      } else {
-        startingPosition = 0;
-        startingFieldLength = -1;
-      }
-      parseEventStreamLine(buffer, position, fieldLength, lineLength);
-      position += lineLength + 1;
-    }
-    if (position === length) {
-      buffer = "";
-    } else if (position > 0) {
-      buffer = buffer.slice(position);
-    }
-  }
-  function parseEventStreamLine(lineBuffer, index, fieldLength, lineLength) {
-    if (lineLength === 0) {
-      if (data.length > 0) {
-        onParse({
-          type: "event",
-          id: eventId,
-          event: eventName || void 0,
-          data: data.slice(0, -1)
-          // remove trailing newline
-        });
-
-        data = "";
-        eventId = void 0;
-      }
-      eventName = void 0;
-      return;
-    }
-    const noValue = fieldLength < 0;
-    const field = lineBuffer.slice(index, index + (noValue ? lineLength : fieldLength));
-    let step = 0;
-    if (noValue) {
-      step = lineLength;
-    } else if (lineBuffer[index + fieldLength + 1] === " ") {
-      step = fieldLength + 2;
-    } else {
-      step = fieldLength + 1;
-    }
-    const position = index + step;
-    const valueLength = lineLength - step;
-    const value = lineBuffer.slice(position, position + valueLength).toString();
-    if (field === "data") {
-      data += value ? "".concat(value, "\n") : "\n";
-    } else if (field === "event") {
-      eventName = value;
-    } else if (field === "id" && !value.includes("\0")) {
-      eventId = value;
-    } else if (field === "retry") {
-      const retry = parseInt(value, 10);
-      if (!Number.isNaN(retry)) {
-        onParse({
-          type: "reconnect-interval",
-          value: retry
-        });
-      }
-    }
+;// CONCATENATED MODULE: ./node_modules/@ai-sdk/anthropic/node_modules/eventsource-parser/dist/index.js
+var __defProp = Object.defineProperty, __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: !0, configurable: !0, writable: !0, value }) : obj[key] = value, __publicField = (obj, key, value) => __defNormalProp(obj, typeof key != "symbol" ? key + "" : key, value);
+class ParseError extends Error {
+  constructor(message, options) {
+    super(message), __publicField(this, "type"), __publicField(this, "field"), __publicField(this, "value"), __publicField(this, "line"), this.name = "ParseError", this.type = options.type, this.field = options.field, this.value = options.value, this.line = options.line;
   }
 }
-const BOM = [239, 187, 191];
-function hasBom(buffer) {
-  return BOM.every((charCode, index) => buffer.charCodeAt(index) === charCode);
+function noop(_arg) {
+}
+function dist_createParser(callbacks) {
+  const { onEvent = noop, onError = noop, onRetry = noop, onComment } = callbacks;
+  let incompleteLine = "", isFirstChunk = !0, id, data = "", eventType = "";
+  function feed(newChunk) {
+    const chunk = isFirstChunk ? newChunk.replace(/^\xEF\xBB\xBF/, "") : newChunk, [complete, incomplete] = splitLines(`${incompleteLine}${chunk}`);
+    for (const line of complete)
+      parseLine(line);
+    incompleteLine = incomplete, isFirstChunk = !1;
+  }
+  function parseLine(line) {
+    if (line === "") {
+      dispatchEvent();
+      return;
+    }
+    if (line.startsWith(":")) {
+      onComment && onComment(line.slice(line.startsWith(": ") ? 2 : 1));
+      return;
+    }
+    const fieldSeparatorIndex = line.indexOf(":");
+    if (fieldSeparatorIndex !== -1) {
+      const field = line.slice(0, fieldSeparatorIndex), offset = line[fieldSeparatorIndex + 1] === " " ? 2 : 1, value = line.slice(fieldSeparatorIndex + offset);
+      processField(field, value, line);
+      return;
+    }
+    processField(line, "", line);
+  }
+  function processField(field, value, line) {
+    switch (field) {
+      case "event":
+        eventType = value;
+        break;
+      case "data":
+        data = `${data}${value}
+`;
+        break;
+      case "id":
+        id = value.includes("\0") ? void 0 : value;
+        break;
+      case "retry":
+        /^\d+$/.test(value) ? onRetry(parseInt(value, 10)) : onError(
+          new ParseError(`Invalid \`retry\` value: "${value}"`, {
+            type: "invalid-retry",
+            value,
+            line
+          })
+        );
+        break;
+      default:
+        onError(
+          new ParseError(
+            `Unknown field "${field.length > 20 ? `${field.slice(0, 20)}\u2026` : field}"`,
+            { type: "unknown-field", field, value, line }
+          )
+        );
+        break;
+    }
+  }
+  function dispatchEvent() {
+    data.length > 0 && onEvent({
+      id,
+      event: eventType || void 0,
+      // If the data buffer's last character is a U+000A LINE FEED (LF) character,
+      // then remove the last character from the data buffer.
+      data: data.endsWith(`
+`) ? data.slice(0, -1) : data
+    }), id = void 0, data = "", eventType = "";
+  }
+  function reset(options = {}) {
+    incompleteLine && options.consume && parseLine(incompleteLine), id = void 0, data = "", eventType = "", incompleteLine = "";
+  }
+  return { feed, reset };
+}
+function splitLines(chunk) {
+  const lines = [];
+  let incompleteLine = "";
+  const totalLength = chunk.length;
+  for (let i = 0; i < totalLength; i++) {
+    const char = chunk[i];
+    char === "\r" && chunk[i + 1] === `
+` ? (lines.push(incompleteLine), incompleteLine = "", i++) : char === "\r" || char === `
+` ? (lines.push(incompleteLine), incompleteLine = "") : incompleteLine += char;
+  }
+  return [lines, incompleteLine];
 }
 
 //# sourceMappingURL=index.js.map
 
-;// CONCATENATED MODULE: ./node_modules/eventsource-parser/dist/stream.js
+;// CONCATENATED MODULE: ./node_modules/@ai-sdk/anthropic/node_modules/eventsource-parser/dist/stream.js
 
-class EventSourceParserStream extends TransformStream {
-  constructor() {
+
+class stream_EventSourceParserStream extends TransformStream {
+  constructor({ onError, onRetry, onComment } = {}) {
     let parser;
     super({
       start(controller) {
-        parser = dist_createParser(event => {
-          if (event.type === "event") {
+        parser = dist_createParser({
+          onEvent: (event) => {
             controller.enqueue(event);
-          }
+          },
+          onError(error) {
+            onError === "terminate" ? controller.error(error) : typeof onError == "function" && onError(error);
+          },
+          onRetry,
+          onComment
         });
       },
       transform(chunk) {
@@ -39333,7 +57485,7 @@ class EventSourceParserStream extends TransformStream {
 
 //# sourceMappingURL=stream.js.map
 
-;// CONCATENATED MODULE: ./node_modules/@ai-sdk/provider-utils/dist/index.mjs
+;// CONCATENATED MODULE: ./node_modules/@ai-sdk/anthropic/node_modules/@ai-sdk/provider-utils/dist/index.mjs
 // src/combine-headers.ts
 function combineHeaders(...headers) {
   return headers.reduce(
@@ -39345,8 +57497,8 @@ function combineHeaders(...headers) {
   );
 }
 
-// src/convert-async-generator-to-readable-stream.ts
-function convertAsyncGeneratorToReadableStream(stream) {
+// src/convert-async-iterator-to-readable-stream.ts
+function convertAsyncIteratorToReadableStream(iterator) {
   return new ReadableStream({
     /**
      * Called when the consumer wants to pull more data from the stream.
@@ -39356,7 +57508,7 @@ function convertAsyncGeneratorToReadableStream(stream) {
      */
     async pull(controller) {
       try {
-        const { value, done } = await stream.next();
+        const { value, done } = await iterator.next();
         if (done) {
           controller.close();
         } else {
@@ -39388,7 +57540,7 @@ function extractResponseHeaders(response) {
 
 var createIdGenerator = ({
   prefix,
-  size: defaultSize = 7,
+  size: defaultSize = 16,
   alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
   separator = "-"
 } = {}) => {
@@ -39427,7 +57579,7 @@ function isAbortError(error) {
 
 // src/load-api-key.ts
 
-function dist_loadApiKey({
+function loadApiKey({
   apiKey,
   environmentVariableName,
   apiKeyParameterName = "apiKey",
@@ -39437,27 +57589,45 @@ function dist_loadApiKey({
     return apiKey;
   }
   if (apiKey != null) {
-    throw new LoadAPIKeyError({
+    throw new dist_LoadAPIKeyError({
       message: `${description} API key must be a string.`
     });
   }
   if (typeof process === "undefined") {
-    throw new LoadAPIKeyError({
+    throw new dist_LoadAPIKeyError({
       message: `${description} API key is missing. Pass it using the '${apiKeyParameterName}' parameter. Environment variables is not supported in this environment.`
     });
   }
   apiKey = process.env[environmentVariableName];
   if (apiKey == null) {
-    throw new LoadAPIKeyError({
+    throw new dist_LoadAPIKeyError({
       message: `${description} API key is missing. Pass it using the '${apiKeyParameterName}' parameter or the ${environmentVariableName} environment variable.`
     });
   }
   if (typeof apiKey !== "string") {
-    throw new LoadAPIKeyError({
+    throw new dist_LoadAPIKeyError({
       message: `${description} API key must be a string. The value of the ${environmentVariableName} environment variable is not a string.`
     });
   }
   return apiKey;
+}
+
+// src/load-optional-setting.ts
+function loadOptionalSetting({
+  settingValue,
+  environmentVariableName
+}) {
+  if (typeof settingValue === "string") {
+    return settingValue;
+  }
+  if (settingValue != null || typeof process === "undefined") {
+    return void 0;
+  }
+  settingValue = process.env[environmentVariableName];
+  if (settingValue == null || typeof settingValue !== "string") {
+    return void 0;
+  }
+  return settingValue;
 }
 
 // src/load-setting.ts
@@ -39491,24 +57661,6 @@ function loadSetting({
     throw new LoadSettingError({
       message: `${description} setting must be a string. The value of the ${environmentVariableName} environment variable is not a string.`
     });
-  }
-  return settingValue;
-}
-
-// src/load-optional-setting.ts
-function loadOptionalSetting({
-  settingValue,
-  environmentVariableName
-}) {
-  if (typeof settingValue === "string") {
-    return settingValue;
-  }
-  if (settingValue != null || typeof process === "undefined") {
-    return void 0;
-  }
-  settingValue = process.env[environmentVariableName];
-  if (settingValue == null || typeof settingValue !== "string") {
-    return void 0;
   }
   return settingValue;
 }
@@ -39586,10 +57738,10 @@ function parseJSON({
     }
     return validateTypes({ value, schema });
   } catch (error) {
-    if (JSONParseError.isJSONParseError(error) || dist_TypeValidationError.isTypeValidationError(error)) {
+    if (dist_JSONParseError.isInstance(error) || dist_TypeValidationError.isInstance(error)) {
       throw error;
     }
-    throw new JSONParseError({ text, cause: error });
+    throw new dist_JSONParseError({ text, cause: error });
   }
 }
 function dist_safeParseJSON({
@@ -39608,19 +57760,18 @@ function dist_safeParseJSON({
   } catch (error) {
     return {
       success: false,
-      error: JSONParseError.isJSONParseError(error) ? error : new JSONParseError({ text, cause: error })
+      error: dist_JSONParseError.isInstance(error) ? error : new dist_JSONParseError({ text, cause: error })
     };
   }
 }
 function isParsableJson(input) {
   try {
-    secure_json_parse.parse(input);
+    SecureJSON.parse(input);
     return true;
   } catch (e) {
     return false;
   }
 }
-var isParseableJson = (/* unused pure expression or super */ null && (isParsableJson));
 
 // src/post-to-api.ts
 
@@ -39683,10 +57834,10 @@ var postToApi = async ({
           requestBodyValues: body.values
         });
       } catch (error) {
-        if (isAbortError(error) || APICallError.isAPICallError(error)) {
+        if (isAbortError(error) || dist_APICallError.isInstance(error)) {
           throw error;
         }
-        throw new APICallError({
+        throw new dist_APICallError({
           message: "Failed to process error response",
           cause: error,
           statusCode: response.status,
@@ -39705,11 +57856,11 @@ var postToApi = async ({
       });
     } catch (error) {
       if (error instanceof Error) {
-        if (isAbortError(error) || APICallError.isAPICallError(error)) {
+        if (isAbortError(error) || dist_APICallError.isInstance(error)) {
           throw error;
         }
       }
-      throw new APICallError({
+      throw new dist_APICallError({
         message: "Failed to process successful response",
         cause: error,
         statusCode: response.status,
@@ -39725,7 +57876,7 @@ var postToApi = async ({
     if (error instanceof TypeError && error.message === "fetch failed") {
       const cause = error.cause;
       if (cause != null) {
-        throw new APICallError({
+        throw new dist_APICallError({
           message: `Cannot connect to API: ${cause.message}`,
           cause,
           url,
@@ -39752,7 +57903,7 @@ var createJsonErrorResponseHandler = ({
   if (responseBody.trim() === "") {
     return {
       responseHeaders,
-      value: new APICallError({
+      value: new dist_APICallError({
         message: response.statusText,
         url,
         requestBodyValues,
@@ -39770,7 +57921,7 @@ var createJsonErrorResponseHandler = ({
     });
     return {
       responseHeaders,
-      value: new APICallError({
+      value: new dist_APICallError({
         message: errorToMessage(parsedError),
         url,
         requestBodyValues,
@@ -39784,7 +57935,7 @@ var createJsonErrorResponseHandler = ({
   } catch (parseError) {
     return {
       responseHeaders,
-      value: new APICallError({
+      value: new dist_APICallError({
         message: response.statusText,
         url,
         requestBodyValues,
@@ -39803,7 +57954,7 @@ var createEventSourceResponseHandler = (chunkSchema) => async ({ response }) => 
   }
   return {
     responseHeaders,
-    value: response.body.pipeThrough(new TextDecoderStream()).pipeThrough(new EventSourceParserStream()).pipeThrough(
+    value: response.body.pipeThrough(new TextDecoderStream()).pipeThrough(new stream_EventSourceParserStream()).pipeThrough(
       new TransformStream({
         transform({ data }, controller) {
           if (data === "[DONE]") {
@@ -39855,7 +58006,7 @@ var createJsonResponseHandler = (responseSchema) => async ({ response, url, requ
   });
   const responseHeaders = extractResponseHeaders(response);
   if (!parsedResult.success) {
-    throw new APICallError({
+    throw new dist_APICallError({
       message: "Invalid JSON response",
       cause: parsedResult.error,
       statusCode: response.status,
@@ -39887,7 +58038,7 @@ function convertUint8ArrayToBase64(array) {
 }
 
 // src/without-trailing-slash.ts
-function dist_withoutTrailingSlash(url) {
+function withoutTrailingSlash(url) {
   return url == null ? void 0 : url.replace(/\/$/, "");
 }
 
@@ -44131,7 +62282,8 @@ var z = /*#__PURE__*/Object.freeze({
 
 
 ;// CONCATENATED MODULE: ./node_modules/@ai-sdk/anthropic/dist/index.mjs
-// src/anthropic-facade.ts
+// src/anthropic-provider.ts
+
 
 
 // src/anthropic-messages-language-model.ts
@@ -44572,12 +62724,11 @@ var AnthropicMessagesLanguageModel = class {
     const baseArgs = {
       // model id:
       model: this.modelId,
-      // model specific settings:
-      top_k: topK != null ? topK : this.settings.topK,
       // standardized settings:
       max_tokens: maxTokens != null ? maxTokens : 4096,
-      // 4096: max model output tokens
+      // 4096: max model output tokens TODO remove
       temperature,
+      top_k: topK,
       top_p: topP,
       stop_sequences: stopSequences,
       // prompt:
@@ -44940,49 +63091,6 @@ var anthropicMessagesChunkSchema = z.discriminatedUnion("type", [
   })
 ]);
 
-// src/anthropic-facade.ts
-var Anthropic = class {
-  /**
-   * Creates a new Anthropic provider instance.
-   */
-  constructor(options = {}) {
-    var _a, _b;
-    this.baseURL = (_b = withoutTrailingSlash((_a = options.baseURL) != null ? _a : options.baseUrl)) != null ? _b : "https://api.anthropic.com/v1";
-    this.apiKey = options.apiKey;
-    this.headers = options.headers;
-  }
-  get baseConfig() {
-    return {
-      baseURL: this.baseURL,
-      headers: () => ({
-        "anthropic-version": "2023-06-01",
-        "x-api-key": loadApiKey({
-          apiKey: this.apiKey,
-          environmentVariableName: "ANTHROPIC_API_KEY",
-          description: "Anthropic"
-        }),
-        ...this.headers
-      })
-    };
-  }
-  /**
-   * @deprecated Use `chat()` instead.
-   */
-  messages(modelId, settings = {}) {
-    return this.chat(modelId, settings);
-  }
-  chat(modelId, settings = {}) {
-    return new AnthropicMessagesLanguageModel(modelId, settings, {
-      provider: "anthropic.messages",
-      ...this.baseConfig
-    });
-  }
-};
-
-// src/anthropic-provider.ts
-
-
-
 // src/anthropic-tools.ts
 
 var Bash20241022Parameters = z.object({
@@ -45056,11 +63164,11 @@ var anthropicTools = {
 
 // src/anthropic-provider.ts
 function createAnthropic(options = {}) {
-  var _a, _b;
-  const baseURL = (_b = dist_withoutTrailingSlash((_a = options.baseURL) != null ? _a : options.baseUrl)) != null ? _b : "https://api.anthropic.com/v1";
+  var _a;
+  const baseURL = (_a = withoutTrailingSlash(options.baseURL)) != null ? _a : "https://api.anthropic.com/v1";
   const getHeaders = () => ({
     "anthropic-version": "2023-06-01",
-    "x-api-key": dist_loadApiKey({
+    "x-api-key": loadApiKey({
       apiKey: options.apiKey,
       environmentVariableName: "ANTHROPIC_API_KEY",
       description: "Anthropic"
@@ -45093,8 +63201,1065 @@ function createAnthropic(options = {}) {
 var anthropic = createAnthropic();
 
 //# sourceMappingURL=index.mjs.map
+;// CONCATENATED MODULE: ./node_modules/@ai-sdk/openai/node_modules/@ai-sdk/provider/dist/index.mjs
+// src/errors/ai-sdk-error.ts
+var dist_marker = "vercel.ai.error";
+var dist_symbol = Symbol.for(dist_marker);
+var dist_a;
+var dist_AISDKError = class _AISDKError extends Error {
+  /**
+   * Creates an AI SDK Error.
+   *
+   * @param {Object} params - The parameters for creating the error.
+   * @param {string} params.name - The name of the error.
+   * @param {string} params.message - The error message.
+   * @param {unknown} [params.cause] - The underlying cause of the error.
+   */
+  constructor({
+    name: name14,
+    message,
+    cause
+  }) {
+    super(message);
+    this[dist_a] = true;
+    this.name = name14;
+    this.cause = cause;
+  }
+  /**
+   * Checks if the given error is an AI SDK Error.
+   * @param {unknown} error - The error to check.
+   * @returns {boolean} True if the error is an AI SDK Error, false otherwise.
+   */
+  static isInstance(error) {
+    return _AISDKError.hasMarker(error, dist_marker);
+  }
+  static hasMarker(error, marker15) {
+    const markerSymbol = Symbol.for(marker15);
+    return error != null && typeof error === "object" && markerSymbol in error && typeof error[markerSymbol] === "boolean" && error[markerSymbol] === true;
+  }
+};
+dist_a = dist_symbol;
+var provider_dist_AISDKError = dist_AISDKError;
+
+// src/errors/api-call-error.ts
+var provider_dist_name = "AI_APICallError";
+var dist_marker2 = `vercel.ai.error.${provider_dist_name}`;
+var dist_symbol2 = Symbol.for(dist_marker2);
+var dist_a2;
+var provider_dist_APICallError = class extends provider_dist_AISDKError {
+  constructor({
+    message,
+    url,
+    requestBodyValues,
+    statusCode,
+    responseHeaders,
+    responseBody,
+    cause,
+    isRetryable = statusCode != null && (statusCode === 408 || // request timeout
+    statusCode === 409 || // conflict
+    statusCode === 429 || // too many requests
+    statusCode >= 500),
+    // server error
+    data
+  }) {
+    super({ name: provider_dist_name, message, cause });
+    this[dist_a2] = true;
+    this.url = url;
+    this.requestBodyValues = requestBodyValues;
+    this.statusCode = statusCode;
+    this.responseHeaders = responseHeaders;
+    this.responseBody = responseBody;
+    this.isRetryable = isRetryable;
+    this.data = data;
+  }
+  static isInstance(error) {
+    return provider_dist_AISDKError.hasMarker(error, dist_marker2);
+  }
+};
+dist_a2 = dist_symbol2;
+
+// src/errors/empty-response-body-error.ts
+var dist_name2 = "AI_EmptyResponseBodyError";
+var dist_marker3 = `vercel.ai.error.${dist_name2}`;
+var dist_symbol3 = Symbol.for(dist_marker3);
+var dist_a3;
+var provider_dist_EmptyResponseBodyError = class extends provider_dist_AISDKError {
+  // used in isInstance
+  constructor({ message = "Empty response body" } = {}) {
+    super({ name: dist_name2, message });
+    this[dist_a3] = true;
+  }
+  static isInstance(error) {
+    return provider_dist_AISDKError.hasMarker(error, dist_marker3);
+  }
+};
+dist_a3 = dist_symbol3;
+
+// src/errors/get-error-message.ts
+function provider_dist_getErrorMessage(error) {
+  if (error == null) {
+    return "unknown error";
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return JSON.stringify(error);
+}
+
+// src/errors/invalid-argument-error.ts
+var dist_name3 = "AI_InvalidArgumentError";
+var dist_marker4 = `vercel.ai.error.${dist_name3}`;
+var dist_symbol4 = Symbol.for(dist_marker4);
+var dist_a4;
+var dist_InvalidArgumentError = class extends provider_dist_AISDKError {
+  constructor({
+    message,
+    cause,
+    argument
+  }) {
+    super({ name: dist_name3, message, cause });
+    this[dist_a4] = true;
+    this.argument = argument;
+  }
+  static isInstance(error) {
+    return provider_dist_AISDKError.hasMarker(error, dist_marker4);
+  }
+};
+dist_a4 = dist_symbol4;
+
+// src/errors/invalid-prompt-error.ts
+var dist_name4 = "AI_InvalidPromptError";
+var dist_marker5 = `vercel.ai.error.${dist_name4}`;
+var dist_symbol5 = Symbol.for(dist_marker5);
+var dist_a5;
+var dist_InvalidPromptError = class extends provider_dist_AISDKError {
+  constructor({
+    prompt,
+    message,
+    cause
+  }) {
+    super({ name: dist_name4, message: `Invalid prompt: ${message}`, cause });
+    this[dist_a5] = true;
+    this.prompt = prompt;
+  }
+  static isInstance(error) {
+    return provider_dist_AISDKError.hasMarker(error, dist_marker5);
+  }
+};
+dist_a5 = dist_symbol5;
+
+// src/errors/invalid-response-data-error.ts
+var dist_name5 = "AI_InvalidResponseDataError";
+var dist_marker6 = `vercel.ai.error.${dist_name5}`;
+var dist_symbol6 = Symbol.for(dist_marker6);
+var dist_a6;
+var dist_InvalidResponseDataError = class extends provider_dist_AISDKError {
+  constructor({
+    data,
+    message = `Invalid response data: ${JSON.stringify(data)}.`
+  }) {
+    super({ name: dist_name5, message });
+    this[dist_a6] = true;
+    this.data = data;
+  }
+  static isInstance(error) {
+    return provider_dist_AISDKError.hasMarker(error, dist_marker6);
+  }
+};
+dist_a6 = dist_symbol6;
+
+// src/errors/json-parse-error.ts
+var dist_name6 = "AI_JSONParseError";
+var dist_marker7 = `vercel.ai.error.${dist_name6}`;
+var dist_symbol7 = Symbol.for(dist_marker7);
+var dist_a7;
+var provider_dist_JSONParseError = class extends provider_dist_AISDKError {
+  constructor({ text, cause }) {
+    super({
+      name: dist_name6,
+      message: `JSON parsing failed: Text: ${text}.
+Error message: ${provider_dist_getErrorMessage(cause)}`,
+      cause
+    });
+    this[dist_a7] = true;
+    this.text = text;
+  }
+  static isInstance(error) {
+    return provider_dist_AISDKError.hasMarker(error, dist_marker7);
+  }
+};
+dist_a7 = dist_symbol7;
+
+// src/errors/load-api-key-error.ts
+var dist_name7 = "AI_LoadAPIKeyError";
+var dist_marker8 = `vercel.ai.error.${dist_name7}`;
+var dist_symbol8 = Symbol.for(dist_marker8);
+var dist_a8;
+var provider_dist_LoadAPIKeyError = class extends provider_dist_AISDKError {
+  // used in isInstance
+  constructor({ message }) {
+    super({ name: dist_name7, message });
+    this[dist_a8] = true;
+  }
+  static isInstance(error) {
+    return provider_dist_AISDKError.hasMarker(error, dist_marker8);
+  }
+};
+dist_a8 = dist_symbol8;
+
+// src/errors/load-setting-error.ts
+var dist_name8 = "AI_LoadSettingError";
+var dist_marker9 = `vercel.ai.error.${dist_name8}`;
+var dist_symbol9 = Symbol.for(dist_marker9);
+var dist_a9;
+var provider_dist_LoadSettingError = class extends (/* unused pure expression or super */ null && (provider_dist_AISDKError)) {
+  // used in isInstance
+  constructor({ message }) {
+    super({ name: dist_name8, message });
+    this[dist_a9] = true;
+  }
+  static isInstance(error) {
+    return provider_dist_AISDKError.hasMarker(error, dist_marker9);
+  }
+};
+dist_a9 = dist_symbol9;
+
+// src/errors/no-content-generated-error.ts
+var dist_name9 = "AI_NoContentGeneratedError";
+var dist_marker10 = `vercel.ai.error.${dist_name9}`;
+var dist_symbol10 = Symbol.for(dist_marker10);
+var dist_a10;
+var dist_NoContentGeneratedError = class extends (/* unused pure expression or super */ null && (provider_dist_AISDKError)) {
+  // used in isInstance
+  constructor({
+    message = "No content generated."
+  } = {}) {
+    super({ name: dist_name9, message });
+    this[dist_a10] = true;
+  }
+  static isInstance(error) {
+    return provider_dist_AISDKError.hasMarker(error, dist_marker10);
+  }
+};
+dist_a10 = dist_symbol10;
+
+// src/errors/no-such-model-error.ts
+var dist_name10 = "AI_NoSuchModelError";
+var dist_marker11 = `vercel.ai.error.${dist_name10}`;
+var dist_symbol11 = Symbol.for(dist_marker11);
+var dist_a11;
+var dist_NoSuchModelError = class extends (/* unused pure expression or super */ null && (provider_dist_AISDKError)) {
+  constructor({
+    errorName = dist_name10,
+    modelId,
+    modelType,
+    message = `No such ${modelType}: ${modelId}`
+  }) {
+    super({ name: errorName, message });
+    this[dist_a11] = true;
+    this.modelId = modelId;
+    this.modelType = modelType;
+  }
+  static isInstance(error) {
+    return provider_dist_AISDKError.hasMarker(error, dist_marker11);
+  }
+};
+dist_a11 = dist_symbol11;
+
+// src/errors/too-many-embedding-values-for-call-error.ts
+var dist_name11 = "AI_TooManyEmbeddingValuesForCallError";
+var dist_marker12 = `vercel.ai.error.${dist_name11}`;
+var dist_symbol12 = Symbol.for(dist_marker12);
+var dist_a12;
+var dist_TooManyEmbeddingValuesForCallError = class extends provider_dist_AISDKError {
+  constructor(options) {
+    super({
+      name: dist_name11,
+      message: `Too many values for a single embedding call. The ${options.provider} model "${options.modelId}" can only embed up to ${options.maxEmbeddingsPerCall} values per call, but ${options.values.length} values were provided.`
+    });
+    this[dist_a12] = true;
+    this.provider = options.provider;
+    this.modelId = options.modelId;
+    this.maxEmbeddingsPerCall = options.maxEmbeddingsPerCall;
+    this.values = options.values;
+  }
+  static isInstance(error) {
+    return provider_dist_AISDKError.hasMarker(error, dist_marker12);
+  }
+};
+dist_a12 = dist_symbol12;
+
+// src/errors/type-validation-error.ts
+var dist_name12 = "AI_TypeValidationError";
+var dist_marker13 = `vercel.ai.error.${dist_name12}`;
+var dist_symbol13 = Symbol.for(dist_marker13);
+var dist_a13;
+var provider_dist_TypeValidationError = class _TypeValidationError extends provider_dist_AISDKError {
+  constructor({ value, cause }) {
+    super({
+      name: dist_name12,
+      message: `Type validation failed: Value: ${JSON.stringify(value)}.
+Error message: ${provider_dist_getErrorMessage(cause)}`,
+      cause
+    });
+    this[dist_a13] = true;
+    this.value = value;
+  }
+  static isInstance(error) {
+    return provider_dist_AISDKError.hasMarker(error, dist_marker13);
+  }
+  /**
+   * Wraps an error into a TypeValidationError.
+   * If the cause is already a TypeValidationError with the same value, it returns the cause.
+   * Otherwise, it creates a new TypeValidationError.
+   *
+   * @param {Object} params - The parameters for wrapping the error.
+   * @param {unknown} params.value - The value that failed validation.
+   * @param {unknown} params.cause - The original error or cause of the validation failure.
+   * @returns {TypeValidationError} A TypeValidationError instance.
+   */
+  static wrap({
+    value,
+    cause
+  }) {
+    return _TypeValidationError.isInstance(cause) && cause.value === value ? cause : new _TypeValidationError({ value, cause });
+  }
+};
+dist_a13 = dist_symbol13;
+var _ai_sdk_provider_dist_TypeValidationError = provider_dist_TypeValidationError;
+
+// src/errors/unsupported-functionality-error.ts
+var dist_name13 = "AI_UnsupportedFunctionalityError";
+var dist_marker14 = `vercel.ai.error.${dist_name13}`;
+var dist_symbol14 = Symbol.for(dist_marker14);
+var dist_a14;
+var provider_dist_UnsupportedFunctionalityError = class extends provider_dist_AISDKError {
+  constructor({ functionality }) {
+    super({
+      name: dist_name13,
+      message: `'${functionality}' functionality not supported.`
+    });
+    this[dist_a14] = true;
+    this.functionality = functionality;
+  }
+  static isInstance(error) {
+    return provider_dist_AISDKError.hasMarker(error, dist_marker14);
+  }
+};
+dist_a14 = dist_symbol14;
+
+// src/json-value/is-json.ts
+function dist_isJSONValue(value) {
+  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.every(dist_isJSONValue);
+  }
+  if (typeof value === "object") {
+    return Object.entries(value).every(
+      ([key, val]) => typeof key === "string" && dist_isJSONValue(val)
+    );
+  }
+  return false;
+}
+function provider_dist_isJSONArray(value) {
+  return Array.isArray(value) && value.every(dist_isJSONValue);
+}
+function provider_dist_isJSONObject(value) {
+  return value != null && typeof value === "object" && Object.entries(value).every(
+    ([key, val]) => typeof key === "string" && dist_isJSONValue(val)
+  );
+}
+
+//# sourceMappingURL=index.mjs.map
+;// CONCATENATED MODULE: ./node_modules/@ai-sdk/openai/node_modules/eventsource-parser/dist/index.js
+var dist_defProp = Object.defineProperty, dist_defNormalProp = (obj, key, value) => key in obj ? dist_defProp(obj, key, { enumerable: !0, configurable: !0, writable: !0, value }) : obj[key] = value, dist_publicField = (obj, key, value) => dist_defNormalProp(obj, typeof key != "symbol" ? key + "" : key, value);
+class dist_ParseError extends Error {
+  constructor(message, options) {
+    super(message), dist_publicField(this, "type"), dist_publicField(this, "field"), dist_publicField(this, "value"), dist_publicField(this, "line"), this.name = "ParseError", this.type = options.type, this.field = options.field, this.value = options.value, this.line = options.line;
+  }
+}
+function dist_noop(_arg) {
+}
+function eventsource_parser_dist_createParser(callbacks) {
+  const { onEvent = dist_noop, onError = dist_noop, onRetry = dist_noop, onComment } = callbacks;
+  let incompleteLine = "", isFirstChunk = !0, id, data = "", eventType = "";
+  function feed(newChunk) {
+    const chunk = isFirstChunk ? newChunk.replace(/^\xEF\xBB\xBF/, "") : newChunk, [complete, incomplete] = dist_splitLines(`${incompleteLine}${chunk}`);
+    for (const line of complete)
+      parseLine(line);
+    incompleteLine = incomplete, isFirstChunk = !1;
+  }
+  function parseLine(line) {
+    if (line === "") {
+      dispatchEvent();
+      return;
+    }
+    if (line.startsWith(":")) {
+      onComment && onComment(line.slice(line.startsWith(": ") ? 2 : 1));
+      return;
+    }
+    const fieldSeparatorIndex = line.indexOf(":");
+    if (fieldSeparatorIndex !== -1) {
+      const field = line.slice(0, fieldSeparatorIndex), offset = line[fieldSeparatorIndex + 1] === " " ? 2 : 1, value = line.slice(fieldSeparatorIndex + offset);
+      processField(field, value, line);
+      return;
+    }
+    processField(line, "", line);
+  }
+  function processField(field, value, line) {
+    switch (field) {
+      case "event":
+        eventType = value;
+        break;
+      case "data":
+        data = `${data}${value}
+`;
+        break;
+      case "id":
+        id = value.includes("\0") ? void 0 : value;
+        break;
+      case "retry":
+        /^\d+$/.test(value) ? onRetry(parseInt(value, 10)) : onError(
+          new dist_ParseError(`Invalid \`retry\` value: "${value}"`, {
+            type: "invalid-retry",
+            value,
+            line
+          })
+        );
+        break;
+      default:
+        onError(
+          new dist_ParseError(
+            `Unknown field "${field.length > 20 ? `${field.slice(0, 20)}\u2026` : field}"`,
+            { type: "unknown-field", field, value, line }
+          )
+        );
+        break;
+    }
+  }
+  function dispatchEvent() {
+    data.length > 0 && onEvent({
+      id,
+      event: eventType || void 0,
+      // If the data buffer's last character is a U+000A LINE FEED (LF) character,
+      // then remove the last character from the data buffer.
+      data: data.endsWith(`
+`) ? data.slice(0, -1) : data
+    }), id = void 0, data = "", eventType = "";
+  }
+  function reset(options = {}) {
+    incompleteLine && options.consume && parseLine(incompleteLine), id = void 0, data = "", eventType = "", incompleteLine = "";
+  }
+  return { feed, reset };
+}
+function dist_splitLines(chunk) {
+  const lines = [];
+  let incompleteLine = "";
+  const totalLength = chunk.length;
+  for (let i = 0; i < totalLength; i++) {
+    const char = chunk[i];
+    char === "\r" && chunk[i + 1] === `
+` ? (lines.push(incompleteLine), incompleteLine = "", i++) : char === "\r" || char === `
+` ? (lines.push(incompleteLine), incompleteLine = "") : incompleteLine += char;
+  }
+  return [lines, incompleteLine];
+}
+
+//# sourceMappingURL=index.js.map
+
+;// CONCATENATED MODULE: ./node_modules/@ai-sdk/openai/node_modules/eventsource-parser/dist/stream.js
+
+
+class dist_stream_EventSourceParserStream extends TransformStream {
+  constructor({ onError, onRetry, onComment } = {}) {
+    let parser;
+    super({
+      start(controller) {
+        parser = eventsource_parser_dist_createParser({
+          onEvent: (event) => {
+            controller.enqueue(event);
+          },
+          onError(error) {
+            onError === "terminate" ? controller.error(error) : typeof onError == "function" && onError(error);
+          },
+          onRetry,
+          onComment
+        });
+      },
+      transform(chunk) {
+        parser.feed(chunk);
+      }
+    });
+  }
+}
+
+//# sourceMappingURL=stream.js.map
+
+;// CONCATENATED MODULE: ./node_modules/@ai-sdk/openai/node_modules/@ai-sdk/provider-utils/dist/index.mjs
+// src/combine-headers.ts
+function dist_combineHeaders(...headers) {
+  return headers.reduce(
+    (combinedHeaders, currentHeaders) => ({
+      ...combinedHeaders,
+      ...currentHeaders != null ? currentHeaders : {}
+    }),
+    {}
+  );
+}
+
+// src/convert-async-iterator-to-readable-stream.ts
+function dist_convertAsyncIteratorToReadableStream(iterator) {
+  return new ReadableStream({
+    /**
+     * Called when the consumer wants to pull more data from the stream.
+     *
+     * @param {ReadableStreamDefaultController<T>} controller - The controller to enqueue data into the stream.
+     * @returns {Promise<void>}
+     */
+    async pull(controller) {
+      try {
+        const { value, done } = await iterator.next();
+        if (done) {
+          controller.close();
+        } else {
+          controller.enqueue(value);
+        }
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+    /**
+     * Called when the consumer cancels the stream.
+     */
+    cancel() {
+    }
+  });
+}
+
+// src/extract-response-headers.ts
+function dist_extractResponseHeaders(response) {
+  const headers = {};
+  response.headers.forEach((value, key) => {
+    headers[key] = value;
+  });
+  return headers;
+}
+
+// src/generate-id.ts
+
+
+var dist_createIdGenerator = ({
+  prefix,
+  size: defaultSize = 16,
+  alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+  separator = "-"
+} = {}) => {
+  const generator = customAlphabet(alphabet, defaultSize);
+  if (prefix == null) {
+    return generator;
+  }
+  if (alphabet.includes(separator)) {
+    throw new dist_InvalidArgumentError({
+      argument: "separator",
+      message: `The separator "${separator}" must not be part of the alphabet "${alphabet}".`
+    });
+  }
+  return (size) => `${prefix}${separator}${generator(size)}`;
+};
+var provider_utils_dist_generateId = dist_createIdGenerator();
+
+// src/get-error-message.ts
+function provider_utils_dist_getErrorMessage(error) {
+  if (error == null) {
+    return "unknown error";
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return JSON.stringify(error);
+}
+
+// src/is-abort-error.ts
+function dist_isAbortError(error) {
+  return error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
+}
+
+// src/load-api-key.ts
+
+function dist_loadApiKey({
+  apiKey,
+  environmentVariableName,
+  apiKeyParameterName = "apiKey",
+  description
+}) {
+  if (typeof apiKey === "string") {
+    return apiKey;
+  }
+  if (apiKey != null) {
+    throw new provider_dist_LoadAPIKeyError({
+      message: `${description} API key must be a string.`
+    });
+  }
+  if (typeof process === "undefined") {
+    throw new provider_dist_LoadAPIKeyError({
+      message: `${description} API key is missing. Pass it using the '${apiKeyParameterName}' parameter. Environment variables is not supported in this environment.`
+    });
+  }
+  apiKey = process.env[environmentVariableName];
+  if (apiKey == null) {
+    throw new provider_dist_LoadAPIKeyError({
+      message: `${description} API key is missing. Pass it using the '${apiKeyParameterName}' parameter or the ${environmentVariableName} environment variable.`
+    });
+  }
+  if (typeof apiKey !== "string") {
+    throw new provider_dist_LoadAPIKeyError({
+      message: `${description} API key must be a string. The value of the ${environmentVariableName} environment variable is not a string.`
+    });
+  }
+  return apiKey;
+}
+
+// src/load-optional-setting.ts
+function dist_loadOptionalSetting({
+  settingValue,
+  environmentVariableName
+}) {
+  if (typeof settingValue === "string") {
+    return settingValue;
+  }
+  if (settingValue != null || typeof process === "undefined") {
+    return void 0;
+  }
+  settingValue = process.env[environmentVariableName];
+  if (settingValue == null || typeof settingValue !== "string") {
+    return void 0;
+  }
+  return settingValue;
+}
+
+// src/load-setting.ts
+
+function dist_loadSetting({
+  settingValue,
+  environmentVariableName,
+  settingName,
+  description
+}) {
+  if (typeof settingValue === "string") {
+    return settingValue;
+  }
+  if (settingValue != null) {
+    throw new LoadSettingError({
+      message: `${description} setting must be a string.`
+    });
+  }
+  if (typeof process === "undefined") {
+    throw new LoadSettingError({
+      message: `${description} setting is missing. Pass it using the '${settingName}' parameter. Environment variables is not supported in this environment.`
+    });
+  }
+  settingValue = process.env[environmentVariableName];
+  if (settingValue == null) {
+    throw new LoadSettingError({
+      message: `${description} setting is missing. Pass it using the '${settingName}' parameter or the ${environmentVariableName} environment variable.`
+    });
+  }
+  if (typeof settingValue !== "string") {
+    throw new LoadSettingError({
+      message: `${description} setting must be a string. The value of the ${environmentVariableName} environment variable is not a string.`
+    });
+  }
+  return settingValue;
+}
+
+// src/parse-json.ts
+
+
+
+// src/validate-types.ts
+
+
+// src/validator.ts
+var dist_validatorSymbol = Symbol.for("vercel.ai.validator");
+function dist_validator(validate) {
+  return { [dist_validatorSymbol]: true, validate };
+}
+function dist_isValidator(value) {
+  return typeof value === "object" && value !== null && dist_validatorSymbol in value && value[dist_validatorSymbol] === true && "validate" in value;
+}
+function dist_asValidator(value) {
+  return dist_isValidator(value) ? value : dist_zodValidator(value);
+}
+function dist_zodValidator(zodSchema) {
+  return dist_validator((value) => {
+    const result = zodSchema.safeParse(value);
+    return result.success ? { success: true, value: result.data } : { success: false, error: result.error };
+  });
+}
+
+// src/validate-types.ts
+function dist_validateTypes({
+  value,
+  schema: inputSchema
+}) {
+  const result = dist_safeValidateTypes({ value, schema: inputSchema });
+  if (!result.success) {
+    throw _ai_sdk_provider_dist_TypeValidationError.wrap({ value, cause: result.error });
+  }
+  return result.value;
+}
+function dist_safeValidateTypes({
+  value,
+  schema
+}) {
+  const validator2 = dist_asValidator(schema);
+  try {
+    if (validator2.validate == null) {
+      return { success: true, value };
+    }
+    const result = validator2.validate(value);
+    if (result.success) {
+      return result;
+    }
+    return {
+      success: false,
+      error: _ai_sdk_provider_dist_TypeValidationError.wrap({ value, cause: result.error })
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: _ai_sdk_provider_dist_TypeValidationError.wrap({ value, cause: error })
+    };
+  }
+}
+
+// src/parse-json.ts
+function dist_parseJSON({
+  text,
+  schema
+}) {
+  try {
+    const value = secure_json_parse.parse(text);
+    if (schema == null) {
+      return value;
+    }
+    return dist_validateTypes({ value, schema });
+  } catch (error) {
+    if (provider_dist_JSONParseError.isInstance(error) || _ai_sdk_provider_dist_TypeValidationError.isInstance(error)) {
+      throw error;
+    }
+    throw new provider_dist_JSONParseError({ text, cause: error });
+  }
+}
+function provider_utils_dist_safeParseJSON({
+  text,
+  schema
+}) {
+  try {
+    const value = secure_json_parse.parse(text);
+    if (schema == null) {
+      return {
+        success: true,
+        value
+      };
+    }
+    return dist_safeValidateTypes({ value, schema });
+  } catch (error) {
+    return {
+      success: false,
+      error: provider_dist_JSONParseError.isInstance(error) ? error : new provider_dist_JSONParseError({ text, cause: error })
+    };
+  }
+}
+function dist_isParsableJson(input) {
+  try {
+    secure_json_parse.parse(input);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// src/post-to-api.ts
+
+
+// src/remove-undefined-entries.ts
+function dist_removeUndefinedEntries(record) {
+  return Object.fromEntries(
+    Object.entries(record).filter(([_key, value]) => value != null)
+  );
+}
+
+// src/post-to-api.ts
+var dist_getOriginalFetch = () => globalThis.fetch;
+var dist_postJsonToApi = async ({
+  url,
+  headers,
+  body,
+  failedResponseHandler,
+  successfulResponseHandler,
+  abortSignal,
+  fetch
+}) => dist_postToApi({
+  url,
+  headers: {
+    "Content-Type": "application/json",
+    ...headers
+  },
+  body: {
+    content: JSON.stringify(body),
+    values: body
+  },
+  failedResponseHandler,
+  successfulResponseHandler,
+  abortSignal,
+  fetch
+});
+var dist_postToApi = async ({
+  url,
+  headers = {},
+  body,
+  successfulResponseHandler,
+  failedResponseHandler,
+  abortSignal,
+  fetch = dist_getOriginalFetch()
+}) => {
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: dist_removeUndefinedEntries(headers),
+      body: body.content,
+      signal: abortSignal
+    });
+    const responseHeaders = dist_extractResponseHeaders(response);
+    if (!response.ok) {
+      let errorInformation;
+      try {
+        errorInformation = await failedResponseHandler({
+          response,
+          url,
+          requestBodyValues: body.values
+        });
+      } catch (error) {
+        if (dist_isAbortError(error) || provider_dist_APICallError.isInstance(error)) {
+          throw error;
+        }
+        throw new provider_dist_APICallError({
+          message: "Failed to process error response",
+          cause: error,
+          statusCode: response.status,
+          url,
+          responseHeaders,
+          requestBodyValues: body.values
+        });
+      }
+      throw errorInformation.value;
+    }
+    try {
+      return await successfulResponseHandler({
+        response,
+        url,
+        requestBodyValues: body.values
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        if (dist_isAbortError(error) || provider_dist_APICallError.isInstance(error)) {
+          throw error;
+        }
+      }
+      throw new provider_dist_APICallError({
+        message: "Failed to process successful response",
+        cause: error,
+        statusCode: response.status,
+        url,
+        responseHeaders,
+        requestBodyValues: body.values
+      });
+    }
+  } catch (error) {
+    if (dist_isAbortError(error)) {
+      throw error;
+    }
+    if (error instanceof TypeError && error.message === "fetch failed") {
+      const cause = error.cause;
+      if (cause != null) {
+        throw new provider_dist_APICallError({
+          message: `Cannot connect to API: ${cause.message}`,
+          cause,
+          url,
+          requestBodyValues: body.values,
+          isRetryable: true
+          // retry when network error
+        });
+      }
+    }
+    throw error;
+  }
+};
+
+// src/response-handler.ts
+
+
+var dist_createJsonErrorResponseHandler = ({
+  errorSchema,
+  errorToMessage,
+  isRetryable
+}) => async ({ response, url, requestBodyValues }) => {
+  const responseBody = await response.text();
+  const responseHeaders = dist_extractResponseHeaders(response);
+  if (responseBody.trim() === "") {
+    return {
+      responseHeaders,
+      value: new provider_dist_APICallError({
+        message: response.statusText,
+        url,
+        requestBodyValues,
+        statusCode: response.status,
+        responseHeaders,
+        responseBody,
+        isRetryable: isRetryable == null ? void 0 : isRetryable(response)
+      })
+    };
+  }
+  try {
+    const parsedError = dist_parseJSON({
+      text: responseBody,
+      schema: errorSchema
+    });
+    return {
+      responseHeaders,
+      value: new provider_dist_APICallError({
+        message: errorToMessage(parsedError),
+        url,
+        requestBodyValues,
+        statusCode: response.status,
+        responseHeaders,
+        responseBody,
+        data: parsedError,
+        isRetryable: isRetryable == null ? void 0 : isRetryable(response, parsedError)
+      })
+    };
+  } catch (parseError) {
+    return {
+      responseHeaders,
+      value: new provider_dist_APICallError({
+        message: response.statusText,
+        url,
+        requestBodyValues,
+        statusCode: response.status,
+        responseHeaders,
+        responseBody,
+        isRetryable: isRetryable == null ? void 0 : isRetryable(response)
+      })
+    };
+  }
+};
+var dist_createEventSourceResponseHandler = (chunkSchema) => async ({ response }) => {
+  const responseHeaders = dist_extractResponseHeaders(response);
+  if (response.body == null) {
+    throw new provider_dist_EmptyResponseBodyError({});
+  }
+  return {
+    responseHeaders,
+    value: response.body.pipeThrough(new TextDecoderStream()).pipeThrough(new dist_stream_EventSourceParserStream()).pipeThrough(
+      new TransformStream({
+        transform({ data }, controller) {
+          if (data === "[DONE]") {
+            return;
+          }
+          controller.enqueue(
+            provider_utils_dist_safeParseJSON({
+              text: data,
+              schema: chunkSchema
+            })
+          );
+        }
+      })
+    )
+  };
+};
+var dist_createJsonStreamResponseHandler = (chunkSchema) => async ({ response }) => {
+  const responseHeaders = dist_extractResponseHeaders(response);
+  if (response.body == null) {
+    throw new EmptyResponseBodyError({});
+  }
+  let buffer = "";
+  return {
+    responseHeaders,
+    value: response.body.pipeThrough(new TextDecoderStream()).pipeThrough(
+      new TransformStream({
+        transform(chunkText, controller) {
+          if (chunkText.endsWith("\n")) {
+            controller.enqueue(
+              provider_utils_dist_safeParseJSON({
+                text: buffer + chunkText,
+                schema: chunkSchema
+              })
+            );
+            buffer = "";
+          } else {
+            buffer += chunkText;
+          }
+        }
+      })
+    )
+  };
+};
+var dist_createJsonResponseHandler = (responseSchema) => async ({ response, url, requestBodyValues }) => {
+  const responseBody = await response.text();
+  const parsedResult = provider_utils_dist_safeParseJSON({
+    text: responseBody,
+    schema: responseSchema
+  });
+  const responseHeaders = dist_extractResponseHeaders(response);
+  if (!parsedResult.success) {
+    throw new provider_dist_APICallError({
+      message: "Invalid JSON response",
+      cause: parsedResult.error,
+      statusCode: response.status,
+      responseHeaders,
+      responseBody,
+      url,
+      requestBodyValues
+    });
+  }
+  return {
+    responseHeaders,
+    value: parsedResult.value
+  };
+};
+
+// src/uint8-utils.ts
+var { btoa: dist_btoa, atob: dist_atob } = globalThis;
+function dist_convertBase64ToUint8Array(base64String) {
+  const base64Url = base64String.replace(/-/g, "+").replace(/_/g, "/");
+  const latin1string = dist_atob(base64Url);
+  return Uint8Array.from(latin1string, (byte) => byte.codePointAt(0));
+}
+function dist_convertUint8ArrayToBase64(array) {
+  let latin1string = "";
+  for (let i = 0; i < array.length; i++) {
+    latin1string += String.fromCodePoint(array[i]);
+  }
+  return dist_btoa(latin1string);
+}
+
+// src/without-trailing-slash.ts
+function dist_withoutTrailingSlash(url) {
+  return url == null ? void 0 : url.replace(/\/$/, "");
+}
+
+//# sourceMappingURL=index.mjs.map
 ;// CONCATENATED MODULE: ./node_modules/@ai-sdk/openai/dist/index.mjs
-// src/openai-facade.ts
+// src/openai-provider.ts
 
 
 // src/openai-chat-language-model.ts
@@ -45133,7 +64298,7 @@ function convertToOpenAIChatMessages({
                 return {
                   type: "image_url",
                   image_url: {
-                    url: part.image instanceof URL ? part.image.toString() : `data:${(_a = part.mimeType) != null ? _a : "image/jpeg"};base64,${convertUint8ArrayToBase64(part.image)}`,
+                    url: part.image instanceof URL ? part.image.toString() : `data:${(_a = part.mimeType) != null ? _a : "image/jpeg"};base64,${dist_convertUint8ArrayToBase64(part.image)}`,
                     // OpenAI specific extension: image detail
                     detail: (_c = (_b = part.providerMetadata) == null ? void 0 : _b.openai) == null ? void 0 : _c.imageDetail
                   }
@@ -45141,7 +64306,7 @@ function convertToOpenAIChatMessages({
               }
               case "file": {
                 if (part.data instanceof URL) {
-                  throw new dist_UnsupportedFunctionalityError({
+                  throw new provider_dist_UnsupportedFunctionalityError({
                     functionality: "'File content parts with URL data' functionality not supported."
                   });
                 }
@@ -45160,7 +64325,7 @@ function convertToOpenAIChatMessages({
                     };
                   }
                   default: {
-                    throw new dist_UnsupportedFunctionalityError({
+                    throw new provider_dist_UnsupportedFunctionalityError({
                       functionality: `File content part type ${part.mimeType} in user messages`
                     });
                   }
@@ -45199,7 +64364,7 @@ function convertToOpenAIChatMessages({
         }
         if (useLegacyFunctionCalling) {
           if (toolCalls.length > 1) {
-            throw new dist_UnsupportedFunctionalityError({
+            throw new provider_dist_UnsupportedFunctionalityError({
               functionality: "useLegacyFunctionCalling with multiple tool calls in one message"
             });
           }
@@ -45288,7 +64453,7 @@ var openAIErrorDataSchema = z.object({
     code: z.union([z.string(), z.number()]).nullish()
   })
 });
-var openaiFailedResponseHandler = createJsonErrorResponseHandler({
+var openaiFailedResponseHandler = dist_createJsonErrorResponseHandler({
   errorSchema: openAIErrorDataSchema,
   errorToMessage: (data) => data.error.message
 });
@@ -45351,7 +64516,7 @@ function dist_prepareTools({
           toolWarnings
         };
       case "required":
-        throw new dist_UnsupportedFunctionalityError({
+        throw new provider_dist_UnsupportedFunctionalityError({
           functionality: "useLegacyFunctionCalling and toolChoice: required"
         });
       default:
@@ -45400,7 +64565,7 @@ function dist_prepareTools({
       };
     default: {
       const _exhaustiveCheck = type;
-      throw new dist_UnsupportedFunctionalityError({
+      throw new provider_dist_UnsupportedFunctionalityError({
         functionality: `Unsupported tool choice type: ${_exhaustiveCheck}`
       });
     }
@@ -45462,12 +64627,12 @@ var OpenAIChatLanguageModel = class {
     }
     const useLegacyFunctionCalling = this.settings.useLegacyFunctionCalling;
     if (useLegacyFunctionCalling && this.settings.parallelToolCalls === true) {
-      throw new dist_UnsupportedFunctionalityError({
+      throw new provider_dist_UnsupportedFunctionalityError({
         functionality: "useLegacyFunctionCalling with parallelToolCalls"
       });
     }
     if (useLegacyFunctionCalling && this.settings.structuredOutputs === true) {
-      throw new dist_UnsupportedFunctionalityError({
+      throw new provider_dist_UnsupportedFunctionalityError({
         functionality: "structuredOutputs with useLegacyFunctionCalling"
       });
     }
@@ -45586,15 +64751,15 @@ var OpenAIChatLanguageModel = class {
   async doGenerate(options) {
     var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p, _q, _r;
     const { args: body, warnings } = this.getArgs(options);
-    const { responseHeaders, value: response } = await postJsonToApi({
+    const { responseHeaders, value: response } = await dist_postJsonToApi({
       url: this.config.url({
         path: "/chat/completions",
         modelId: this.modelId
       }),
-      headers: combineHeaders(this.config.headers(), options.headers),
+      headers: dist_combineHeaders(this.config.headers(), options.headers),
       body,
       failedResponseHandler: openaiFailedResponseHandler,
-      successfulResponseHandler: createJsonResponseHandler(
+      successfulResponseHandler: dist_createJsonResponseHandler(
         openAIChatResponseSchema
       ),
       abortSignal: options.abortSignal,
@@ -45617,7 +64782,7 @@ var OpenAIChatLanguageModel = class {
       toolCalls: this.settings.useLegacyFunctionCalling && choice.message.function_call ? [
         {
           toolCallType: "function",
-          toolCallId: dist_generateId(),
+          toolCallId: provider_utils_dist_generateId(),
           toolName: choice.message.function_call.name,
           args: choice.message.function_call.arguments
         }
@@ -45625,7 +64790,7 @@ var OpenAIChatLanguageModel = class {
         var _a2;
         return {
           toolCallType: "function",
-          toolCallId: (_a2 = toolCall.id) != null ? _a2 : dist_generateId(),
+          toolCallId: (_a2 = toolCall.id) != null ? _a2 : provider_utils_dist_generateId(),
           toolName: toolCall.function.name,
           args: toolCall.function.arguments
         };
@@ -45645,42 +64810,6 @@ var OpenAIChatLanguageModel = class {
     };
   }
   async doStream(options) {
-    if (isReasoningModel(this.modelId)) {
-      const result = await this.doGenerate(options);
-      const simulatedStream = new ReadableStream({
-        start(controller) {
-          controller.enqueue({ type: "response-metadata", ...result.response });
-          if (result.text) {
-            controller.enqueue({
-              type: "text-delta",
-              textDelta: result.text
-            });
-          }
-          if (result.toolCalls) {
-            for (const toolCall of result.toolCalls) {
-              controller.enqueue({
-                type: "tool-call",
-                ...toolCall
-              });
-            }
-          }
-          controller.enqueue({
-            type: "finish",
-            finishReason: result.finishReason,
-            usage: result.usage,
-            logprobs: result.logprobs,
-            providerMetadata: result.providerMetadata
-          });
-          controller.close();
-        }
-      });
-      return {
-        stream: simulatedStream,
-        rawCall: result.rawCall,
-        rawResponse: result.rawResponse,
-        warnings: result.warnings
-      };
-    }
     const { args, warnings } = this.getArgs(options);
     const body = {
       ...args,
@@ -45688,15 +64817,15 @@ var OpenAIChatLanguageModel = class {
       // only include stream_options when in strict compatibility mode:
       stream_options: this.config.compatibility === "strict" ? { include_usage: true } : void 0
     };
-    const { responseHeaders, value: response } = await postJsonToApi({
+    const { responseHeaders, value: response } = await dist_postJsonToApi({
       url: this.config.url({
         path: "/chat/completions",
         modelId: this.modelId
       }),
-      headers: combineHeaders(this.config.headers(), options.headers),
+      headers: dist_combineHeaders(this.config.headers(), options.headers),
       body,
       failedResponseHandler: openaiFailedResponseHandler,
-      successfulResponseHandler: createEventSourceResponseHandler(
+      successfulResponseHandler: dist_createEventSourceResponseHandler(
         openaiChatChunkSchema
       ),
       abortSignal: options.abortSignal,
@@ -45717,7 +64846,7 @@ var OpenAIChatLanguageModel = class {
       stream: response.pipeThrough(
         new TransformStream({
           transform(chunk, controller) {
-            var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n, _o, _p;
+            var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k, _l, _m, _n;
             if (!chunk.success) {
               finishReason = "error";
               controller.enqueue({ type: "error", error: chunk.error });
@@ -45741,12 +64870,18 @@ var OpenAIChatLanguageModel = class {
                 promptTokens: (_a = value.usage.prompt_tokens) != null ? _a : void 0,
                 completionTokens: (_b = value.usage.completion_tokens) != null ? _b : void 0
               };
-              if (((_c = value.usage.prompt_tokens_details) == null ? void 0 : _c.cached_tokens) != null) {
-                providerMetadata = {
-                  openai: {
-                    cachedPromptTokens: (_d = value.usage.prompt_tokens_details) == null ? void 0 : _d.cached_tokens
-                  }
-                };
+              const {
+                completion_tokens_details: completionTokenDetails,
+                prompt_tokens_details: promptTokenDetails
+              } = value.usage;
+              if ((completionTokenDetails == null ? void 0 : completionTokenDetails.reasoning_tokens) != null || (promptTokenDetails == null ? void 0 : promptTokenDetails.cached_tokens) != null) {
+                providerMetadata = { openai: {} };
+                if ((completionTokenDetails == null ? void 0 : completionTokenDetails.reasoning_tokens) != null) {
+                  providerMetadata.openai.reasoningTokens = completionTokenDetails == null ? void 0 : completionTokenDetails.reasoning_tokens;
+                }
+                if ((promptTokenDetails == null ? void 0 : promptTokenDetails.cached_tokens) != null) {
+                  providerMetadata.openai.cachedPromptTokens = promptTokenDetails == null ? void 0 : promptTokenDetails.cached_tokens;
+                }
               }
             }
             const choice = value.choices[0];
@@ -45773,7 +64908,7 @@ var OpenAIChatLanguageModel = class {
             const mappedToolCalls = useLegacyFunctionCalling && delta.function_call != null ? [
               {
                 type: "function",
-                id: dist_generateId(),
+                id: provider_utils_dist_generateId(),
                 function: delta.function_call,
                 index: 0
               }
@@ -45783,19 +64918,19 @@ var OpenAIChatLanguageModel = class {
                 const index = toolCallDelta.index;
                 if (toolCalls[index] == null) {
                   if (toolCallDelta.type !== "function") {
-                    throw new InvalidResponseDataError({
+                    throw new dist_InvalidResponseDataError({
                       data: toolCallDelta,
                       message: `Expected 'function' type.`
                     });
                   }
                   if (toolCallDelta.id == null) {
-                    throw new InvalidResponseDataError({
+                    throw new dist_InvalidResponseDataError({
                       data: toolCallDelta,
                       message: `Expected 'id' to be a string.`
                     });
                   }
-                  if (((_e = toolCallDelta.function) == null ? void 0 : _e.name) == null) {
-                    throw new InvalidResponseDataError({
+                  if (((_c = toolCallDelta.function) == null ? void 0 : _c.name) == null) {
+                    throw new dist_InvalidResponseDataError({
                       data: toolCallDelta,
                       message: `Expected 'function.name' to be a string.`
                     });
@@ -45805,11 +64940,11 @@ var OpenAIChatLanguageModel = class {
                     type: "function",
                     function: {
                       name: toolCallDelta.function.name,
-                      arguments: (_f = toolCallDelta.function.arguments) != null ? _f : ""
+                      arguments: (_d = toolCallDelta.function.arguments) != null ? _d : ""
                     }
                   };
                   const toolCall2 = toolCalls[index];
-                  if (((_g = toolCall2.function) == null ? void 0 : _g.name) != null && ((_h = toolCall2.function) == null ? void 0 : _h.arguments) != null) {
+                  if (((_e = toolCall2.function) == null ? void 0 : _e.name) != null && ((_f = toolCall2.function) == null ? void 0 : _f.arguments) != null) {
                     if (toolCall2.function.arguments.length > 0) {
                       controller.enqueue({
                         type: "tool-call-delta",
@@ -45819,11 +64954,11 @@ var OpenAIChatLanguageModel = class {
                         argsTextDelta: toolCall2.function.arguments
                       });
                     }
-                    if (isParsableJson(toolCall2.function.arguments)) {
+                    if (dist_isParsableJson(toolCall2.function.arguments)) {
                       controller.enqueue({
                         type: "tool-call",
                         toolCallType: "function",
-                        toolCallId: (_i = toolCall2.id) != null ? _i : dist_generateId(),
+                        toolCallId: (_g = toolCall2.id) != null ? _g : provider_utils_dist_generateId(),
                         toolName: toolCall2.function.name,
                         args: toolCall2.function.arguments
                       });
@@ -45832,21 +64967,21 @@ var OpenAIChatLanguageModel = class {
                   continue;
                 }
                 const toolCall = toolCalls[index];
-                if (((_j = toolCallDelta.function) == null ? void 0 : _j.arguments) != null) {
-                  toolCall.function.arguments += (_l = (_k = toolCallDelta.function) == null ? void 0 : _k.arguments) != null ? _l : "";
+                if (((_h = toolCallDelta.function) == null ? void 0 : _h.arguments) != null) {
+                  toolCall.function.arguments += (_j = (_i = toolCallDelta.function) == null ? void 0 : _i.arguments) != null ? _j : "";
                 }
                 controller.enqueue({
                   type: "tool-call-delta",
                   toolCallType: "function",
                   toolCallId: toolCall.id,
                   toolName: toolCall.function.name,
-                  argsTextDelta: (_m = toolCallDelta.function.arguments) != null ? _m : ""
+                  argsTextDelta: (_k = toolCallDelta.function.arguments) != null ? _k : ""
                 });
-                if (((_n = toolCall.function) == null ? void 0 : _n.name) != null && ((_o = toolCall.function) == null ? void 0 : _o.arguments) != null && isParsableJson(toolCall.function.arguments)) {
+                if (((_l = toolCall.function) == null ? void 0 : _l.name) != null && ((_m = toolCall.function) == null ? void 0 : _m.arguments) != null && dist_isParsableJson(toolCall.function.arguments)) {
                   controller.enqueue({
                     type: "tool-call",
                     toolCallType: "function",
-                    toolCallId: (_p = toolCall.id) != null ? _p : dist_generateId(),
+                    toolCallId: (_n = toolCall.id) != null ? _n : provider_utils_dist_generateId(),
                     toolName: toolCall.function.name,
                     args: toolCall.function.arguments
                   });
@@ -46011,7 +65146,7 @@ function convertToOpenAICompletionPrompt({
   for (const { role, content } of prompt) {
     switch (role) {
       case "system": {
-        throw new InvalidPromptError({
+        throw new dist_InvalidPromptError({
           message: "Unexpected system message in prompt: ${content}",
           prompt
         });
@@ -46023,7 +65158,7 @@ function convertToOpenAICompletionPrompt({
               return part.text;
             }
             case "image": {
-              throw new dist_UnsupportedFunctionalityError({
+              throw new provider_dist_UnsupportedFunctionalityError({
                 functionality: "images"
               });
             }
@@ -46042,7 +65177,7 @@ ${userMessage}
               return part.text;
             }
             case "tool-call": {
-              throw new dist_UnsupportedFunctionalityError({
+              throw new provider_dist_UnsupportedFunctionalityError({
                 functionality: "tool-call messages"
               });
             }
@@ -46055,7 +65190,7 @@ ${assistantMessage}
         break;
       }
       case "tool": {
-        throw new dist_UnsupportedFunctionalityError({
+        throw new provider_dist_UnsupportedFunctionalityError({
           functionality: "tool messages"
         });
       }
@@ -46156,24 +65291,24 @@ var OpenAICompletionLanguageModel = class {
     switch (type) {
       case "regular": {
         if ((_a = mode.tools) == null ? void 0 : _a.length) {
-          throw new dist_UnsupportedFunctionalityError({
+          throw new provider_dist_UnsupportedFunctionalityError({
             functionality: "tools"
           });
         }
         if (mode.toolChoice) {
-          throw new dist_UnsupportedFunctionalityError({
+          throw new provider_dist_UnsupportedFunctionalityError({
             functionality: "toolChoice"
           });
         }
         return { args: baseArgs, warnings };
       }
       case "object-json": {
-        throw new dist_UnsupportedFunctionalityError({
+        throw new provider_dist_UnsupportedFunctionalityError({
           functionality: "object-json mode"
         });
       }
       case "object-tool": {
-        throw new dist_UnsupportedFunctionalityError({
+        throw new provider_dist_UnsupportedFunctionalityError({
           functionality: "object-tool mode"
         });
       }
@@ -46185,15 +65320,15 @@ var OpenAICompletionLanguageModel = class {
   }
   async doGenerate(options) {
     const { args, warnings } = this.getArgs(options);
-    const { responseHeaders, value: response } = await postJsonToApi({
+    const { responseHeaders, value: response } = await dist_postJsonToApi({
       url: this.config.url({
         path: "/completions",
         modelId: this.modelId
       }),
-      headers: combineHeaders(this.config.headers(), options.headers),
+      headers: dist_combineHeaders(this.config.headers(), options.headers),
       body: args,
       failedResponseHandler: openaiFailedResponseHandler,
-      successfulResponseHandler: createJsonResponseHandler(
+      successfulResponseHandler: dist_createJsonResponseHandler(
         openAICompletionResponseSchema
       ),
       abortSignal: options.abortSignal,
@@ -46224,15 +65359,15 @@ var OpenAICompletionLanguageModel = class {
       // only include stream_options when in strict compatibility mode:
       stream_options: this.config.compatibility === "strict" ? { include_usage: true } : void 0
     };
-    const { responseHeaders, value: response } = await postJsonToApi({
+    const { responseHeaders, value: response } = await dist_postJsonToApi({
       url: this.config.url({
         path: "/completions",
         modelId: this.modelId
       }),
-      headers: combineHeaders(this.config.headers(), options.headers),
+      headers: dist_combineHeaders(this.config.headers(), options.headers),
       body,
       failedResponseHandler: openaiFailedResponseHandler,
-      successfulResponseHandler: createEventSourceResponseHandler(
+      successfulResponseHandler: dist_createEventSourceResponseHandler(
         openaiCompletionChunkSchema
       ),
       abortSignal: options.abortSignal,
@@ -46354,56 +65489,6 @@ var openaiCompletionChunkSchema = z.union([
   openAIErrorDataSchema
 ]);
 
-// src/openai-facade.ts
-var OpenAI = class {
-  /**
-   * Creates a new OpenAI provider instance.
-   */
-  constructor(options = {}) {
-    var _a, _b;
-    this.baseURL = (_b = withoutTrailingSlash((_a = options.baseURL) != null ? _a : options.baseUrl)) != null ? _b : "https://api.openai.com/v1";
-    this.apiKey = options.apiKey;
-    this.organization = options.organization;
-    this.project = options.project;
-    this.headers = options.headers;
-  }
-  get baseConfig() {
-    return {
-      organization: this.organization,
-      baseURL: this.baseURL,
-      headers: () => ({
-        Authorization: `Bearer ${loadApiKey({
-          apiKey: this.apiKey,
-          environmentVariableName: "OPENAI_API_KEY",
-          description: "OpenAI"
-        })}`,
-        "OpenAI-Organization": this.organization,
-        "OpenAI-Project": this.project,
-        ...this.headers
-      })
-    };
-  }
-  chat(modelId, settings = {}) {
-    return new OpenAIChatLanguageModel(modelId, settings, {
-      provider: "openai.chat",
-      ...this.baseConfig,
-      compatibility: "strict",
-      url: ({ path }) => `${this.baseURL}${path}`
-    });
-  }
-  completion(modelId, settings = {}) {
-    return new OpenAICompletionLanguageModel(modelId, settings, {
-      provider: "openai.completion",
-      ...this.baseConfig,
-      compatibility: "strict",
-      url: ({ path }) => `${this.baseURL}${path}`
-    });
-  }
-};
-
-// src/openai-provider.ts
-
-
 // src/openai-embedding-model.ts
 
 
@@ -46432,19 +65517,19 @@ var OpenAIEmbeddingModel = class {
     abortSignal
   }) {
     if (values.length > this.maxEmbeddingsPerCall) {
-      throw new TooManyEmbeddingValuesForCallError({
+      throw new dist_TooManyEmbeddingValuesForCallError({
         provider: this.provider,
         modelId: this.modelId,
         maxEmbeddingsPerCall: this.maxEmbeddingsPerCall,
         values
       });
     }
-    const { responseHeaders, value: response } = await postJsonToApi({
+    const { responseHeaders, value: response } = await dist_postJsonToApi({
       url: this.config.url({
         path: "/embeddings",
         modelId: this.modelId
       }),
-      headers: combineHeaders(this.config.headers(), headers),
+      headers: dist_combineHeaders(this.config.headers(), headers),
       body: {
         model: this.modelId,
         input: values,
@@ -46453,7 +65538,7 @@ var OpenAIEmbeddingModel = class {
         user: this.settings.user
       },
       failedResponseHandler: openaiFailedResponseHandler,
-      successfulResponseHandler: createJsonResponseHandler(
+      successfulResponseHandler: dist_createJsonResponseHandler(
         openaiTextEmbeddingResponseSchema
       ),
       abortSignal,
@@ -46473,10 +65558,10 @@ var openaiTextEmbeddingResponseSchema = z.object({
 
 // src/openai-provider.ts
 function createOpenAI(options = {}) {
-  var _a, _b, _c, _d;
-  const baseURL = (_b = dist_withoutTrailingSlash((_a = options.baseURL) != null ? _a : options.baseUrl)) != null ? _b : "https://api.openai.com/v1";
-  const compatibility = (_c = options.compatibility) != null ? _c : "compatible";
-  const providerName = (_d = options.name) != null ? _d : "openai";
+  var _a, _b, _c;
+  const baseURL = (_a = dist_withoutTrailingSlash(options.baseURL)) != null ? _a : "https://api.openai.com/v1";
+  const compatibility = (_b = options.compatibility) != null ? _b : "compatible";
+  const providerName = (_c = options.name) != null ? _c : "openai";
   const getHeaders = () => ({
     Authorization: `Bearer ${dist_loadApiKey({
       apiKey: options.apiKey,
@@ -46540,6 +65625,1135 @@ var openai = createOpenAI({
 //# sourceMappingURL=index.mjs.map
 // EXTERNAL MODULE: ./node_modules/@octokit/rest/dist-node/index.js
 var dist_node = __nccwpck_require__(5375);
+;// CONCATENATED MODULE: ./node_modules/@ai-sdk/provider/dist/index.mjs
+// src/errors/ai-sdk-error.ts
+var provider_dist_marker = "vercel.ai.error";
+var provider_dist_symbol = Symbol.for(provider_dist_marker);
+var provider_dist_a;
+var _ai_sdk_provider_dist_AISDKError = class _AISDKError extends Error {
+  /**
+   * Creates an AI SDK Error.
+   *
+   * @param {Object} params - The parameters for creating the error.
+   * @param {string} params.name - The name of the error.
+   * @param {string} params.message - The error message.
+   * @param {unknown} [params.cause] - The underlying cause of the error.
+   */
+  constructor({
+    name: name14,
+    message,
+    cause
+  }) {
+    super(message);
+    this[provider_dist_a] = true;
+    this.name = name14;
+    this.cause = cause;
+  }
+  /**
+   * Checks if the given error is an AI SDK Error.
+   * @param {unknown} error - The error to check.
+   * @returns {boolean} True if the error is an AI SDK Error, false otherwise.
+   */
+  static isInstance(error) {
+    return _AISDKError.hasMarker(error, provider_dist_marker);
+  }
+  static hasMarker(error, marker15) {
+    const markerSymbol = Symbol.for(marker15);
+    return error != null && typeof error === "object" && markerSymbol in error && typeof error[markerSymbol] === "boolean" && error[markerSymbol] === true;
+  }
+  /**
+   * Returns a JSON representation of the error.
+   * @returns {Object} An object containing the error's name, message, and cause.
+   *
+   * @deprecated Do not use this method. It will be removed in the next major version.
+   */
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message
+    };
+  }
+};
+provider_dist_a = provider_dist_symbol;
+var node_modules_ai_sdk_provider_dist_AISDKError = _ai_sdk_provider_dist_AISDKError;
+
+// src/errors/api-call-error.ts
+var _ai_sdk_provider_dist_name = "AI_APICallError";
+var provider_dist_marker2 = `vercel.ai.error.${_ai_sdk_provider_dist_name}`;
+var provider_dist_symbol2 = Symbol.for(provider_dist_marker2);
+var provider_dist_a2;
+var _ai_sdk_provider_dist_APICallError = class extends node_modules_ai_sdk_provider_dist_AISDKError {
+  constructor({
+    message,
+    url,
+    requestBodyValues,
+    statusCode,
+    responseHeaders,
+    responseBody,
+    cause,
+    isRetryable = statusCode != null && (statusCode === 408 || // request timeout
+    statusCode === 409 || // conflict
+    statusCode === 429 || // too many requests
+    statusCode >= 500),
+    // server error
+    data
+  }) {
+    super({ name: _ai_sdk_provider_dist_name, message, cause });
+    this[provider_dist_a2] = true;
+    this.url = url;
+    this.requestBodyValues = requestBodyValues;
+    this.statusCode = statusCode;
+    this.responseHeaders = responseHeaders;
+    this.responseBody = responseBody;
+    this.isRetryable = isRetryable;
+    this.data = data;
+  }
+  static isInstance(error) {
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, provider_dist_marker2);
+  }
+  /**
+   * @deprecated Use isInstance instead.
+   */
+  static isAPICallError(error) {
+    return error instanceof Error && error.name === _ai_sdk_provider_dist_name && typeof error.url === "string" && typeof error.requestBodyValues === "object" && (error.statusCode == null || typeof error.statusCode === "number") && (error.responseHeaders == null || typeof error.responseHeaders === "object") && (error.responseBody == null || typeof error.responseBody === "string") && (error.cause == null || typeof error.cause === "object") && typeof error.isRetryable === "boolean" && (error.data == null || typeof error.data === "object");
+  }
+  /**
+   * @deprecated Do not use this method. It will be removed in the next major version.
+   */
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      url: this.url,
+      requestBodyValues: this.requestBodyValues,
+      statusCode: this.statusCode,
+      responseHeaders: this.responseHeaders,
+      responseBody: this.responseBody,
+      cause: this.cause,
+      isRetryable: this.isRetryable,
+      data: this.data
+    };
+  }
+};
+provider_dist_a2 = provider_dist_symbol2;
+
+// src/errors/empty-response-body-error.ts
+var provider_dist_name2 = "AI_EmptyResponseBodyError";
+var provider_dist_marker3 = `vercel.ai.error.${provider_dist_name2}`;
+var provider_dist_symbol3 = Symbol.for(provider_dist_marker3);
+var provider_dist_a3;
+var _ai_sdk_provider_dist_EmptyResponseBodyError = class extends (/* unused pure expression or super */ null && (node_modules_ai_sdk_provider_dist_AISDKError)) {
+  // used in isInstance
+  constructor({ message = "Empty response body" } = {}) {
+    super({ name: provider_dist_name2, message });
+    this[provider_dist_a3] = true;
+  }
+  static isInstance(error) {
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, provider_dist_marker3);
+  }
+  /**
+   * @deprecated use `isInstance` instead
+   */
+  static isEmptyResponseBodyError(error) {
+    return error instanceof Error && error.name === provider_dist_name2;
+  }
+};
+provider_dist_a3 = provider_dist_symbol3;
+
+// src/errors/get-error-message.ts
+function _ai_sdk_provider_dist_getErrorMessage(error) {
+  if (error == null) {
+    return "unknown error";
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return JSON.stringify(error);
+}
+
+// src/errors/invalid-argument-error.ts
+var provider_dist_name3 = "AI_InvalidArgumentError";
+var provider_dist_marker4 = `vercel.ai.error.${provider_dist_name3}`;
+var provider_dist_symbol4 = Symbol.for(provider_dist_marker4);
+var provider_dist_a4;
+var provider_dist_InvalidArgumentError = class extends node_modules_ai_sdk_provider_dist_AISDKError {
+  constructor({
+    message,
+    cause,
+    argument
+  }) {
+    super({ name: provider_dist_name3, message, cause });
+    this[provider_dist_a4] = true;
+    this.argument = argument;
+  }
+  static isInstance(error) {
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, provider_dist_marker4);
+  }
+};
+provider_dist_a4 = provider_dist_symbol4;
+
+// src/errors/invalid-prompt-error.ts
+var provider_dist_name4 = "AI_InvalidPromptError";
+var provider_dist_marker5 = `vercel.ai.error.${provider_dist_name4}`;
+var provider_dist_symbol5 = Symbol.for(provider_dist_marker5);
+var provider_dist_a5;
+var provider_dist_InvalidPromptError = class extends node_modules_ai_sdk_provider_dist_AISDKError {
+  constructor({
+    prompt: prompt2,
+    message,
+    cause
+  }) {
+    super({ name: provider_dist_name4, message: `Invalid prompt: ${message}`, cause });
+    this[provider_dist_a5] = true;
+    this.prompt = prompt2;
+  }
+  static isInstance(error) {
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, provider_dist_marker5);
+  }
+  /**
+   * @deprecated use `isInstance` instead
+   */
+  static isInvalidPromptError(error) {
+    return error instanceof Error && error.name === provider_dist_name4 && prompt != null;
+  }
+  /**
+   * @deprecated Do not use this method. It will be removed in the next major version.
+   */
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      stack: this.stack,
+      prompt: this.prompt
+    };
+  }
+};
+provider_dist_a5 = provider_dist_symbol5;
+
+// src/errors/invalid-response-data-error.ts
+var provider_dist_name5 = "AI_InvalidResponseDataError";
+var provider_dist_marker6 = `vercel.ai.error.${provider_dist_name5}`;
+var provider_dist_symbol6 = Symbol.for(provider_dist_marker6);
+var provider_dist_a6;
+var provider_dist_InvalidResponseDataError = class extends (/* unused pure expression or super */ null && (node_modules_ai_sdk_provider_dist_AISDKError)) {
+  constructor({
+    data,
+    message = `Invalid response data: ${JSON.stringify(data)}.`
+  }) {
+    super({ name: provider_dist_name5, message });
+    this[provider_dist_a6] = true;
+    this.data = data;
+  }
+  static isInstance(error) {
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, provider_dist_marker6);
+  }
+  /**
+   * @deprecated use `isInstance` instead
+   */
+  static isInvalidResponseDataError(error) {
+    return error instanceof Error && error.name === provider_dist_name5 && error.data != null;
+  }
+  /**
+   * @deprecated Do not use this method. It will be removed in the next major version.
+   */
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      stack: this.stack,
+      data: this.data
+    };
+  }
+};
+provider_dist_a6 = provider_dist_symbol6;
+
+// src/errors/json-parse-error.ts
+var provider_dist_name6 = "AI_JSONParseError";
+var provider_dist_marker7 = `vercel.ai.error.${provider_dist_name6}`;
+var provider_dist_symbol7 = Symbol.for(provider_dist_marker7);
+var provider_dist_a7;
+var _ai_sdk_provider_dist_JSONParseError = class extends node_modules_ai_sdk_provider_dist_AISDKError {
+  constructor({ text, cause }) {
+    super({
+      name: provider_dist_name6,
+      message: `JSON parsing failed: Text: ${text}.
+Error message: ${_ai_sdk_provider_dist_getErrorMessage(cause)}`,
+      cause
+    });
+    this[provider_dist_a7] = true;
+    this.text = text;
+  }
+  static isInstance(error) {
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, provider_dist_marker7);
+  }
+  /**
+   * @deprecated use `isInstance` instead
+   */
+  static isJSONParseError(error) {
+    return error instanceof Error && error.name === provider_dist_name6 && "text" in error && typeof error.text === "string";
+  }
+  /**
+   * @deprecated Do not use this method. It will be removed in the next major version.
+   */
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      cause: this.cause,
+      stack: this.stack,
+      valueText: this.text
+    };
+  }
+};
+provider_dist_a7 = provider_dist_symbol7;
+
+// src/errors/load-api-key-error.ts
+var provider_dist_name7 = "AI_LoadAPIKeyError";
+var provider_dist_marker8 = `vercel.ai.error.${provider_dist_name7}`;
+var provider_dist_symbol8 = Symbol.for(provider_dist_marker8);
+var provider_dist_a8;
+var _ai_sdk_provider_dist_LoadAPIKeyError = class extends (/* unused pure expression or super */ null && (node_modules_ai_sdk_provider_dist_AISDKError)) {
+  // used in isInstance
+  constructor({ message }) {
+    super({ name: provider_dist_name7, message });
+    this[provider_dist_a8] = true;
+  }
+  static isInstance(error) {
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, provider_dist_marker8);
+  }
+  /**
+   * @deprecated Use isInstance instead.
+   */
+  static isLoadAPIKeyError(error) {
+    return error instanceof Error && error.name === provider_dist_name7;
+  }
+};
+provider_dist_a8 = provider_dist_symbol8;
+
+// src/errors/load-setting-error.ts
+var provider_dist_name8 = "AI_LoadSettingError";
+var provider_dist_marker9 = `vercel.ai.error.${provider_dist_name8}`;
+var provider_dist_symbol9 = Symbol.for(provider_dist_marker9);
+var provider_dist_a9;
+var _ai_sdk_provider_dist_LoadSettingError = class extends (/* unused pure expression or super */ null && (node_modules_ai_sdk_provider_dist_AISDKError)) {
+  // used in isInstance
+  constructor({ message }) {
+    super({ name: provider_dist_name8, message });
+    this[provider_dist_a9] = true;
+  }
+  static isInstance(error) {
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, provider_dist_marker9);
+  }
+  /**
+   * @deprecated Use isInstance instead.
+   */
+  static isLoadSettingError(error) {
+    return error instanceof Error && error.name === provider_dist_name8;
+  }
+};
+provider_dist_a9 = provider_dist_symbol9;
+
+// src/errors/no-content-generated-error.ts
+var provider_dist_name9 = "AI_NoContentGeneratedError";
+var provider_dist_marker10 = `vercel.ai.error.${provider_dist_name9}`;
+var provider_dist_symbol10 = Symbol.for(provider_dist_marker10);
+var provider_dist_a10;
+var provider_dist_NoContentGeneratedError = class extends (/* unused pure expression or super */ null && (node_modules_ai_sdk_provider_dist_AISDKError)) {
+  // used in isInstance
+  constructor({
+    message = "No content generated."
+  } = {}) {
+    super({ name: provider_dist_name9, message });
+    this[provider_dist_a10] = true;
+  }
+  static isInstance(error) {
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, provider_dist_marker10);
+  }
+  /**
+   * @deprecated Use isInstance instead.
+   */
+  static isNoContentGeneratedError(error) {
+    return error instanceof Error && error.name === provider_dist_name9;
+  }
+  /**
+   * @deprecated Do not use this method. It will be removed in the next major version.
+   */
+  toJSON() {
+    return {
+      name: this.name,
+      cause: this.cause,
+      message: this.message,
+      stack: this.stack
+    };
+  }
+};
+provider_dist_a10 = provider_dist_symbol10;
+
+// src/errors/no-such-model-error.ts
+var provider_dist_name10 = "AI_NoSuchModelError";
+var provider_dist_marker11 = `vercel.ai.error.${provider_dist_name10}`;
+var provider_dist_symbol11 = Symbol.for(provider_dist_marker11);
+var provider_dist_a11;
+var provider_dist_NoSuchModelError = class extends (/* unused pure expression or super */ null && (node_modules_ai_sdk_provider_dist_AISDKError)) {
+  constructor({
+    errorName = provider_dist_name10,
+    modelId,
+    modelType,
+    message = `No such ${modelType}: ${modelId}`
+  }) {
+    super({ name: errorName, message });
+    this[provider_dist_a11] = true;
+    this.modelId = modelId;
+    this.modelType = modelType;
+  }
+  static isInstance(error) {
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, provider_dist_marker11);
+  }
+  /**
+   * @deprecated use `isInstance` instead
+   */
+  static isNoSuchModelError(error) {
+    return error instanceof Error && error.name === provider_dist_name10 && typeof error.modelId === "string" && typeof error.modelType === "string";
+  }
+  /**
+   * @deprecated Do not use this method. It will be removed in the next major version.
+   */
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      stack: this.stack,
+      modelId: this.modelId,
+      modelType: this.modelType
+    };
+  }
+};
+provider_dist_a11 = provider_dist_symbol11;
+
+// src/errors/too-many-embedding-values-for-call-error.ts
+var provider_dist_name11 = "AI_TooManyEmbeddingValuesForCallError";
+var provider_dist_marker12 = `vercel.ai.error.${provider_dist_name11}`;
+var provider_dist_symbol12 = Symbol.for(provider_dist_marker12);
+var provider_dist_a12;
+var provider_dist_TooManyEmbeddingValuesForCallError = class extends (/* unused pure expression or super */ null && (node_modules_ai_sdk_provider_dist_AISDKError)) {
+  constructor(options) {
+    super({
+      name: provider_dist_name11,
+      message: `Too many values for a single embedding call. The ${options.provider} model "${options.modelId}" can only embed up to ${options.maxEmbeddingsPerCall} values per call, but ${options.values.length} values were provided.`
+    });
+    this[provider_dist_a12] = true;
+    this.provider = options.provider;
+    this.modelId = options.modelId;
+    this.maxEmbeddingsPerCall = options.maxEmbeddingsPerCall;
+    this.values = options.values;
+  }
+  static isInstance(error) {
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, provider_dist_marker12);
+  }
+  /**
+   * @deprecated use `isInstance` instead
+   */
+  static isTooManyEmbeddingValuesForCallError(error) {
+    return error instanceof Error && error.name === provider_dist_name11 && "provider" in error && typeof error.provider === "string" && "modelId" in error && typeof error.modelId === "string" && "maxEmbeddingsPerCall" in error && typeof error.maxEmbeddingsPerCall === "number" && "values" in error && Array.isArray(error.values);
+  }
+  /**
+   * @deprecated Do not use this method. It will be removed in the next major version.
+   */
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      stack: this.stack,
+      provider: this.provider,
+      modelId: this.modelId,
+      maxEmbeddingsPerCall: this.maxEmbeddingsPerCall,
+      values: this.values
+    };
+  }
+};
+provider_dist_a12 = provider_dist_symbol12;
+
+// src/errors/type-validation-error.ts
+var provider_dist_name12 = "AI_TypeValidationError";
+var provider_dist_marker13 = `vercel.ai.error.${provider_dist_name12}`;
+var provider_dist_symbol13 = Symbol.for(provider_dist_marker13);
+var provider_dist_a13;
+var node_modules_ai_sdk_provider_dist_TypeValidationError = class _TypeValidationError extends node_modules_ai_sdk_provider_dist_AISDKError {
+  constructor({ value, cause }) {
+    super({
+      name: provider_dist_name12,
+      message: `Type validation failed: Value: ${JSON.stringify(value)}.
+Error message: ${_ai_sdk_provider_dist_getErrorMessage(cause)}`,
+      cause
+    });
+    this[provider_dist_a13] = true;
+    this.value = value;
+  }
+  static isInstance(error) {
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, provider_dist_marker13);
+  }
+  /**
+   * Wraps an error into a TypeValidationError.
+   * If the cause is already a TypeValidationError with the same value, it returns the cause.
+   * Otherwise, it creates a new TypeValidationError.
+   *
+   * @param {Object} params - The parameters for wrapping the error.
+   * @param {unknown} params.value - The value that failed validation.
+   * @param {unknown} params.cause - The original error or cause of the validation failure.
+   * @returns {TypeValidationError} A TypeValidationError instance.
+   */
+  static wrap({
+    value,
+    cause
+  }) {
+    return _TypeValidationError.isInstance(cause) && cause.value === value ? cause : new _TypeValidationError({ value, cause });
+  }
+  /**
+   * @deprecated use `isInstance` instead
+   */
+  static isTypeValidationError(error) {
+    return error instanceof Error && error.name === provider_dist_name12;
+  }
+  /**
+   * @deprecated Do not use this method. It will be removed in the next major version.
+   */
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      cause: this.cause,
+      stack: this.stack,
+      value: this.value
+    };
+  }
+};
+provider_dist_a13 = provider_dist_symbol13;
+var node_modules_ai_sdk_provider_dist_TypeValidationError_0 = node_modules_ai_sdk_provider_dist_TypeValidationError;
+
+// src/errors/unsupported-functionality-error.ts
+var provider_dist_name13 = "AI_UnsupportedFunctionalityError";
+var provider_dist_marker14 = `vercel.ai.error.${provider_dist_name13}`;
+var provider_dist_symbol14 = Symbol.for(provider_dist_marker14);
+var provider_dist_a14;
+var _ai_sdk_provider_dist_UnsupportedFunctionalityError = class extends node_modules_ai_sdk_provider_dist_AISDKError {
+  constructor({ functionality }) {
+    super({
+      name: provider_dist_name13,
+      message: `'${functionality}' functionality not supported.`
+    });
+    this[provider_dist_a14] = true;
+    this.functionality = functionality;
+  }
+  static isInstance(error) {
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, provider_dist_marker14);
+  }
+  /**
+   * @deprecated Use isInstance instead.
+   */
+  static isUnsupportedFunctionalityError(error) {
+    return error instanceof Error && error.name === provider_dist_name13 && typeof error.functionality === "string";
+  }
+  /**
+   * @deprecated Do not use this method. It will be removed in the next major version.
+   */
+  toJSON() {
+    return {
+      name: this.name,
+      message: this.message,
+      stack: this.stack,
+      functionality: this.functionality
+    };
+  }
+};
+provider_dist_a14 = provider_dist_symbol14;
+
+// src/json-value/is-json.ts
+function provider_dist_isJSONValue(value) {
+  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.every(provider_dist_isJSONValue);
+  }
+  if (typeof value === "object") {
+    return Object.entries(value).every(
+      ([key, val]) => typeof key === "string" && provider_dist_isJSONValue(val)
+    );
+  }
+  return false;
+}
+function _ai_sdk_provider_dist_isJSONArray(value) {
+  return Array.isArray(value) && value.every(provider_dist_isJSONValue);
+}
+function _ai_sdk_provider_dist_isJSONObject(value) {
+  return value != null && typeof value === "object" && Object.entries(value).every(
+    ([key, val]) => typeof key === "string" && provider_dist_isJSONValue(val)
+  );
+}
+
+//# sourceMappingURL=index.mjs.map
+;// CONCATENATED MODULE: ./node_modules/@ai-sdk/provider-utils/dist/index.mjs
+// src/combine-headers.ts
+function provider_utils_dist_combineHeaders(...headers) {
+  return headers.reduce(
+    (combinedHeaders, currentHeaders) => ({
+      ...combinedHeaders,
+      ...currentHeaders != null ? currentHeaders : {}
+    }),
+    {}
+  );
+}
+
+// src/convert-async-generator-to-readable-stream.ts
+function convertAsyncGeneratorToReadableStream(stream) {
+  return new ReadableStream({
+    /**
+     * Called when the consumer wants to pull more data from the stream.
+     *
+     * @param {ReadableStreamDefaultController<T>} controller - The controller to enqueue data into the stream.
+     * @returns {Promise<void>}
+     */
+    async pull(controller) {
+      try {
+        const { value, done } = await stream.next();
+        if (done) {
+          controller.close();
+        } else {
+          controller.enqueue(value);
+        }
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+    /**
+     * Called when the consumer cancels the stream.
+     */
+    cancel() {
+    }
+  });
+}
+
+// src/extract-response-headers.ts
+function provider_utils_dist_extractResponseHeaders(response) {
+  const headers = {};
+  response.headers.forEach((value, key) => {
+    headers[key] = value;
+  });
+  return headers;
+}
+
+// src/generate-id.ts
+
+
+var provider_utils_dist_createIdGenerator = ({
+  prefix,
+  size: defaultSize = 7,
+  alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+  separator = "-"
+} = {}) => {
+  const generator = customAlphabet(alphabet, defaultSize);
+  if (prefix == null) {
+    return generator;
+  }
+  if (alphabet.includes(separator)) {
+    throw new provider_dist_InvalidArgumentError({
+      argument: "separator",
+      message: `The separator "${separator}" must not be part of the alphabet "${alphabet}".`
+    });
+  }
+  return (size) => `${prefix}${separator}${generator(size)}`;
+};
+var _ai_sdk_provider_utils_dist_generateId = provider_utils_dist_createIdGenerator();
+
+// src/get-error-message.ts
+function _ai_sdk_provider_utils_dist_getErrorMessage(error) {
+  if (error == null) {
+    return "unknown error";
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return JSON.stringify(error);
+}
+
+// src/is-abort-error.ts
+function provider_utils_dist_isAbortError(error) {
+  return error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
+}
+
+// src/load-api-key.ts
+
+function provider_utils_dist_loadApiKey({
+  apiKey,
+  environmentVariableName,
+  apiKeyParameterName = "apiKey",
+  description
+}) {
+  if (typeof apiKey === "string") {
+    return apiKey;
+  }
+  if (apiKey != null) {
+    throw new LoadAPIKeyError({
+      message: `${description} API key must be a string.`
+    });
+  }
+  if (typeof process === "undefined") {
+    throw new LoadAPIKeyError({
+      message: `${description} API key is missing. Pass it using the '${apiKeyParameterName}' parameter. Environment variables is not supported in this environment.`
+    });
+  }
+  apiKey = process.env[environmentVariableName];
+  if (apiKey == null) {
+    throw new LoadAPIKeyError({
+      message: `${description} API key is missing. Pass it using the '${apiKeyParameterName}' parameter or the ${environmentVariableName} environment variable.`
+    });
+  }
+  if (typeof apiKey !== "string") {
+    throw new LoadAPIKeyError({
+      message: `${description} API key must be a string. The value of the ${environmentVariableName} environment variable is not a string.`
+    });
+  }
+  return apiKey;
+}
+
+// src/load-setting.ts
+
+function provider_utils_dist_loadSetting({
+  settingValue,
+  environmentVariableName,
+  settingName,
+  description
+}) {
+  if (typeof settingValue === "string") {
+    return settingValue;
+  }
+  if (settingValue != null) {
+    throw new LoadSettingError({
+      message: `${description} setting must be a string.`
+    });
+  }
+  if (typeof process === "undefined") {
+    throw new LoadSettingError({
+      message: `${description} setting is missing. Pass it using the '${settingName}' parameter. Environment variables is not supported in this environment.`
+    });
+  }
+  settingValue = process.env[environmentVariableName];
+  if (settingValue == null) {
+    throw new LoadSettingError({
+      message: `${description} setting is missing. Pass it using the '${settingName}' parameter or the ${environmentVariableName} environment variable.`
+    });
+  }
+  if (typeof settingValue !== "string") {
+    throw new LoadSettingError({
+      message: `${description} setting must be a string. The value of the ${environmentVariableName} environment variable is not a string.`
+    });
+  }
+  return settingValue;
+}
+
+// src/load-optional-setting.ts
+function provider_utils_dist_loadOptionalSetting({
+  settingValue,
+  environmentVariableName
+}) {
+  if (typeof settingValue === "string") {
+    return settingValue;
+  }
+  if (settingValue != null || typeof process === "undefined") {
+    return void 0;
+  }
+  settingValue = process.env[environmentVariableName];
+  if (settingValue == null || typeof settingValue !== "string") {
+    return void 0;
+  }
+  return settingValue;
+}
+
+// src/parse-json.ts
+
+
+
+// src/validate-types.ts
+
+
+// src/validator.ts
+var provider_utils_dist_validatorSymbol = Symbol.for("vercel.ai.validator");
+function provider_utils_dist_validator(validate) {
+  return { [provider_utils_dist_validatorSymbol]: true, validate };
+}
+function provider_utils_dist_isValidator(value) {
+  return typeof value === "object" && value !== null && provider_utils_dist_validatorSymbol in value && value[provider_utils_dist_validatorSymbol] === true && "validate" in value;
+}
+function provider_utils_dist_asValidator(value) {
+  return provider_utils_dist_isValidator(value) ? value : provider_utils_dist_zodValidator(value);
+}
+function provider_utils_dist_zodValidator(zodSchema) {
+  return provider_utils_dist_validator((value) => {
+    const result = zodSchema.safeParse(value);
+    return result.success ? { success: true, value: result.data } : { success: false, error: result.error };
+  });
+}
+
+// src/validate-types.ts
+function provider_utils_dist_validateTypes({
+  value,
+  schema: inputSchema
+}) {
+  const result = provider_utils_dist_safeValidateTypes({ value, schema: inputSchema });
+  if (!result.success) {
+    throw TypeValidationError.wrap({ value, cause: result.error });
+  }
+  return result.value;
+}
+function provider_utils_dist_safeValidateTypes({
+  value,
+  schema
+}) {
+  const validator2 = provider_utils_dist_asValidator(schema);
+  try {
+    if (validator2.validate == null) {
+      return { success: true, value };
+    }
+    const result = validator2.validate(value);
+    if (result.success) {
+      return result;
+    }
+    return {
+      success: false,
+      error: node_modules_ai_sdk_provider_dist_TypeValidationError_0.wrap({ value, cause: result.error })
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: node_modules_ai_sdk_provider_dist_TypeValidationError_0.wrap({ value, cause: error })
+    };
+  }
+}
+
+// src/parse-json.ts
+function provider_utils_dist_parseJSON({
+  text,
+  schema
+}) {
+  try {
+    const value = SecureJSON.parse(text);
+    if (schema == null) {
+      return value;
+    }
+    return provider_utils_dist_validateTypes({ value, schema });
+  } catch (error) {
+    if (JSONParseError.isJSONParseError(error) || TypeValidationError2.isTypeValidationError(error)) {
+      throw error;
+    }
+    throw new JSONParseError({ text, cause: error });
+  }
+}
+function _ai_sdk_provider_utils_dist_safeParseJSON({
+  text,
+  schema
+}) {
+  try {
+    const value = secure_json_parse.parse(text);
+    if (schema == null) {
+      return {
+        success: true,
+        value
+      };
+    }
+    return provider_utils_dist_safeValidateTypes({ value, schema });
+  } catch (error) {
+    return {
+      success: false,
+      error: _ai_sdk_provider_dist_JSONParseError.isJSONParseError(error) ? error : new _ai_sdk_provider_dist_JSONParseError({ text, cause: error })
+    };
+  }
+}
+function provider_utils_dist_isParsableJson(input) {
+  try {
+    SecureJSON.parse(input);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+var isParseableJson = (/* unused pure expression or super */ null && (provider_utils_dist_isParsableJson));
+
+// src/post-to-api.ts
+
+
+// src/remove-undefined-entries.ts
+function provider_utils_dist_removeUndefinedEntries(record) {
+  return Object.fromEntries(
+    Object.entries(record).filter(([_key, value]) => value != null)
+  );
+}
+
+// src/post-to-api.ts
+var provider_utils_dist_getOriginalFetch = () => globalThis.fetch;
+var provider_utils_dist_postJsonToApi = async ({
+  url,
+  headers,
+  body,
+  failedResponseHandler,
+  successfulResponseHandler,
+  abortSignal,
+  fetch
+}) => provider_utils_dist_postToApi({
+  url,
+  headers: {
+    "Content-Type": "application/json",
+    ...headers
+  },
+  body: {
+    content: JSON.stringify(body),
+    values: body
+  },
+  failedResponseHandler,
+  successfulResponseHandler,
+  abortSignal,
+  fetch
+});
+var provider_utils_dist_postToApi = async ({
+  url,
+  headers = {},
+  body,
+  successfulResponseHandler,
+  failedResponseHandler,
+  abortSignal,
+  fetch = provider_utils_dist_getOriginalFetch()
+}) => {
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: provider_utils_dist_removeUndefinedEntries(headers),
+      body: body.content,
+      signal: abortSignal
+    });
+    const responseHeaders = provider_utils_dist_extractResponseHeaders(response);
+    if (!response.ok) {
+      let errorInformation;
+      try {
+        errorInformation = await failedResponseHandler({
+          response,
+          url,
+          requestBodyValues: body.values
+        });
+      } catch (error) {
+        if (provider_utils_dist_isAbortError(error) || APICallError.isAPICallError(error)) {
+          throw error;
+        }
+        throw new APICallError({
+          message: "Failed to process error response",
+          cause: error,
+          statusCode: response.status,
+          url,
+          responseHeaders,
+          requestBodyValues: body.values
+        });
+      }
+      throw errorInformation.value;
+    }
+    try {
+      return await successfulResponseHandler({
+        response,
+        url,
+        requestBodyValues: body.values
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        if (provider_utils_dist_isAbortError(error) || APICallError.isAPICallError(error)) {
+          throw error;
+        }
+      }
+      throw new APICallError({
+        message: "Failed to process successful response",
+        cause: error,
+        statusCode: response.status,
+        url,
+        responseHeaders,
+        requestBodyValues: body.values
+      });
+    }
+  } catch (error) {
+    if (provider_utils_dist_isAbortError(error)) {
+      throw error;
+    }
+    if (error instanceof TypeError && error.message === "fetch failed") {
+      const cause = error.cause;
+      if (cause != null) {
+        throw new APICallError({
+          message: `Cannot connect to API: ${cause.message}`,
+          cause,
+          url,
+          requestBodyValues: body.values,
+          isRetryable: true
+          // retry when network error
+        });
+      }
+    }
+    throw error;
+  }
+};
+
+// src/response-handler.ts
+
+
+var provider_utils_dist_createJsonErrorResponseHandler = ({
+  errorSchema,
+  errorToMessage,
+  isRetryable
+}) => async ({ response, url, requestBodyValues }) => {
+  const responseBody = await response.text();
+  const responseHeaders = provider_utils_dist_extractResponseHeaders(response);
+  if (responseBody.trim() === "") {
+    return {
+      responseHeaders,
+      value: new APICallError2({
+        message: response.statusText,
+        url,
+        requestBodyValues,
+        statusCode: response.status,
+        responseHeaders,
+        responseBody,
+        isRetryable: isRetryable == null ? void 0 : isRetryable(response)
+      })
+    };
+  }
+  try {
+    const parsedError = provider_utils_dist_parseJSON({
+      text: responseBody,
+      schema: errorSchema
+    });
+    return {
+      responseHeaders,
+      value: new APICallError2({
+        message: errorToMessage(parsedError),
+        url,
+        requestBodyValues,
+        statusCode: response.status,
+        responseHeaders,
+        responseBody,
+        data: parsedError,
+        isRetryable: isRetryable == null ? void 0 : isRetryable(response, parsedError)
+      })
+    };
+  } catch (parseError) {
+    return {
+      responseHeaders,
+      value: new APICallError2({
+        message: response.statusText,
+        url,
+        requestBodyValues,
+        statusCode: response.status,
+        responseHeaders,
+        responseBody,
+        isRetryable: isRetryable == null ? void 0 : isRetryable(response)
+      })
+    };
+  }
+};
+var provider_utils_dist_createEventSourceResponseHandler = (chunkSchema) => async ({ response }) => {
+  const responseHeaders = provider_utils_dist_extractResponseHeaders(response);
+  if (response.body == null) {
+    throw new EmptyResponseBodyError({});
+  }
+  return {
+    responseHeaders,
+    value: response.body.pipeThrough(new TextDecoderStream()).pipeThrough(new EventSourceParserStream()).pipeThrough(
+      new TransformStream({
+        transform({ data }, controller) {
+          if (data === "[DONE]") {
+            return;
+          }
+          controller.enqueue(
+            _ai_sdk_provider_utils_dist_safeParseJSON({
+              text: data,
+              schema: chunkSchema
+            })
+          );
+        }
+      })
+    )
+  };
+};
+var provider_utils_dist_createJsonStreamResponseHandler = (chunkSchema) => async ({ response }) => {
+  const responseHeaders = provider_utils_dist_extractResponseHeaders(response);
+  if (response.body == null) {
+    throw new EmptyResponseBodyError({});
+  }
+  let buffer = "";
+  return {
+    responseHeaders,
+    value: response.body.pipeThrough(new TextDecoderStream()).pipeThrough(
+      new TransformStream({
+        transform(chunkText, controller) {
+          if (chunkText.endsWith("\n")) {
+            controller.enqueue(
+              _ai_sdk_provider_utils_dist_safeParseJSON({
+                text: buffer + chunkText,
+                schema: chunkSchema
+              })
+            );
+            buffer = "";
+          } else {
+            buffer += chunkText;
+          }
+        }
+      })
+    )
+  };
+};
+var provider_utils_dist_createJsonResponseHandler = (responseSchema) => async ({ response, url, requestBodyValues }) => {
+  const responseBody = await response.text();
+  const parsedResult = _ai_sdk_provider_utils_dist_safeParseJSON({
+    text: responseBody,
+    schema: responseSchema
+  });
+  const responseHeaders = provider_utils_dist_extractResponseHeaders(response);
+  if (!parsedResult.success) {
+    throw new APICallError2({
+      message: "Invalid JSON response",
+      cause: parsedResult.error,
+      statusCode: response.status,
+      responseHeaders,
+      responseBody,
+      url,
+      requestBodyValues
+    });
+  }
+  return {
+    responseHeaders,
+    value: parsedResult.value
+  };
+};
+
+// src/uint8-utils.ts
+var { btoa: provider_utils_dist_btoa, atob: provider_utils_dist_atob } = globalThis;
+function provider_utils_dist_convertBase64ToUint8Array(base64String) {
+  const base64Url = base64String.replace(/-/g, "+").replace(/_/g, "/");
+  const latin1string = provider_utils_dist_atob(base64Url);
+  return Uint8Array.from(latin1string, (byte) => byte.codePointAt(0));
+}
+function provider_utils_dist_convertUint8ArrayToBase64(array) {
+  let latin1string = "";
+  for (let i = 0; i < array.length; i++) {
+    latin1string += String.fromCodePoint(array[i]);
+  }
+  return provider_utils_dist_btoa(latin1string);
+}
+
+// src/without-trailing-slash.ts
+function provider_utils_dist_withoutTrailingSlash(url) {
+  return url == null ? void 0 : url.replace(/\/$/, "");
+}
+
+//# sourceMappingURL=index.mjs.map
 // EXTERNAL MODULE: ./node_modules/@opentelemetry/api/build/src/index.js
 var src = __nccwpck_require__(5163);
 ;// CONCATENATED MODULE: ./node_modules/zod-to-json-schema/dist/esm/Options.js
@@ -48864,7 +69078,7 @@ async function processDataProtocolResponse({
 }
 
 // src/call-chat-api.ts
-var dist_getOriginalFetch = () => fetch;
+var ui_utils_dist_getOriginalFetch = () => fetch;
 async function callChatApi({
   api,
   body,
@@ -48878,7 +69092,7 @@ async function callChatApi({
   onFinish,
   onToolCall,
   generateId: generateId2,
-  fetch: fetch2 = dist_getOriginalFetch()
+  fetch: fetch2 = ui_utils_dist_getOriginalFetch()
 }) {
   var _a, _b;
   const response = await fetch2(api, {
@@ -49272,7 +69486,7 @@ function jsonSchema(jsonSchema2, {
     [schemaSymbol]: true,
     _type: void 0,
     // should never be used directly
-    [validatorSymbol]: true,
+    [provider_utils_dist_validatorSymbol]: true,
     jsonSchema: jsonSchema2,
     validate
   };
@@ -49298,10 +69512,10 @@ function zodSchema(zodSchema2) {
 
 //# sourceMappingURL=index.mjs.map
 ;// CONCATENATED MODULE: ./node_modules/ai/dist/index.mjs
-var __defProp = Object.defineProperty;
+var ai_dist_defProp = Object.defineProperty;
 var __export = (target, all) => {
   for (var name11 in all)
-    __defProp(target, name11, { get: all[name11], enumerable: true });
+    ai_dist_defProp(target, name11, { get: all[name11], enumerable: true });
 };
 
 // streams/index.ts
@@ -49323,23 +69537,23 @@ async function delay(delayInMs) {
 // util/retry-error.ts
 
 var ai_dist_name = "AI_RetryError";
-var dist_marker = `vercel.ai.error.${ai_dist_name}`;
-var dist_symbol = Symbol.for(dist_marker);
-var dist_a;
-var RetryError = class extends AISDKError {
+var ai_dist_marker = `vercel.ai.error.${ai_dist_name}`;
+var ai_dist_symbol = Symbol.for(ai_dist_marker);
+var ai_dist_a;
+var RetryError = class extends node_modules_ai_sdk_provider_dist_AISDKError {
   constructor({
     message,
     reason,
     errors
   }) {
     super({ name: ai_dist_name, message });
-    this[dist_a] = true;
+    this[ai_dist_a] = true;
     this.reason = reason;
     this.errors = errors;
     this.lastError = errors[errors.length - 1];
   }
   static isInstance(error) {
-    return AISDKError.hasMarker(error, dist_marker);
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, ai_dist_marker);
   }
   /**
    * @deprecated use `isInstance` instead
@@ -49360,7 +69574,7 @@ var RetryError = class extends AISDKError {
     };
   }
 };
-dist_a = dist_symbol;
+ai_dist_a = ai_dist_symbol;
 
 // util/retry-with-exponential-backoff.ts
 var retryWithExponentialBackoff = ({
@@ -49380,13 +69594,13 @@ async function _retryWithExponentialBackoff(f, {
   try {
     return await f();
   } catch (error) {
-    if (isAbortError(error)) {
+    if (provider_utils_dist_isAbortError(error)) {
       throw error;
     }
     if (maxRetries === 0) {
       throw error;
     }
-    const errorMessage = dist_getErrorMessage(error);
+    const errorMessage = _ai_sdk_provider_utils_dist_getErrorMessage(error);
     const newErrors = [...errors, error];
     const tryNumber = newErrors.length;
     if (tryNumber > maxRetries) {
@@ -49396,7 +69610,7 @@ async function _retryWithExponentialBackoff(f, {
         errors: newErrors
       });
     }
-    if (error instanceof Error && APICallError.isAPICallError(error) && error.isRetryable === true && tryNumber <= maxRetries) {
+    if (error instanceof Error && _ai_sdk_provider_dist_APICallError.isAPICallError(error) && error.isRetryable === true && tryNumber <= maxRetries) {
       await delay(delayInMs);
       return _retryWithExponentialBackoff(
         f,
@@ -49890,11 +70104,11 @@ var DefaultEmbedManyResult = class {
 
 // util/download-error.ts
 
-var dist_name2 = "AI_DownloadError";
-var dist_marker2 = `vercel.ai.error.${dist_name2}`;
-var dist_symbol2 = Symbol.for(dist_marker2);
-var dist_a2;
-var DownloadError = class extends AISDKError {
+var ai_dist_name2 = "AI_DownloadError";
+var ai_dist_marker2 = `vercel.ai.error.${ai_dist_name2}`;
+var ai_dist_symbol2 = Symbol.for(ai_dist_marker2);
+var ai_dist_a2;
+var DownloadError = class extends node_modules_ai_sdk_provider_dist_AISDKError {
   constructor({
     url,
     statusCode,
@@ -49902,20 +70116,20 @@ var DownloadError = class extends AISDKError {
     cause,
     message = cause == null ? `Failed to download ${url}: ${statusCode} ${statusText}` : `Failed to download ${url}: ${cause}`
   }) {
-    super({ name: dist_name2, message, cause });
-    this[dist_a2] = true;
+    super({ name: ai_dist_name2, message, cause });
+    this[ai_dist_a2] = true;
     this.url = url;
     this.statusCode = statusCode;
     this.statusText = statusText;
   }
   static isInstance(error) {
-    return AISDKError.hasMarker(error, dist_marker2);
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, ai_dist_marker2);
   }
   /**
    * @deprecated use `isInstance` instead
    */
   static isDownloadError(error) {
-    return error instanceof Error && error.name === dist_name2 && typeof error.url === "string" && (error.statusCode == null || typeof error.statusCode === "number") && (error.statusText == null || typeof error.statusText === "string");
+    return error instanceof Error && error.name === ai_dist_name2 && typeof error.url === "string" && (error.statusCode == null || typeof error.statusCode === "number") && (error.statusText == null || typeof error.statusText === "string");
   }
   /**
    * @deprecated Do not use this method. It will be removed in the next major version.
@@ -49931,7 +70145,7 @@ var DownloadError = class extends AISDKError {
     };
   }
 };
-dist_a2 = dist_symbol2;
+ai_dist_a2 = ai_dist_symbol2;
 
 // util/download.ts
 async function download({
@@ -49982,28 +70196,28 @@ function detectImageMimeType(image) {
 
 // core/prompt/invalid-data-content-error.ts
 
-var dist_name3 = "AI_InvalidDataContentError";
-var dist_marker3 = `vercel.ai.error.${dist_name3}`;
-var dist_symbol3 = Symbol.for(dist_marker3);
-var dist_a3;
-var InvalidDataContentError = class extends AISDKError {
+var ai_dist_name3 = "AI_InvalidDataContentError";
+var ai_dist_marker3 = `vercel.ai.error.${ai_dist_name3}`;
+var ai_dist_symbol3 = Symbol.for(ai_dist_marker3);
+var ai_dist_a3;
+var InvalidDataContentError = class extends node_modules_ai_sdk_provider_dist_AISDKError {
   constructor({
     content,
     cause,
     message = `Invalid data content. Expected a base64 string, Uint8Array, ArrayBuffer, or Buffer, but got ${typeof content}.`
   }) {
-    super({ name: dist_name3, message, cause });
-    this[dist_a3] = true;
+    super({ name: ai_dist_name3, message, cause });
+    this[ai_dist_a3] = true;
     this.content = content;
   }
   static isInstance(error) {
-    return AISDKError.hasMarker(error, dist_marker3);
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, ai_dist_marker3);
   }
   /**
    * @deprecated use `isInstance` instead
    */
   static isInvalidDataContentError(error) {
-    return error instanceof Error && error.name === dist_name3 && error.content != null;
+    return error instanceof Error && error.name === ai_dist_name3 && error.content != null;
   }
   /**
    * @deprecated Do not use this method. It will be removed in the next major version.
@@ -50018,7 +70232,7 @@ var InvalidDataContentError = class extends AISDKError {
     };
   }
 };
-dist_a3 = dist_symbol3;
+ai_dist_a3 = ai_dist_symbol3;
 
 // core/prompt/data-content.ts
 
@@ -50040,9 +70254,9 @@ function convertDataContentToBase64String(content) {
     return content;
   }
   if (content instanceof ArrayBuffer) {
-    return convertUint8ArrayToBase64(new Uint8Array(content));
+    return provider_utils_dist_convertUint8ArrayToBase64(new Uint8Array(content));
   }
-  return convertUint8ArrayToBase64(content);
+  return provider_utils_dist_convertUint8ArrayToBase64(content);
 }
 function convertDataContentToUint8Array(content) {
   if (content instanceof Uint8Array) {
@@ -50050,7 +70264,7 @@ function convertDataContentToUint8Array(content) {
   }
   if (typeof content === "string") {
     try {
-      return convertBase64ToUint8Array(content);
+      return provider_utils_dist_convertBase64ToUint8Array(content);
     } catch (error) {
       throw new InvalidDataContentError({
         message: "Invalid data content. Content string is not a base64-encoded media.",
@@ -50074,27 +70288,27 @@ function convertUint8ArrayToText(uint8Array) {
 
 // core/prompt/invalid-message-role-error.ts
 
-var dist_name4 = "AI_InvalidMessageRoleError";
-var dist_marker4 = `vercel.ai.error.${dist_name4}`;
-var dist_symbol4 = Symbol.for(dist_marker4);
-var dist_a4;
-var InvalidMessageRoleError = class extends AISDKError {
+var ai_dist_name4 = "AI_InvalidMessageRoleError";
+var ai_dist_marker4 = `vercel.ai.error.${ai_dist_name4}`;
+var ai_dist_symbol4 = Symbol.for(ai_dist_marker4);
+var ai_dist_a4;
+var InvalidMessageRoleError = class extends node_modules_ai_sdk_provider_dist_AISDKError {
   constructor({
     role,
     message = `Invalid message role: '${role}'. Must be one of: "system", "user", "assistant", "tool".`
   }) {
-    super({ name: dist_name4, message });
-    this[dist_a4] = true;
+    super({ name: ai_dist_name4, message });
+    this[ai_dist_a4] = true;
     this.role = role;
   }
   static isInstance(error) {
-    return AISDKError.hasMarker(error, dist_marker4);
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, ai_dist_marker4);
   }
   /**
    * @deprecated use `isInstance` instead
    */
   static isInvalidMessageRoleError(error) {
-    return error instanceof Error && error.name === dist_name4 && typeof error.role === "string";
+    return error instanceof Error && error.name === ai_dist_name4 && typeof error.role === "string";
   }
   /**
    * @deprecated Do not use this method. It will be removed in the next major version.
@@ -50108,7 +70322,7 @@ var InvalidMessageRoleError = class extends AISDKError {
     };
   }
 };
-dist_a4 = dist_symbol4;
+ai_dist_a4 = ai_dist_symbol4;
 
 // core/prompt/split-data-url.ts
 function splitDataUrl(dataUrl) {
@@ -50313,32 +70527,32 @@ function convertPartToLanguageModelPart(part, downloadedAssets) {
 
 // errors/invalid-argument-error.ts
 
-var dist_name5 = "AI_InvalidArgumentError";
-var dist_marker5 = `vercel.ai.error.${dist_name5}`;
-var dist_symbol5 = Symbol.for(dist_marker5);
-var dist_a5;
-var dist_InvalidArgumentError = class extends AISDKError {
+var ai_dist_name5 = "AI_InvalidArgumentError";
+var ai_dist_marker5 = `vercel.ai.error.${ai_dist_name5}`;
+var ai_dist_symbol5 = Symbol.for(ai_dist_marker5);
+var ai_dist_a5;
+var ai_dist_InvalidArgumentError = class extends node_modules_ai_sdk_provider_dist_AISDKError {
   constructor({
     parameter,
     value,
     message
   }) {
     super({
-      name: dist_name5,
+      name: ai_dist_name5,
       message: `Invalid argument for parameter ${parameter}: ${message}`
     });
-    this[dist_a5] = true;
+    this[ai_dist_a5] = true;
     this.parameter = parameter;
     this.value = value;
   }
   static isInstance(error) {
-    return AISDKError.hasMarker(error, dist_marker5);
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, ai_dist_marker5);
   }
   /**
    * @deprecated use `isInstance` instead
    */
   static isInvalidArgumentError(error) {
-    return error instanceof Error && error.name === dist_name5 && typeof error.parameter === "string" && typeof error.value === "string";
+    return error instanceof Error && error.name === ai_dist_name5 && typeof error.parameter === "string" && typeof error.value === "string";
   }
   toJSON() {
     return {
@@ -50350,7 +70564,7 @@ var dist_InvalidArgumentError = class extends AISDKError {
     };
   }
 };
-dist_a5 = dist_symbol5;
+ai_dist_a5 = ai_dist_symbol5;
 
 // core/prompt/prepare-call-settings.ts
 function prepareCallSettings({
@@ -50366,14 +70580,14 @@ function prepareCallSettings({
 }) {
   if (maxTokens != null) {
     if (!Number.isInteger(maxTokens)) {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "maxTokens",
         value: maxTokens,
         message: "maxTokens must be an integer"
       });
     }
     if (maxTokens < 1) {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "maxTokens",
         value: maxTokens,
         message: "maxTokens must be >= 1"
@@ -50382,7 +70596,7 @@ function prepareCallSettings({
   }
   if (temperature != null) {
     if (typeof temperature !== "number") {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "temperature",
         value: temperature,
         message: "temperature must be a number"
@@ -50391,7 +70605,7 @@ function prepareCallSettings({
   }
   if (topP != null) {
     if (typeof topP !== "number") {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "topP",
         value: topP,
         message: "topP must be a number"
@@ -50400,7 +70614,7 @@ function prepareCallSettings({
   }
   if (topK != null) {
     if (typeof topK !== "number") {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "topK",
         value: topK,
         message: "topK must be a number"
@@ -50409,7 +70623,7 @@ function prepareCallSettings({
   }
   if (presencePenalty != null) {
     if (typeof presencePenalty !== "number") {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "presencePenalty",
         value: presencePenalty,
         message: "presencePenalty must be a number"
@@ -50418,7 +70632,7 @@ function prepareCallSettings({
   }
   if (frequencyPenalty != null) {
     if (typeof frequencyPenalty !== "number") {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "frequencyPenalty",
         value: frequencyPenalty,
         message: "frequencyPenalty must be a number"
@@ -50427,7 +70641,7 @@ function prepareCallSettings({
   }
   if (seed != null) {
     if (!Number.isInteger(seed)) {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "seed",
         value: seed,
         message: "seed must be an integer"
@@ -50436,14 +70650,14 @@ function prepareCallSettings({
   }
   if (maxRetries != null) {
     if (!Number.isInteger(maxRetries)) {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "maxRetries",
         value: maxRetries,
         message: "maxRetries must be an integer"
       });
     }
     if (maxRetries < 0) {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "maxRetries",
         value: maxRetries,
         message: "maxRetries must be >= 0"
@@ -50691,24 +70905,24 @@ function attachmentsToParts(attachments) {
 
 // core/prompt/message-conversion-error.ts
 
-var dist_name6 = "AI_MessageConversionError";
-var dist_marker6 = `vercel.ai.error.${dist_name6}`;
-var dist_symbol6 = Symbol.for(dist_marker6);
-var dist_a6;
-var MessageConversionError = class extends AISDKError {
+var ai_dist_name6 = "AI_MessageConversionError";
+var ai_dist_marker6 = `vercel.ai.error.${ai_dist_name6}`;
+var ai_dist_symbol6 = Symbol.for(ai_dist_marker6);
+var ai_dist_a6;
+var MessageConversionError = class extends node_modules_ai_sdk_provider_dist_AISDKError {
   constructor({
     originalMessage,
     message
   }) {
-    super({ name: dist_name6, message });
-    this[dist_a6] = true;
+    super({ name: ai_dist_name6, message });
+    this[ai_dist_a6] = true;
     this.originalMessage = originalMessage;
   }
   static isInstance(error) {
-    return AISDKError.hasMarker(error, dist_marker6);
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, ai_dist_marker6);
   }
 };
-dist_a6 = dist_symbol6;
+ai_dist_a6 = ai_dist_symbol6;
 
 // core/prompt/convert-to-core-messages.ts
 function convertToCoreMessages(messages, options) {
@@ -50804,26 +71018,26 @@ function standardizePrompt({
   tools
 }) {
   if (prompt.prompt == null && prompt.messages == null) {
-    throw new InvalidPromptError({
+    throw new provider_dist_InvalidPromptError({
       prompt,
       message: "prompt or messages must be defined"
     });
   }
   if (prompt.prompt != null && prompt.messages != null) {
-    throw new InvalidPromptError({
+    throw new provider_dist_InvalidPromptError({
       prompt,
       message: "prompt and messages cannot be defined at the same time"
     });
   }
   if (prompt.system != null && typeof prompt.system !== "string") {
-    throw new InvalidPromptError({
+    throw new provider_dist_InvalidPromptError({
       prompt,
       message: "system must be a string"
     });
   }
   if (prompt.prompt != null) {
     if (typeof prompt.prompt !== "string") {
-      throw new InvalidPromptError({
+      throw new provider_dist_InvalidPromptError({
         prompt,
         message: "prompt must be a string"
       });
@@ -50842,7 +71056,7 @@ function standardizePrompt({
   if (prompt.messages != null) {
     const promptType = detectPromptType(prompt.messages);
     if (promptType === "other") {
-      throw new InvalidPromptError({
+      throw new provider_dist_InvalidPromptError({
         prompt,
         message: "messages must be an array of CoreMessage or UIMessage"
       });
@@ -50850,12 +71064,12 @@ function standardizePrompt({
     const messages = promptType === "ui-messages" ? convertToCoreMessages(prompt.messages, {
       tools
     }) : prompt.messages;
-    const validationResult = safeValidateTypes({
+    const validationResult = provider_utils_dist_safeValidateTypes({
       value: messages,
       schema: z.array(coreMessageSchema)
     });
     if (!validationResult.success) {
-      throw new InvalidPromptError({
+      throw new provider_dist_InvalidPromptError({
         prompt,
         message: "messages must be an array of CoreMessage or UIMessage",
         cause: validationResult.error
@@ -50917,24 +71131,24 @@ function injectJsonInstruction({
 
 // core/generate-object/no-object-generated-error.ts
 
-var dist_name7 = "AI_NoObjectGeneratedError";
-var dist_marker7 = `vercel.ai.error.${dist_name7}`;
-var dist_symbol7 = Symbol.for(dist_marker7);
-var dist_a7;
-var NoObjectGeneratedError = class extends AISDKError {
+var ai_dist_name7 = "AI_NoObjectGeneratedError";
+var ai_dist_marker7 = `vercel.ai.error.${ai_dist_name7}`;
+var ai_dist_symbol7 = Symbol.for(ai_dist_marker7);
+var ai_dist_a7;
+var NoObjectGeneratedError = class extends node_modules_ai_sdk_provider_dist_AISDKError {
   // used in isInstance
   constructor({ message = "No object generated." } = {}) {
-    super({ name: dist_name7, message });
-    this[dist_a7] = true;
+    super({ name: ai_dist_name7, message });
+    this[ai_dist_a7] = true;
   }
   static isInstance(error) {
-    return AISDKError.hasMarker(error, dist_marker7);
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, ai_dist_marker7);
   }
   /**
    * @deprecated Use isInstance instead.
    */
   static isNoObjectGeneratedError(error) {
-    return error instanceof Error && error.name === dist_name7;
+    return error instanceof Error && error.name === ai_dist_name7;
   }
   /**
    * @deprecated Do not use this method. It will be removed in the next major version.
@@ -50948,7 +71162,7 @@ var NoObjectGeneratedError = class extends AISDKError {
     };
   }
 };
-dist_a7 = dist_symbol7;
+ai_dist_a7 = ai_dist_symbol7;
 
 // core/generate-object/output-strategy.ts
 
@@ -50983,7 +71197,7 @@ var noSchemaOutputStrategy = {
     return value === void 0 ? { success: false, error: new NoObjectGeneratedError() } : { success: true, value };
   },
   createElementStream() {
-    throw new dist_UnsupportedFunctionalityError({
+    throw new _ai_sdk_provider_dist_UnsupportedFunctionalityError({
       functionality: "element streams in no-schema mode"
     });
   }
@@ -51194,7 +71408,7 @@ function validateObjectGenerationInput({
   enumValues
 }) {
   if (output != null && output !== "object" && output !== "array" && output !== "enum" && output !== "no-schema") {
-    throw new dist_InvalidArgumentError({
+    throw new ai_dist_InvalidArgumentError({
       parameter: "output",
       value: output,
       message: "Invalid output type."
@@ -51202,35 +71416,35 @@ function validateObjectGenerationInput({
   }
   if (output === "no-schema") {
     if (mode === "auto" || mode === "tool") {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "mode",
         value: mode,
         message: 'Mode must be "json" for no-schema output.'
       });
     }
     if (schema != null) {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "schema",
         value: schema,
         message: "Schema is not supported for no-schema output."
       });
     }
     if (schemaDescription != null) {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "schemaDescription",
         value: schemaDescription,
         message: "Schema description is not supported for no-schema output."
       });
     }
     if (schemaName != null) {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "schemaName",
         value: schemaName,
         message: "Schema name is not supported for no-schema output."
       });
     }
     if (enumValues != null) {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "enumValues",
         value: enumValues,
         message: "Enum values are not supported for no-schema output."
@@ -51239,14 +71453,14 @@ function validateObjectGenerationInput({
   }
   if (output === "object") {
     if (schema == null) {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "schema",
         value: schema,
         message: "Schema is required for object output."
       });
     }
     if (enumValues != null) {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "enumValues",
         value: enumValues,
         message: "Enum values are not supported for object output."
@@ -51255,14 +71469,14 @@ function validateObjectGenerationInput({
   }
   if (output === "array") {
     if (schema == null) {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "schema",
         value: schema,
         message: "Element schema is required for array output."
       });
     }
     if (enumValues != null) {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "enumValues",
         value: enumValues,
         message: "Enum values are not supported for array output."
@@ -51271,28 +71485,28 @@ function validateObjectGenerationInput({
   }
   if (output === "enum") {
     if (schema != null) {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "schema",
         value: schema,
         message: "Schema is not supported for enum output."
       });
     }
     if (schemaDescription != null) {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "schemaDescription",
         value: schemaDescription,
         message: "Schema description is not supported for enum output."
       });
     }
     if (schemaName != null) {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "schemaName",
         value: schemaName,
         message: "Schema name is not supported for enum output."
       });
     }
     if (enumValues == null) {
-      throw new dist_InvalidArgumentError({
+      throw new ai_dist_InvalidArgumentError({
         parameter: "enumValues",
         value: enumValues,
         message: "Enum values are required for enum output."
@@ -51300,7 +71514,7 @@ function validateObjectGenerationInput({
     }
     for (const value of enumValues) {
       if (typeof value !== "string") {
-        throw new dist_InvalidArgumentError({
+        throw new ai_dist_InvalidArgumentError({
           parameter: "enumValues",
           value,
           message: "Enum values must be strings."
@@ -51311,7 +71525,7 @@ function validateObjectGenerationInput({
 }
 
 // core/generate-object/generate-object.ts
-var originalGenerateId = createIdGenerator({ prefix: "aiobj", size: 24 });
+var originalGenerateId = provider_utils_dist_createIdGenerator({ prefix: "aiobj", size: 24 });
 async function generateObject({
   model,
   enum: enumValues,
@@ -51803,7 +72017,7 @@ function writeToServerResponse({
 }
 
 // core/generate-object/stream-object.ts
-var originalGenerateId2 = createIdGenerator({ prefix: "aiobj", size: 24 });
+var originalGenerateId2 = provider_utils_dist_createIdGenerator({ prefix: "aiobj", size: 24 });
 async function streamObject({
   model,
   schema: inputSchema,
@@ -52320,32 +72534,32 @@ var experimental_streamObject = (/* unused pure expression or super */ null && (
 
 // errors/invalid-tool-arguments-error.ts
 
-var dist_name8 = "AI_InvalidToolArgumentsError";
-var dist_marker8 = `vercel.ai.error.${dist_name8}`;
-var dist_symbol8 = Symbol.for(dist_marker8);
-var dist_a8;
-var InvalidToolArgumentsError = class extends AISDKError {
+var ai_dist_name8 = "AI_InvalidToolArgumentsError";
+var ai_dist_marker8 = `vercel.ai.error.${ai_dist_name8}`;
+var ai_dist_symbol8 = Symbol.for(ai_dist_marker8);
+var ai_dist_a8;
+var InvalidToolArgumentsError = class extends node_modules_ai_sdk_provider_dist_AISDKError {
   constructor({
     toolArgs,
     toolName,
     cause,
-    message = `Invalid arguments for tool ${toolName}: ${getErrorMessage(
+    message = `Invalid arguments for tool ${toolName}: ${_ai_sdk_provider_dist_getErrorMessage(
       cause
     )}`
   }) {
-    super({ name: dist_name8, message, cause });
-    this[dist_a8] = true;
+    super({ name: ai_dist_name8, message, cause });
+    this[ai_dist_a8] = true;
     this.toolArgs = toolArgs;
     this.toolName = toolName;
   }
   static isInstance(error) {
-    return AISDKError.hasMarker(error, dist_marker8);
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, ai_dist_marker8);
   }
   /**
    * @deprecated use `isInstance` instead
    */
   static isInvalidToolArgumentsError(error) {
-    return error instanceof Error && error.name === dist_name8 && typeof error.toolName === "string" && typeof error.toolArgs === "string";
+    return error instanceof Error && error.name === ai_dist_name8 && typeof error.toolName === "string" && typeof error.toolArgs === "string";
   }
   /**
    * @deprecated Do not use this method. It will be removed in the next major version.
@@ -52361,33 +72575,33 @@ var InvalidToolArgumentsError = class extends AISDKError {
     };
   }
 };
-dist_a8 = dist_symbol8;
+ai_dist_a8 = ai_dist_symbol8;
 
 // errors/no-such-tool-error.ts
 
-var dist_name9 = "AI_NoSuchToolError";
-var dist_marker9 = `vercel.ai.error.${dist_name9}`;
-var dist_symbol9 = Symbol.for(dist_marker9);
-var dist_a9;
-var NoSuchToolError = class extends AISDKError {
+var ai_dist_name9 = "AI_NoSuchToolError";
+var ai_dist_marker9 = `vercel.ai.error.${ai_dist_name9}`;
+var ai_dist_symbol9 = Symbol.for(ai_dist_marker9);
+var ai_dist_a9;
+var NoSuchToolError = class extends node_modules_ai_sdk_provider_dist_AISDKError {
   constructor({
     toolName,
     availableTools = void 0,
     message = `Model tried to call unavailable tool '${toolName}'. ${availableTools === void 0 ? "No tools are available." : `Available tools: ${availableTools.join(", ")}.`}`
   }) {
-    super({ name: dist_name9, message });
-    this[dist_a9] = true;
+    super({ name: ai_dist_name9, message });
+    this[ai_dist_a9] = true;
     this.toolName = toolName;
     this.availableTools = availableTools;
   }
   static isInstance(error) {
-    return AISDKError.hasMarker(error, dist_marker9);
+    return node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, ai_dist_marker9);
   }
   /**
    * @deprecated use `isInstance` instead
    */
   static isNoSuchToolError(error) {
-    return error instanceof Error && error.name === dist_name9 && "toolName" in error && error.toolName != void 0 && typeof error.name === "string";
+    return error instanceof Error && error.name === ai_dist_name9 && "toolName" in error && error.toolName != void 0 && typeof error.name === "string";
   }
   /**
    * @deprecated Do not use this method. It will be removed in the next major version.
@@ -52402,7 +72616,7 @@ var NoSuchToolError = class extends AISDKError {
     };
   }
 };
-dist_a9 = dist_symbol9;
+ai_dist_a9 = ai_dist_symbol9;
 
 // core/prompt/prepare-tools-and-tool-choice.ts
 
@@ -52488,7 +72702,7 @@ function parseToolCall({
     });
   }
   const schema = dist_asSchema(tool2.parameters);
-  const parseResult = toolCall.args.trim() === "" ? safeValidateTypes({ value: {}, schema }) : dist_safeParseJSON({ text: toolCall.args, schema });
+  const parseResult = toolCall.args.trim() === "" ? provider_utils_dist_safeValidateTypes({ value: {}, schema }) : _ai_sdk_provider_utils_dist_safeParseJSON({ text: toolCall.args, schema });
   if (parseResult.success === false) {
     throw new InvalidToolArgumentsError({
       toolName,
@@ -52542,7 +72756,7 @@ function toResponseMessages({
 }
 
 // core/generate-text/generate-text.ts
-var originalGenerateId3 = createIdGenerator({ prefix: "aitxt", size: 24 });
+var originalGenerateId3 = provider_utils_dist_createIdGenerator({ prefix: "aitxt", size: 24 });
 async function generateText({
   model,
   tools,
@@ -52569,7 +72783,7 @@ async function generateText({
   ...settings
 }) {
   if (maxSteps < 1) {
-    throw new dist_InvalidArgumentError({
+    throw new ai_dist_InvalidArgumentError({
       parameter: "maxSteps",
       value: maxSteps,
       message: "maxSteps must be at least 1"
@@ -53281,7 +73495,7 @@ function runToolsTransformation({
 }
 
 // core/generate-text/stream-text.ts
-var originalGenerateId4 = createIdGenerator({ prefix: "aitxt", size: 24 });
+var originalGenerateId4 = provider_utils_dist_createIdGenerator({ prefix: "aitxt", size: 24 });
 async function streamText({
   model,
   tools,
@@ -53310,7 +73524,7 @@ async function streamText({
   ...settings
 }) {
   if (maxSteps < 1) {
-    throw new dist_InvalidArgumentError({
+    throw new ai_dist_InvalidArgumentError({
       parameter: "maxSteps",
       value: maxSteps,
       message: "maxSteps must be at least 1"
@@ -54200,10 +74414,10 @@ function experimental_customProvider({
 
 // core/registry/no-such-provider-error.ts
 
-var dist_name10 = "AI_NoSuchProviderError";
-var dist_marker10 = `vercel.ai.error.${dist_name10}`;
-var dist_symbol10 = Symbol.for(dist_marker10);
-var dist_a10;
+var ai_dist_name10 = "AI_NoSuchProviderError";
+var ai_dist_marker10 = `vercel.ai.error.${ai_dist_name10}`;
+var ai_dist_symbol10 = Symbol.for(ai_dist_marker10);
+var ai_dist_a10;
 var NoSuchProviderError = class extends (/* unused pure expression or super */ null && (NoSuchModelError3)) {
   constructor({
     modelId,
@@ -54212,19 +74426,19 @@ var NoSuchProviderError = class extends (/* unused pure expression or super */ n
     availableProviders,
     message = `No such provider: ${providerId} (available providers: ${availableProviders.join()})`
   }) {
-    super({ errorName: dist_name10, modelId, modelType, message });
-    this[dist_a10] = true;
+    super({ errorName: ai_dist_name10, modelId, modelType, message });
+    this[ai_dist_a10] = true;
     this.providerId = providerId;
     this.availableProviders = availableProviders;
   }
   static isInstance(error) {
-    return AISDKError11.hasMarker(error, dist_marker10);
+    return AISDKError11.hasMarker(error, ai_dist_marker10);
   }
   /**
    * @deprecated use `isInstance` instead
    */
   static isNoSuchProviderError(error) {
-    return error instanceof Error && error.name === dist_name10 && typeof error.providerId === "string" && Array.isArray(error.availableProviders);
+    return error instanceof Error && error.name === ai_dist_name10 && typeof error.providerId === "string" && Array.isArray(error.availableProviders);
   }
   /**
    * @deprecated Do not use this method. It will be removed in the next major version.
@@ -54241,7 +74455,7 @@ var NoSuchProviderError = class extends (/* unused pure expression or super */ n
     };
   }
 };
-dist_a10 = dist_symbol10;
+ai_dist_a10 = ai_dist_symbol10;
 
 // core/registry/provider-registry.ts
 
@@ -55425,8 +75639,8 @@ var StreamingTextResponse = class extends Response {
 };
 
 // streams/index.ts
-var generateId2 = dist_generateId;
-var dist_nanoid = dist_generateId;
+var generateId2 = _ai_sdk_provider_utils_dist_generateId;
+var dist_nanoid = _ai_sdk_provider_utils_dist_generateId;
 
 //# sourceMappingURL=index.mjs.map
 ;// CONCATENATED MODULE: ./node_modules/dedent/dist/dedent.mjs
@@ -55500,10 +75714,10 @@ var index_cjs = __nccwpck_require__(8591);
 var parse_diff = __nccwpck_require__(4833);
 ;// CONCATENATED MODULE: ./node_modules/@ai-sdk/google/node_modules/@ai-sdk/provider/dist/index.mjs
 // src/errors/ai-sdk-error.ts
-var provider_dist_marker = "vercel.ai.error";
-var provider_dist_symbol = Symbol.for(provider_dist_marker);
-var provider_dist_a;
-var dist_AISDKError = class _AISDKError extends Error {
+var _ai_sdk_provider_dist_marker = "vercel.ai.error";
+var _ai_sdk_provider_dist_symbol = Symbol.for(_ai_sdk_provider_dist_marker);
+var _ai_sdk_provider_dist_a;
+var google_node_modules_ai_sdk_provider_dist_AISDKError = class _AISDKError extends Error {
   /**
    * Creates an AI SDK Error.
    *
@@ -55518,7 +75732,7 @@ var dist_AISDKError = class _AISDKError extends Error {
     cause
   }) {
     super(message);
-    this[provider_dist_a] = true;
+    this[_ai_sdk_provider_dist_a] = true;
     this.name = name14;
     this.cause = cause;
   }
@@ -55528,22 +75742,22 @@ var dist_AISDKError = class _AISDKError extends Error {
    * @returns {boolean} True if the error is an AI SDK Error, false otherwise.
    */
   static isInstance(error) {
-    return _AISDKError.hasMarker(error, provider_dist_marker);
+    return _AISDKError.hasMarker(error, _ai_sdk_provider_dist_marker);
   }
   static hasMarker(error, marker15) {
     const markerSymbol = Symbol.for(marker15);
     return error != null && typeof error === "object" && markerSymbol in error && typeof error[markerSymbol] === "boolean" && error[markerSymbol] === true;
   }
 };
-provider_dist_a = provider_dist_symbol;
-var provider_dist_AISDKError = dist_AISDKError;
+_ai_sdk_provider_dist_a = _ai_sdk_provider_dist_symbol;
+var _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError = google_node_modules_ai_sdk_provider_dist_AISDKError;
 
 // src/errors/api-call-error.ts
-var provider_dist_name = "AI_APICallError";
-var provider_dist_marker2 = `vercel.ai.error.${provider_dist_name}`;
-var provider_dist_symbol2 = Symbol.for(provider_dist_marker2);
-var provider_dist_a2;
-var dist_APICallError = class extends provider_dist_AISDKError {
+var node_modules_ai_sdk_provider_dist_name = "AI_APICallError";
+var _ai_sdk_provider_dist_marker2 = `vercel.ai.error.${node_modules_ai_sdk_provider_dist_name}`;
+var _ai_sdk_provider_dist_symbol2 = Symbol.for(_ai_sdk_provider_dist_marker2);
+var _ai_sdk_provider_dist_a2;
+var node_modules_ai_sdk_provider_dist_APICallError = class extends _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError {
   constructor({
     message,
     url,
@@ -55559,8 +75773,8 @@ var dist_APICallError = class extends provider_dist_AISDKError {
     // server error
     data
   }) {
-    super({ name: provider_dist_name, message, cause });
-    this[provider_dist_a2] = true;
+    super({ name: node_modules_ai_sdk_provider_dist_name, message, cause });
+    this[_ai_sdk_provider_dist_a2] = true;
     this.url = url;
     this.requestBodyValues = requestBodyValues;
     this.statusCode = statusCode;
@@ -55570,30 +75784,30 @@ var dist_APICallError = class extends provider_dist_AISDKError {
     this.data = data;
   }
   static isInstance(error) {
-    return provider_dist_AISDKError.hasMarker(error, provider_dist_marker2);
+    return _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, _ai_sdk_provider_dist_marker2);
   }
 };
-provider_dist_a2 = provider_dist_symbol2;
+_ai_sdk_provider_dist_a2 = _ai_sdk_provider_dist_symbol2;
 
 // src/errors/empty-response-body-error.ts
-var provider_dist_name2 = "AI_EmptyResponseBodyError";
-var provider_dist_marker3 = `vercel.ai.error.${provider_dist_name2}`;
-var provider_dist_symbol3 = Symbol.for(provider_dist_marker3);
-var provider_dist_a3;
-var provider_dist_EmptyResponseBodyError = class extends provider_dist_AISDKError {
+var _ai_sdk_provider_dist_name2 = "AI_EmptyResponseBodyError";
+var _ai_sdk_provider_dist_marker3 = `vercel.ai.error.${_ai_sdk_provider_dist_name2}`;
+var _ai_sdk_provider_dist_symbol3 = Symbol.for(_ai_sdk_provider_dist_marker3);
+var _ai_sdk_provider_dist_a3;
+var node_modules_ai_sdk_provider_dist_EmptyResponseBodyError = class extends _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError {
   // used in isInstance
   constructor({ message = "Empty response body" } = {}) {
-    super({ name: provider_dist_name2, message });
-    this[provider_dist_a3] = true;
+    super({ name: _ai_sdk_provider_dist_name2, message });
+    this[_ai_sdk_provider_dist_a3] = true;
   }
   static isInstance(error) {
-    return provider_dist_AISDKError.hasMarker(error, provider_dist_marker3);
+    return _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, _ai_sdk_provider_dist_marker3);
   }
 };
-provider_dist_a3 = provider_dist_symbol3;
+_ai_sdk_provider_dist_a3 = _ai_sdk_provider_dist_symbol3;
 
 // src/errors/get-error-message.ts
-function provider_dist_getErrorMessage(error) {
+function node_modules_ai_sdk_provider_dist_getErrorMessage(error) {
   if (error == null) {
     return "unknown error";
   }
@@ -55607,206 +75821,206 @@ function provider_dist_getErrorMessage(error) {
 }
 
 // src/errors/invalid-argument-error.ts
-var provider_dist_name3 = "AI_InvalidArgumentError";
-var provider_dist_marker4 = `vercel.ai.error.${provider_dist_name3}`;
-var provider_dist_symbol4 = Symbol.for(provider_dist_marker4);
-var provider_dist_a4;
-var provider_dist_InvalidArgumentError = class extends provider_dist_AISDKError {
+var _ai_sdk_provider_dist_name3 = "AI_InvalidArgumentError";
+var _ai_sdk_provider_dist_marker4 = `vercel.ai.error.${_ai_sdk_provider_dist_name3}`;
+var _ai_sdk_provider_dist_symbol4 = Symbol.for(_ai_sdk_provider_dist_marker4);
+var _ai_sdk_provider_dist_a4;
+var _ai_sdk_provider_dist_InvalidArgumentError = class extends _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError {
   constructor({
     message,
     cause,
     argument
   }) {
-    super({ name: provider_dist_name3, message, cause });
-    this[provider_dist_a4] = true;
+    super({ name: _ai_sdk_provider_dist_name3, message, cause });
+    this[_ai_sdk_provider_dist_a4] = true;
     this.argument = argument;
   }
   static isInstance(error) {
-    return provider_dist_AISDKError.hasMarker(error, provider_dist_marker4);
+    return _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, _ai_sdk_provider_dist_marker4);
   }
 };
-provider_dist_a4 = provider_dist_symbol4;
+_ai_sdk_provider_dist_a4 = _ai_sdk_provider_dist_symbol4;
 
 // src/errors/invalid-prompt-error.ts
-var provider_dist_name4 = "AI_InvalidPromptError";
-var provider_dist_marker5 = `vercel.ai.error.${provider_dist_name4}`;
-var provider_dist_symbol5 = Symbol.for(provider_dist_marker5);
-var provider_dist_a5;
-var dist_InvalidPromptError = class extends (/* unused pure expression or super */ null && (provider_dist_AISDKError)) {
+var _ai_sdk_provider_dist_name4 = "AI_InvalidPromptError";
+var _ai_sdk_provider_dist_marker5 = `vercel.ai.error.${_ai_sdk_provider_dist_name4}`;
+var _ai_sdk_provider_dist_symbol5 = Symbol.for(_ai_sdk_provider_dist_marker5);
+var _ai_sdk_provider_dist_a5;
+var _ai_sdk_provider_dist_InvalidPromptError = class extends (/* unused pure expression or super */ null && (_ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError)) {
   constructor({
     prompt,
     message,
     cause
   }) {
-    super({ name: provider_dist_name4, message: `Invalid prompt: ${message}`, cause });
-    this[provider_dist_a5] = true;
+    super({ name: _ai_sdk_provider_dist_name4, message: `Invalid prompt: ${message}`, cause });
+    this[_ai_sdk_provider_dist_a5] = true;
     this.prompt = prompt;
   }
   static isInstance(error) {
-    return provider_dist_AISDKError.hasMarker(error, provider_dist_marker5);
+    return _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, _ai_sdk_provider_dist_marker5);
   }
 };
-provider_dist_a5 = provider_dist_symbol5;
+_ai_sdk_provider_dist_a5 = _ai_sdk_provider_dist_symbol5;
 
 // src/errors/invalid-response-data-error.ts
-var provider_dist_name5 = "AI_InvalidResponseDataError";
-var provider_dist_marker6 = `vercel.ai.error.${provider_dist_name5}`;
-var provider_dist_symbol6 = Symbol.for(provider_dist_marker6);
-var provider_dist_a6;
-var dist_InvalidResponseDataError = class extends (/* unused pure expression or super */ null && (provider_dist_AISDKError)) {
+var _ai_sdk_provider_dist_name5 = "AI_InvalidResponseDataError";
+var _ai_sdk_provider_dist_marker6 = `vercel.ai.error.${_ai_sdk_provider_dist_name5}`;
+var _ai_sdk_provider_dist_symbol6 = Symbol.for(_ai_sdk_provider_dist_marker6);
+var _ai_sdk_provider_dist_a6;
+var _ai_sdk_provider_dist_InvalidResponseDataError = class extends (/* unused pure expression or super */ null && (_ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError)) {
   constructor({
     data,
     message = `Invalid response data: ${JSON.stringify(data)}.`
   }) {
-    super({ name: provider_dist_name5, message });
-    this[provider_dist_a6] = true;
+    super({ name: _ai_sdk_provider_dist_name5, message });
+    this[_ai_sdk_provider_dist_a6] = true;
     this.data = data;
   }
   static isInstance(error) {
-    return provider_dist_AISDKError.hasMarker(error, provider_dist_marker6);
+    return _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, _ai_sdk_provider_dist_marker6);
   }
 };
-provider_dist_a6 = provider_dist_symbol6;
+_ai_sdk_provider_dist_a6 = _ai_sdk_provider_dist_symbol6;
 
 // src/errors/json-parse-error.ts
-var provider_dist_name6 = "AI_JSONParseError";
-var provider_dist_marker7 = `vercel.ai.error.${provider_dist_name6}`;
-var provider_dist_symbol7 = Symbol.for(provider_dist_marker7);
-var provider_dist_a7;
-var dist_JSONParseError = class extends provider_dist_AISDKError {
+var _ai_sdk_provider_dist_name6 = "AI_JSONParseError";
+var _ai_sdk_provider_dist_marker7 = `vercel.ai.error.${_ai_sdk_provider_dist_name6}`;
+var _ai_sdk_provider_dist_symbol7 = Symbol.for(_ai_sdk_provider_dist_marker7);
+var _ai_sdk_provider_dist_a7;
+var node_modules_ai_sdk_provider_dist_JSONParseError = class extends _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError {
   constructor({ text, cause }) {
     super({
-      name: provider_dist_name6,
+      name: _ai_sdk_provider_dist_name6,
       message: `JSON parsing failed: Text: ${text}.
-Error message: ${provider_dist_getErrorMessage(cause)}`,
+Error message: ${node_modules_ai_sdk_provider_dist_getErrorMessage(cause)}`,
       cause
     });
-    this[provider_dist_a7] = true;
+    this[_ai_sdk_provider_dist_a7] = true;
     this.text = text;
   }
   static isInstance(error) {
-    return provider_dist_AISDKError.hasMarker(error, provider_dist_marker7);
+    return _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, _ai_sdk_provider_dist_marker7);
   }
 };
-provider_dist_a7 = provider_dist_symbol7;
+_ai_sdk_provider_dist_a7 = _ai_sdk_provider_dist_symbol7;
 
 // src/errors/load-api-key-error.ts
-var provider_dist_name7 = "AI_LoadAPIKeyError";
-var provider_dist_marker8 = `vercel.ai.error.${provider_dist_name7}`;
-var provider_dist_symbol8 = Symbol.for(provider_dist_marker8);
-var provider_dist_a8;
-var dist_LoadAPIKeyError = class extends provider_dist_AISDKError {
+var _ai_sdk_provider_dist_name7 = "AI_LoadAPIKeyError";
+var _ai_sdk_provider_dist_marker8 = `vercel.ai.error.${_ai_sdk_provider_dist_name7}`;
+var _ai_sdk_provider_dist_symbol8 = Symbol.for(_ai_sdk_provider_dist_marker8);
+var _ai_sdk_provider_dist_a8;
+var node_modules_ai_sdk_provider_dist_LoadAPIKeyError = class extends _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError {
   // used in isInstance
   constructor({ message }) {
-    super({ name: provider_dist_name7, message });
-    this[provider_dist_a8] = true;
+    super({ name: _ai_sdk_provider_dist_name7, message });
+    this[_ai_sdk_provider_dist_a8] = true;
   }
   static isInstance(error) {
-    return provider_dist_AISDKError.hasMarker(error, provider_dist_marker8);
+    return _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, _ai_sdk_provider_dist_marker8);
   }
 };
-provider_dist_a8 = provider_dist_symbol8;
+_ai_sdk_provider_dist_a8 = _ai_sdk_provider_dist_symbol8;
 
 // src/errors/load-setting-error.ts
-var provider_dist_name8 = "AI_LoadSettingError";
-var provider_dist_marker9 = `vercel.ai.error.${provider_dist_name8}`;
-var provider_dist_symbol9 = Symbol.for(provider_dist_marker9);
-var provider_dist_a9;
-var provider_dist_LoadSettingError = class extends (/* unused pure expression or super */ null && (provider_dist_AISDKError)) {
+var _ai_sdk_provider_dist_name8 = "AI_LoadSettingError";
+var _ai_sdk_provider_dist_marker9 = `vercel.ai.error.${_ai_sdk_provider_dist_name8}`;
+var _ai_sdk_provider_dist_symbol9 = Symbol.for(_ai_sdk_provider_dist_marker9);
+var _ai_sdk_provider_dist_a9;
+var node_modules_ai_sdk_provider_dist_LoadSettingError = class extends (/* unused pure expression or super */ null && (_ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError)) {
   // used in isInstance
   constructor({ message }) {
-    super({ name: provider_dist_name8, message });
-    this[provider_dist_a9] = true;
+    super({ name: _ai_sdk_provider_dist_name8, message });
+    this[_ai_sdk_provider_dist_a9] = true;
   }
   static isInstance(error) {
-    return provider_dist_AISDKError.hasMarker(error, provider_dist_marker9);
+    return _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, _ai_sdk_provider_dist_marker9);
   }
 };
-provider_dist_a9 = provider_dist_symbol9;
+_ai_sdk_provider_dist_a9 = _ai_sdk_provider_dist_symbol9;
 
 // src/errors/no-content-generated-error.ts
-var provider_dist_name9 = "AI_NoContentGeneratedError";
-var provider_dist_marker10 = `vercel.ai.error.${provider_dist_name9}`;
-var provider_dist_symbol10 = Symbol.for(provider_dist_marker10);
-var provider_dist_a10;
-var dist_NoContentGeneratedError = class extends (/* unused pure expression or super */ null && (provider_dist_AISDKError)) {
+var _ai_sdk_provider_dist_name9 = "AI_NoContentGeneratedError";
+var _ai_sdk_provider_dist_marker10 = `vercel.ai.error.${_ai_sdk_provider_dist_name9}`;
+var _ai_sdk_provider_dist_symbol10 = Symbol.for(_ai_sdk_provider_dist_marker10);
+var _ai_sdk_provider_dist_a10;
+var _ai_sdk_provider_dist_NoContentGeneratedError = class extends (/* unused pure expression or super */ null && (_ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError)) {
   // used in isInstance
   constructor({
     message = "No content generated."
   } = {}) {
-    super({ name: provider_dist_name9, message });
-    this[provider_dist_a10] = true;
+    super({ name: _ai_sdk_provider_dist_name9, message });
+    this[_ai_sdk_provider_dist_a10] = true;
   }
   static isInstance(error) {
-    return provider_dist_AISDKError.hasMarker(error, provider_dist_marker10);
+    return _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, _ai_sdk_provider_dist_marker10);
   }
 };
-provider_dist_a10 = provider_dist_symbol10;
+_ai_sdk_provider_dist_a10 = _ai_sdk_provider_dist_symbol10;
 
 // src/errors/no-such-model-error.ts
-var provider_dist_name10 = "AI_NoSuchModelError";
-var dist_marker11 = `vercel.ai.error.${provider_dist_name10}`;
-var dist_symbol11 = Symbol.for(dist_marker11);
-var dist_a11;
-var dist_NoSuchModelError = class extends (/* unused pure expression or super */ null && (provider_dist_AISDKError)) {
+var _ai_sdk_provider_dist_name10 = "AI_NoSuchModelError";
+var _ai_sdk_provider_dist_marker11 = `vercel.ai.error.${_ai_sdk_provider_dist_name10}`;
+var _ai_sdk_provider_dist_symbol11 = Symbol.for(_ai_sdk_provider_dist_marker11);
+var _ai_sdk_provider_dist_a11;
+var _ai_sdk_provider_dist_NoSuchModelError = class extends (/* unused pure expression or super */ null && (_ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError)) {
   constructor({
-    errorName = provider_dist_name10,
+    errorName = _ai_sdk_provider_dist_name10,
     modelId,
     modelType,
     message = `No such ${modelType}: ${modelId}`
   }) {
     super({ name: errorName, message });
-    this[dist_a11] = true;
+    this[_ai_sdk_provider_dist_a11] = true;
     this.modelId = modelId;
     this.modelType = modelType;
   }
   static isInstance(error) {
-    return provider_dist_AISDKError.hasMarker(error, dist_marker11);
+    return _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, _ai_sdk_provider_dist_marker11);
   }
 };
-dist_a11 = dist_symbol11;
+_ai_sdk_provider_dist_a11 = _ai_sdk_provider_dist_symbol11;
 
 // src/errors/too-many-embedding-values-for-call-error.ts
-var dist_name11 = "AI_TooManyEmbeddingValuesForCallError";
-var dist_marker12 = `vercel.ai.error.${dist_name11}`;
-var dist_symbol12 = Symbol.for(dist_marker12);
-var dist_a12;
-var dist_TooManyEmbeddingValuesForCallError = class extends provider_dist_AISDKError {
+var _ai_sdk_provider_dist_name11 = "AI_TooManyEmbeddingValuesForCallError";
+var _ai_sdk_provider_dist_marker12 = `vercel.ai.error.${_ai_sdk_provider_dist_name11}`;
+var _ai_sdk_provider_dist_symbol12 = Symbol.for(_ai_sdk_provider_dist_marker12);
+var _ai_sdk_provider_dist_a12;
+var _ai_sdk_provider_dist_TooManyEmbeddingValuesForCallError = class extends _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError {
   constructor(options) {
     super({
-      name: dist_name11,
+      name: _ai_sdk_provider_dist_name11,
       message: `Too many values for a single embedding call. The ${options.provider} model "${options.modelId}" can only embed up to ${options.maxEmbeddingsPerCall} values per call, but ${options.values.length} values were provided.`
     });
-    this[dist_a12] = true;
+    this[_ai_sdk_provider_dist_a12] = true;
     this.provider = options.provider;
     this.modelId = options.modelId;
     this.maxEmbeddingsPerCall = options.maxEmbeddingsPerCall;
     this.values = options.values;
   }
   static isInstance(error) {
-    return provider_dist_AISDKError.hasMarker(error, dist_marker12);
+    return _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, _ai_sdk_provider_dist_marker12);
   }
 };
-dist_a12 = dist_symbol12;
+_ai_sdk_provider_dist_a12 = _ai_sdk_provider_dist_symbol12;
 
 // src/errors/type-validation-error.ts
-var dist_name12 = "AI_TypeValidationError";
-var dist_marker13 = `vercel.ai.error.${dist_name12}`;
-var dist_symbol13 = Symbol.for(dist_marker13);
-var dist_a13;
-var provider_dist_TypeValidationError = class _TypeValidationError extends provider_dist_AISDKError {
+var _ai_sdk_provider_dist_name12 = "AI_TypeValidationError";
+var _ai_sdk_provider_dist_marker13 = `vercel.ai.error.${_ai_sdk_provider_dist_name12}`;
+var _ai_sdk_provider_dist_symbol13 = Symbol.for(_ai_sdk_provider_dist_marker13);
+var _ai_sdk_provider_dist_a13;
+var google_node_modules_ai_sdk_provider_dist_TypeValidationError = class _TypeValidationError extends _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError {
   constructor({ value, cause }) {
     super({
-      name: dist_name12,
+      name: _ai_sdk_provider_dist_name12,
       message: `Type validation failed: Value: ${JSON.stringify(value)}.
-Error message: ${provider_dist_getErrorMessage(cause)}`,
+Error message: ${node_modules_ai_sdk_provider_dist_getErrorMessage(cause)}`,
       cause
     });
-    this[dist_a13] = true;
+    this[_ai_sdk_provider_dist_a13] = true;
     this.value = value;
   }
   static isInstance(error) {
-    return provider_dist_AISDKError.hasMarker(error, dist_marker13);
+    return _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, _ai_sdk_provider_dist_marker13);
   }
   /**
    * Wraps an error into a TypeValidationError.
@@ -55825,50 +76039,50 @@ Error message: ${provider_dist_getErrorMessage(cause)}`,
     return _TypeValidationError.isInstance(cause) && cause.value === value ? cause : new _TypeValidationError({ value, cause });
   }
 };
-dist_a13 = dist_symbol13;
-var _ai_sdk_provider_dist_TypeValidationError = provider_dist_TypeValidationError;
+_ai_sdk_provider_dist_a13 = _ai_sdk_provider_dist_symbol13;
+var _ai_sdk_google_node_modules_ai_sdk_provider_dist_TypeValidationError = google_node_modules_ai_sdk_provider_dist_TypeValidationError;
 
 // src/errors/unsupported-functionality-error.ts
-var dist_name13 = "AI_UnsupportedFunctionalityError";
-var dist_marker14 = `vercel.ai.error.${dist_name13}`;
-var dist_symbol14 = Symbol.for(dist_marker14);
-var dist_a14;
-var provider_dist_UnsupportedFunctionalityError = class extends provider_dist_AISDKError {
+var _ai_sdk_provider_dist_name13 = "AI_UnsupportedFunctionalityError";
+var _ai_sdk_provider_dist_marker14 = `vercel.ai.error.${_ai_sdk_provider_dist_name13}`;
+var _ai_sdk_provider_dist_symbol14 = Symbol.for(_ai_sdk_provider_dist_marker14);
+var _ai_sdk_provider_dist_a14;
+var node_modules_ai_sdk_provider_dist_UnsupportedFunctionalityError = class extends _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError {
   constructor({ functionality }) {
     super({
-      name: dist_name13,
+      name: _ai_sdk_provider_dist_name13,
       message: `'${functionality}' functionality not supported.`
     });
-    this[dist_a14] = true;
+    this[_ai_sdk_provider_dist_a14] = true;
     this.functionality = functionality;
   }
   static isInstance(error) {
-    return provider_dist_AISDKError.hasMarker(error, dist_marker14);
+    return _ai_sdk_google_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, _ai_sdk_provider_dist_marker14);
   }
 };
-dist_a14 = dist_symbol14;
+_ai_sdk_provider_dist_a14 = _ai_sdk_provider_dist_symbol14;
 
 // src/json-value/is-json.ts
-function dist_isJSONValue(value) {
+function _ai_sdk_provider_dist_isJSONValue(value) {
   if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
     return true;
   }
   if (Array.isArray(value)) {
-    return value.every(dist_isJSONValue);
+    return value.every(_ai_sdk_provider_dist_isJSONValue);
   }
   if (typeof value === "object") {
     return Object.entries(value).every(
-      ([key, val]) => typeof key === "string" && dist_isJSONValue(val)
+      ([key, val]) => typeof key === "string" && _ai_sdk_provider_dist_isJSONValue(val)
     );
   }
   return false;
 }
-function provider_dist_isJSONArray(value) {
-  return Array.isArray(value) && value.every(dist_isJSONValue);
+function node_modules_ai_sdk_provider_dist_isJSONArray(value) {
+  return Array.isArray(value) && value.every(_ai_sdk_provider_dist_isJSONValue);
 }
-function provider_dist_isJSONObject(value) {
+function node_modules_ai_sdk_provider_dist_isJSONObject(value) {
   return value != null && typeof value === "object" && Object.entries(value).every(
-    ([key, val]) => typeof key === "string" && dist_isJSONValue(val)
+    ([key, val]) => typeof key === "string" && _ai_sdk_provider_dist_isJSONValue(val)
   );
 }
 
@@ -55896,19 +76110,19 @@ let non_secure_nanoid = (size = 21) => {
 }
 
 ;// CONCATENATED MODULE: ./node_modules/@ai-sdk/google/node_modules/eventsource-parser/dist/index.js
-var dist_defProp = Object.defineProperty, __defNormalProp = (obj, key, value) => key in obj ? dist_defProp(obj, key, { enumerable: !0, configurable: !0, writable: !0, value }) : obj[key] = value, __publicField = (obj, key, value) => __defNormalProp(obj, typeof key != "symbol" ? key + "" : key, value);
-class ParseError extends Error {
+var eventsource_parser_dist_defProp = Object.defineProperty, eventsource_parser_dist_defNormalProp = (obj, key, value) => key in obj ? eventsource_parser_dist_defProp(obj, key, { enumerable: !0, configurable: !0, writable: !0, value }) : obj[key] = value, eventsource_parser_dist_publicField = (obj, key, value) => eventsource_parser_dist_defNormalProp(obj, typeof key != "symbol" ? key + "" : key, value);
+class eventsource_parser_dist_ParseError extends Error {
   constructor(message, options) {
-    super(message), __publicField(this, "type"), __publicField(this, "field"), __publicField(this, "value"), __publicField(this, "line"), this.name = "ParseError", this.type = options.type, this.field = options.field, this.value = options.value, this.line = options.line;
+    super(message), eventsource_parser_dist_publicField(this, "type"), eventsource_parser_dist_publicField(this, "field"), eventsource_parser_dist_publicField(this, "value"), eventsource_parser_dist_publicField(this, "line"), this.name = "ParseError", this.type = options.type, this.field = options.field, this.value = options.value, this.line = options.line;
   }
 }
-function noop(_arg) {
+function eventsource_parser_dist_noop(_arg) {
 }
-function eventsource_parser_dist_createParser(callbacks) {
-  const { onEvent = noop, onError = noop, onRetry = noop, onComment } = callbacks;
+function node_modules_eventsource_parser_dist_createParser(callbacks) {
+  const { onEvent = eventsource_parser_dist_noop, onError = eventsource_parser_dist_noop, onRetry = eventsource_parser_dist_noop, onComment } = callbacks;
   let incompleteLine = "", isFirstChunk = !0, id, data = "", eventType = "";
   function feed(newChunk) {
-    const chunk = isFirstChunk ? newChunk.replace(/^\xEF\xBB\xBF/, "") : newChunk, [complete, incomplete] = splitLines(`${incompleteLine}${chunk}`);
+    const chunk = isFirstChunk ? newChunk.replace(/^\xEF\xBB\xBF/, "") : newChunk, [complete, incomplete] = eventsource_parser_dist_splitLines(`${incompleteLine}${chunk}`);
     for (const line of complete)
       parseLine(line);
     incompleteLine = incomplete, isFirstChunk = !1;
@@ -55944,7 +76158,7 @@ function eventsource_parser_dist_createParser(callbacks) {
         break;
       case "retry":
         /^\d+$/.test(value) ? onRetry(parseInt(value, 10)) : onError(
-          new ParseError(`Invalid \`retry\` value: "${value}"`, {
+          new eventsource_parser_dist_ParseError(`Invalid \`retry\` value: "${value}"`, {
             type: "invalid-retry",
             value,
             line
@@ -55953,7 +76167,7 @@ function eventsource_parser_dist_createParser(callbacks) {
         break;
       default:
         onError(
-          new ParseError(
+          new eventsource_parser_dist_ParseError(
             `Unknown field "${field.length > 20 ? `${field.slice(0, 20)}\u2026` : field}"`,
             { type: "unknown-field", field, value, line }
           )
@@ -55976,7 +76190,7 @@ function eventsource_parser_dist_createParser(callbacks) {
   }
   return { feed, reset };
 }
-function splitLines(chunk) {
+function eventsource_parser_dist_splitLines(chunk) {
   const lines = [];
   let incompleteLine = "";
   const totalLength = chunk.length;
@@ -55994,12 +76208,12 @@ function splitLines(chunk) {
 ;// CONCATENATED MODULE: ./node_modules/@ai-sdk/google/node_modules/eventsource-parser/dist/stream.js
 
 
-class stream_EventSourceParserStream extends TransformStream {
+class eventsource_parser_dist_stream_EventSourceParserStream extends TransformStream {
   constructor({ onError, onRetry, onComment } = {}) {
     let parser;
     super({
       start(controller) {
-        parser = eventsource_parser_dist_createParser({
+        parser = node_modules_eventsource_parser_dist_createParser({
           onEvent: (event) => {
             controller.enqueue(event);
           },
@@ -56021,7 +76235,7 @@ class stream_EventSourceParserStream extends TransformStream {
 
 ;// CONCATENATED MODULE: ./node_modules/@ai-sdk/google/node_modules/@ai-sdk/provider-utils/dist/index.mjs
 // src/combine-headers.ts
-function dist_combineHeaders(...headers) {
+function _ai_sdk_provider_utils_dist_combineHeaders(...headers) {
   return headers.reduce(
     (combinedHeaders, currentHeaders) => ({
       ...combinedHeaders,
@@ -56032,7 +76246,7 @@ function dist_combineHeaders(...headers) {
 }
 
 // src/convert-async-iterator-to-readable-stream.ts
-function convertAsyncIteratorToReadableStream(iterator) {
+function provider_utils_dist_convertAsyncIteratorToReadableStream(iterator) {
   return new ReadableStream({
     /**
      * Called when the consumer wants to pull more data from the stream.
@@ -56061,7 +76275,7 @@ function convertAsyncIteratorToReadableStream(iterator) {
 }
 
 // src/extract-response-headers.ts
-function dist_extractResponseHeaders(response) {
+function _ai_sdk_provider_utils_dist_extractResponseHeaders(response) {
   const headers = {};
   response.headers.forEach((value, key) => {
     headers[key] = value;
@@ -56072,7 +76286,7 @@ function dist_extractResponseHeaders(response) {
 // src/generate-id.ts
 
 
-var dist_createIdGenerator = ({
+var _ai_sdk_provider_utils_dist_createIdGenerator = ({
   prefix,
   size: defaultSize = 16,
   alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
@@ -56083,17 +76297,17 @@ var dist_createIdGenerator = ({
     return generator;
   }
   if (alphabet.includes(separator)) {
-    throw new provider_dist_InvalidArgumentError({
+    throw new _ai_sdk_provider_dist_InvalidArgumentError({
       argument: "separator",
       message: `The separator "${separator}" must not be part of the alphabet "${alphabet}".`
     });
   }
   return (size) => `${prefix}${separator}${generator(size)}`;
 };
-var provider_utils_dist_generateId = dist_createIdGenerator();
+var node_modules_ai_sdk_provider_utils_dist_generateId = _ai_sdk_provider_utils_dist_createIdGenerator();
 
 // src/get-error-message.ts
-function provider_utils_dist_getErrorMessage(error) {
+function node_modules_ai_sdk_provider_utils_dist_getErrorMessage(error) {
   if (error == null) {
     return "unknown error";
   }
@@ -56107,13 +76321,13 @@ function provider_utils_dist_getErrorMessage(error) {
 }
 
 // src/is-abort-error.ts
-function dist_isAbortError(error) {
+function _ai_sdk_provider_utils_dist_isAbortError(error) {
   return error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
 }
 
 // src/load-api-key.ts
 
-function provider_utils_dist_loadApiKey({
+function _ai_sdk_provider_utils_dist_loadApiKey({
   apiKey,
   environmentVariableName,
   apiKeyParameterName = "apiKey",
@@ -56123,23 +76337,23 @@ function provider_utils_dist_loadApiKey({
     return apiKey;
   }
   if (apiKey != null) {
-    throw new dist_LoadAPIKeyError({
+    throw new node_modules_ai_sdk_provider_dist_LoadAPIKeyError({
       message: `${description} API key must be a string.`
     });
   }
   if (typeof process === "undefined") {
-    throw new dist_LoadAPIKeyError({
+    throw new node_modules_ai_sdk_provider_dist_LoadAPIKeyError({
       message: `${description} API key is missing. Pass it using the '${apiKeyParameterName}' parameter. Environment variables is not supported in this environment.`
     });
   }
   apiKey = process.env[environmentVariableName];
   if (apiKey == null) {
-    throw new dist_LoadAPIKeyError({
+    throw new node_modules_ai_sdk_provider_dist_LoadAPIKeyError({
       message: `${description} API key is missing. Pass it using the '${apiKeyParameterName}' parameter or the ${environmentVariableName} environment variable.`
     });
   }
   if (typeof apiKey !== "string") {
-    throw new dist_LoadAPIKeyError({
+    throw new node_modules_ai_sdk_provider_dist_LoadAPIKeyError({
       message: `${description} API key must be a string. The value of the ${environmentVariableName} environment variable is not a string.`
     });
   }
@@ -56147,7 +76361,7 @@ function provider_utils_dist_loadApiKey({
 }
 
 // src/load-optional-setting.ts
-function dist_loadOptionalSetting({
+function _ai_sdk_provider_utils_dist_loadOptionalSetting({
   settingValue,
   environmentVariableName
 }) {
@@ -56166,7 +76380,7 @@ function dist_loadOptionalSetting({
 
 // src/load-setting.ts
 
-function dist_loadSetting({
+function _ai_sdk_provider_utils_dist_loadSetting({
   settingValue,
   environmentVariableName,
   settingName,
@@ -56207,39 +76421,39 @@ function dist_loadSetting({
 
 
 // src/validator.ts
-var dist_validatorSymbol = Symbol.for("vercel.ai.validator");
-function dist_validator(validate) {
-  return { [dist_validatorSymbol]: true, validate };
+var _ai_sdk_provider_utils_dist_validatorSymbol = Symbol.for("vercel.ai.validator");
+function _ai_sdk_provider_utils_dist_validator(validate) {
+  return { [_ai_sdk_provider_utils_dist_validatorSymbol]: true, validate };
 }
-function dist_isValidator(value) {
-  return typeof value === "object" && value !== null && dist_validatorSymbol in value && value[dist_validatorSymbol] === true && "validate" in value;
+function _ai_sdk_provider_utils_dist_isValidator(value) {
+  return typeof value === "object" && value !== null && _ai_sdk_provider_utils_dist_validatorSymbol in value && value[_ai_sdk_provider_utils_dist_validatorSymbol] === true && "validate" in value;
 }
-function dist_asValidator(value) {
-  return dist_isValidator(value) ? value : dist_zodValidator(value);
+function _ai_sdk_provider_utils_dist_asValidator(value) {
+  return _ai_sdk_provider_utils_dist_isValidator(value) ? value : _ai_sdk_provider_utils_dist_zodValidator(value);
 }
-function dist_zodValidator(zodSchema) {
-  return dist_validator((value) => {
+function _ai_sdk_provider_utils_dist_zodValidator(zodSchema) {
+  return _ai_sdk_provider_utils_dist_validator((value) => {
     const result = zodSchema.safeParse(value);
     return result.success ? { success: true, value: result.data } : { success: false, error: result.error };
   });
 }
 
 // src/validate-types.ts
-function dist_validateTypes({
+function _ai_sdk_provider_utils_dist_validateTypes({
   value,
   schema: inputSchema
 }) {
-  const result = dist_safeValidateTypes({ value, schema: inputSchema });
+  const result = _ai_sdk_provider_utils_dist_safeValidateTypes({ value, schema: inputSchema });
   if (!result.success) {
-    throw _ai_sdk_provider_dist_TypeValidationError.wrap({ value, cause: result.error });
+    throw _ai_sdk_google_node_modules_ai_sdk_provider_dist_TypeValidationError.wrap({ value, cause: result.error });
   }
   return result.value;
 }
-function dist_safeValidateTypes({
+function _ai_sdk_provider_utils_dist_safeValidateTypes({
   value,
   schema
 }) {
-  const validator2 = dist_asValidator(schema);
+  const validator2 = _ai_sdk_provider_utils_dist_asValidator(schema);
   try {
     if (validator2.validate == null) {
       return { success: true, value };
@@ -56250,18 +76464,18 @@ function dist_safeValidateTypes({
     }
     return {
       success: false,
-      error: _ai_sdk_provider_dist_TypeValidationError.wrap({ value, cause: result.error })
+      error: _ai_sdk_google_node_modules_ai_sdk_provider_dist_TypeValidationError.wrap({ value, cause: result.error })
     };
   } catch (error) {
     return {
       success: false,
-      error: _ai_sdk_provider_dist_TypeValidationError.wrap({ value, cause: error })
+      error: _ai_sdk_google_node_modules_ai_sdk_provider_dist_TypeValidationError.wrap({ value, cause: error })
     };
   }
 }
 
 // src/parse-json.ts
-function dist_parseJSON({
+function _ai_sdk_provider_utils_dist_parseJSON({
   text,
   schema
 }) {
@@ -56270,15 +76484,15 @@ function dist_parseJSON({
     if (schema == null) {
       return value;
     }
-    return dist_validateTypes({ value, schema });
+    return _ai_sdk_provider_utils_dist_validateTypes({ value, schema });
   } catch (error) {
-    if (dist_JSONParseError.isInstance(error) || _ai_sdk_provider_dist_TypeValidationError.isInstance(error)) {
+    if (node_modules_ai_sdk_provider_dist_JSONParseError.isInstance(error) || _ai_sdk_google_node_modules_ai_sdk_provider_dist_TypeValidationError.isInstance(error)) {
       throw error;
     }
-    throw new dist_JSONParseError({ text, cause: error });
+    throw new node_modules_ai_sdk_provider_dist_JSONParseError({ text, cause: error });
   }
 }
-function provider_utils_dist_safeParseJSON({
+function node_modules_ai_sdk_provider_utils_dist_safeParseJSON({
   text,
   schema
 }) {
@@ -56290,15 +76504,15 @@ function provider_utils_dist_safeParseJSON({
         value
       };
     }
-    return dist_safeValidateTypes({ value, schema });
+    return _ai_sdk_provider_utils_dist_safeValidateTypes({ value, schema });
   } catch (error) {
     return {
       success: false,
-      error: dist_JSONParseError.isInstance(error) ? error : new dist_JSONParseError({ text, cause: error })
+      error: node_modules_ai_sdk_provider_dist_JSONParseError.isInstance(error) ? error : new node_modules_ai_sdk_provider_dist_JSONParseError({ text, cause: error })
     };
   }
 }
-function dist_isParsableJson(input) {
+function _ai_sdk_provider_utils_dist_isParsableJson(input) {
   try {
     SecureJSON.parse(input);
     return true;
@@ -56311,15 +76525,15 @@ function dist_isParsableJson(input) {
 
 
 // src/remove-undefined-entries.ts
-function dist_removeUndefinedEntries(record) {
+function _ai_sdk_provider_utils_dist_removeUndefinedEntries(record) {
   return Object.fromEntries(
     Object.entries(record).filter(([_key, value]) => value != null)
   );
 }
 
 // src/post-to-api.ts
-var provider_utils_dist_getOriginalFetch = () => globalThis.fetch;
-var dist_postJsonToApi = async ({
+var _ai_sdk_provider_utils_dist_getOriginalFetch = () => globalThis.fetch;
+var _ai_sdk_provider_utils_dist_postJsonToApi = async ({
   url,
   headers,
   body,
@@ -56327,7 +76541,7 @@ var dist_postJsonToApi = async ({
   successfulResponseHandler,
   abortSignal,
   fetch
-}) => dist_postToApi({
+}) => _ai_sdk_provider_utils_dist_postToApi({
   url,
   headers: {
     "Content-Type": "application/json",
@@ -56342,23 +76556,23 @@ var dist_postJsonToApi = async ({
   abortSignal,
   fetch
 });
-var dist_postToApi = async ({
+var _ai_sdk_provider_utils_dist_postToApi = async ({
   url,
   headers = {},
   body,
   successfulResponseHandler,
   failedResponseHandler,
   abortSignal,
-  fetch = provider_utils_dist_getOriginalFetch()
+  fetch = _ai_sdk_provider_utils_dist_getOriginalFetch()
 }) => {
   try {
     const response = await fetch(url, {
       method: "POST",
-      headers: dist_removeUndefinedEntries(headers),
+      headers: _ai_sdk_provider_utils_dist_removeUndefinedEntries(headers),
       body: body.content,
       signal: abortSignal
     });
-    const responseHeaders = dist_extractResponseHeaders(response);
+    const responseHeaders = _ai_sdk_provider_utils_dist_extractResponseHeaders(response);
     if (!response.ok) {
       let errorInformation;
       try {
@@ -56368,10 +76582,10 @@ var dist_postToApi = async ({
           requestBodyValues: body.values
         });
       } catch (error) {
-        if (dist_isAbortError(error) || dist_APICallError.isInstance(error)) {
+        if (_ai_sdk_provider_utils_dist_isAbortError(error) || node_modules_ai_sdk_provider_dist_APICallError.isInstance(error)) {
           throw error;
         }
-        throw new dist_APICallError({
+        throw new node_modules_ai_sdk_provider_dist_APICallError({
           message: "Failed to process error response",
           cause: error,
           statusCode: response.status,
@@ -56390,11 +76604,11 @@ var dist_postToApi = async ({
       });
     } catch (error) {
       if (error instanceof Error) {
-        if (dist_isAbortError(error) || dist_APICallError.isInstance(error)) {
+        if (_ai_sdk_provider_utils_dist_isAbortError(error) || node_modules_ai_sdk_provider_dist_APICallError.isInstance(error)) {
           throw error;
         }
       }
-      throw new dist_APICallError({
+      throw new node_modules_ai_sdk_provider_dist_APICallError({
         message: "Failed to process successful response",
         cause: error,
         statusCode: response.status,
@@ -56404,13 +76618,13 @@ var dist_postToApi = async ({
       });
     }
   } catch (error) {
-    if (dist_isAbortError(error)) {
+    if (_ai_sdk_provider_utils_dist_isAbortError(error)) {
       throw error;
     }
     if (error instanceof TypeError && error.message === "fetch failed") {
       const cause = error.cause;
       if (cause != null) {
-        throw new dist_APICallError({
+        throw new node_modules_ai_sdk_provider_dist_APICallError({
           message: `Cannot connect to API: ${cause.message}`,
           cause,
           url,
@@ -56427,17 +76641,17 @@ var dist_postToApi = async ({
 // src/response-handler.ts
 
 
-var dist_createJsonErrorResponseHandler = ({
+var _ai_sdk_provider_utils_dist_createJsonErrorResponseHandler = ({
   errorSchema,
   errorToMessage,
   isRetryable
 }) => async ({ response, url, requestBodyValues }) => {
   const responseBody = await response.text();
-  const responseHeaders = dist_extractResponseHeaders(response);
+  const responseHeaders = _ai_sdk_provider_utils_dist_extractResponseHeaders(response);
   if (responseBody.trim() === "") {
     return {
       responseHeaders,
-      value: new dist_APICallError({
+      value: new node_modules_ai_sdk_provider_dist_APICallError({
         message: response.statusText,
         url,
         requestBodyValues,
@@ -56449,13 +76663,13 @@ var dist_createJsonErrorResponseHandler = ({
     };
   }
   try {
-    const parsedError = dist_parseJSON({
+    const parsedError = _ai_sdk_provider_utils_dist_parseJSON({
       text: responseBody,
       schema: errorSchema
     });
     return {
       responseHeaders,
-      value: new dist_APICallError({
+      value: new node_modules_ai_sdk_provider_dist_APICallError({
         message: errorToMessage(parsedError),
         url,
         requestBodyValues,
@@ -56469,7 +76683,7 @@ var dist_createJsonErrorResponseHandler = ({
   } catch (parseError) {
     return {
       responseHeaders,
-      value: new dist_APICallError({
+      value: new node_modules_ai_sdk_provider_dist_APICallError({
         message: response.statusText,
         url,
         requestBodyValues,
@@ -56481,21 +76695,21 @@ var dist_createJsonErrorResponseHandler = ({
     };
   }
 };
-var dist_createEventSourceResponseHandler = (chunkSchema) => async ({ response }) => {
-  const responseHeaders = dist_extractResponseHeaders(response);
+var _ai_sdk_provider_utils_dist_createEventSourceResponseHandler = (chunkSchema) => async ({ response }) => {
+  const responseHeaders = _ai_sdk_provider_utils_dist_extractResponseHeaders(response);
   if (response.body == null) {
-    throw new provider_dist_EmptyResponseBodyError({});
+    throw new node_modules_ai_sdk_provider_dist_EmptyResponseBodyError({});
   }
   return {
     responseHeaders,
-    value: response.body.pipeThrough(new TextDecoderStream()).pipeThrough(new stream_EventSourceParserStream()).pipeThrough(
+    value: response.body.pipeThrough(new TextDecoderStream()).pipeThrough(new eventsource_parser_dist_stream_EventSourceParserStream()).pipeThrough(
       new TransformStream({
         transform({ data }, controller) {
           if (data === "[DONE]") {
             return;
           }
           controller.enqueue(
-            provider_utils_dist_safeParseJSON({
+            node_modules_ai_sdk_provider_utils_dist_safeParseJSON({
               text: data,
               schema: chunkSchema
             })
@@ -56505,8 +76719,8 @@ var dist_createEventSourceResponseHandler = (chunkSchema) => async ({ response }
     )
   };
 };
-var dist_createJsonStreamResponseHandler = (chunkSchema) => async ({ response }) => {
-  const responseHeaders = dist_extractResponseHeaders(response);
+var _ai_sdk_provider_utils_dist_createJsonStreamResponseHandler = (chunkSchema) => async ({ response }) => {
+  const responseHeaders = _ai_sdk_provider_utils_dist_extractResponseHeaders(response);
   if (response.body == null) {
     throw new EmptyResponseBodyError({});
   }
@@ -56518,7 +76732,7 @@ var dist_createJsonStreamResponseHandler = (chunkSchema) => async ({ response })
         transform(chunkText, controller) {
           if (chunkText.endsWith("\n")) {
             controller.enqueue(
-              provider_utils_dist_safeParseJSON({
+              node_modules_ai_sdk_provider_utils_dist_safeParseJSON({
                 text: buffer + chunkText,
                 schema: chunkSchema
               })
@@ -56532,15 +76746,15 @@ var dist_createJsonStreamResponseHandler = (chunkSchema) => async ({ response })
     )
   };
 };
-var dist_createJsonResponseHandler = (responseSchema) => async ({ response, url, requestBodyValues }) => {
+var _ai_sdk_provider_utils_dist_createJsonResponseHandler = (responseSchema) => async ({ response, url, requestBodyValues }) => {
   const responseBody = await response.text();
-  const parsedResult = provider_utils_dist_safeParseJSON({
+  const parsedResult = node_modules_ai_sdk_provider_utils_dist_safeParseJSON({
     text: responseBody,
     schema: responseSchema
   });
-  const responseHeaders = dist_extractResponseHeaders(response);
+  const responseHeaders = _ai_sdk_provider_utils_dist_extractResponseHeaders(response);
   if (!parsedResult.success) {
-    throw new dist_APICallError({
+    throw new node_modules_ai_sdk_provider_dist_APICallError({
       message: "Invalid JSON response",
       cause: parsedResult.error,
       statusCode: response.status,
@@ -56557,22 +76771,22 @@ var dist_createJsonResponseHandler = (responseSchema) => async ({ response, url,
 };
 
 // src/uint8-utils.ts
-var { btoa: dist_btoa, atob: dist_atob } = globalThis;
-function dist_convertBase64ToUint8Array(base64String) {
+var { btoa: _ai_sdk_provider_utils_dist_btoa, atob: _ai_sdk_provider_utils_dist_atob } = globalThis;
+function _ai_sdk_provider_utils_dist_convertBase64ToUint8Array(base64String) {
   const base64Url = base64String.replace(/-/g, "+").replace(/_/g, "/");
-  const latin1string = dist_atob(base64Url);
+  const latin1string = _ai_sdk_provider_utils_dist_atob(base64Url);
   return Uint8Array.from(latin1string, (byte) => byte.codePointAt(0));
 }
-function dist_convertUint8ArrayToBase64(array) {
+function _ai_sdk_provider_utils_dist_convertUint8ArrayToBase64(array) {
   let latin1string = "";
   for (let i = 0; i < array.length; i++) {
     latin1string += String.fromCodePoint(array[i]);
   }
-  return dist_btoa(latin1string);
+  return _ai_sdk_provider_utils_dist_btoa(latin1string);
 }
 
 // src/without-trailing-slash.ts
-function provider_utils_dist_withoutTrailingSlash(url) {
+function _ai_sdk_provider_utils_dist_withoutTrailingSlash(url) {
   return url == null ? void 0 : url.replace(/\/$/, "");
 }
 
@@ -56671,7 +76885,7 @@ function convertToGoogleGenerativeAIMessages(prompt) {
     switch (role) {
       case "system": {
         if (!systemMessagesAllowed) {
-          throw new provider_dist_UnsupportedFunctionalityError({
+          throw new node_modules_ai_sdk_provider_dist_UnsupportedFunctionalityError({
             functionality: "system messages are only supported at the beginning of the conversation"
           });
         }
@@ -56697,7 +76911,7 @@ function convertToGoogleGenerativeAIMessages(prompt) {
                 } : {
                   inlineData: {
                     mimeType: (_b = part.mimeType) != null ? _b : "image/jpeg",
-                    data: dist_convertUint8ArrayToBase64(part.image)
+                    data: _ai_sdk_provider_utils_dist_convertUint8ArrayToBase64(part.image)
                   }
                 }
               );
@@ -56721,7 +76935,7 @@ function convertToGoogleGenerativeAIMessages(prompt) {
             }
             default: {
               const _exhaustiveCheck = part;
-              throw new provider_dist_UnsupportedFunctionalityError({
+              throw new node_modules_ai_sdk_provider_dist_UnsupportedFunctionalityError({
                 functionality: `prompt part: ${_exhaustiveCheck}`
               });
             }
@@ -56797,7 +77011,7 @@ var googleErrorDataSchema = z.object({
     status: z.string()
   })
 });
-var googleFailedResponseHandler = dist_createJsonErrorResponseHandler({
+var googleFailedResponseHandler = _ai_sdk_provider_utils_dist_createJsonErrorResponseHandler({
   errorSchema: googleErrorDataSchema,
   errorToMessage: (data) => data.error.message
 });
@@ -56864,7 +77078,7 @@ function google_dist_prepareTools(mode) {
       };
     default: {
       const _exhaustiveCheck = type;
-      throw new provider_dist_UnsupportedFunctionalityError({
+      throw new node_modules_ai_sdk_provider_dist_UnsupportedFunctionalityError({
         functionality: `Unsupported tool choice type: ${_exhaustiveCheck}`
       });
     }
@@ -57016,14 +77230,14 @@ var GoogleGenerativeAILanguageModel = class {
     var _a, _b;
     const { args, warnings } = await this.getArgs(options);
     const body = JSON.stringify(args);
-    const { responseHeaders, value: response } = await dist_postJsonToApi({
+    const { responseHeaders, value: response } = await _ai_sdk_provider_utils_dist_postJsonToApi({
       url: `${this.config.baseURL}/${getModelPath(
         this.modelId
       )}:generateContent`,
-      headers: dist_combineHeaders(this.config.headers(), options.headers),
+      headers: _ai_sdk_provider_utils_dist_combineHeaders(this.config.headers(), options.headers),
       body: args,
       failedResponseHandler: googleFailedResponseHandler,
-      successfulResponseHandler: dist_createJsonResponseHandler(responseSchema),
+      successfulResponseHandler: _ai_sdk_provider_utils_dist_createJsonResponseHandler(responseSchema),
       abortSignal: options.abortSignal,
       fetch: this.config.fetch
     });
@@ -57054,14 +77268,14 @@ var GoogleGenerativeAILanguageModel = class {
   async doStream(options) {
     const { args, warnings } = await this.getArgs(options);
     const body = JSON.stringify(args);
-    const { responseHeaders, value: response } = await dist_postJsonToApi({
+    const { responseHeaders, value: response } = await _ai_sdk_provider_utils_dist_postJsonToApi({
       url: `${this.config.baseURL}/${getModelPath(
         this.modelId
       )}:streamGenerateContent?alt=sse`,
-      headers: dist_combineHeaders(this.config.headers(), options.headers),
+      headers: _ai_sdk_provider_utils_dist_combineHeaders(this.config.headers(), options.headers),
       body: args,
       failedResponseHandler: googleFailedResponseHandler,
-      successfulResponseHandler: dist_createEventSourceResponseHandler(chunkSchema),
+      successfulResponseHandler: _ai_sdk_provider_utils_dist_createEventSourceResponseHandler(chunkSchema),
       abortSignal: options.abortSignal,
       fetch: this.config.fetch
     });
@@ -57234,16 +77448,16 @@ var GoogleGenerativeAIEmbeddingModel = class {
     abortSignal
   }) {
     if (values.length > this.maxEmbeddingsPerCall) {
-      throw new dist_TooManyEmbeddingValuesForCallError({
+      throw new _ai_sdk_provider_dist_TooManyEmbeddingValuesForCallError({
         provider: this.provider,
         modelId: this.modelId,
         maxEmbeddingsPerCall: this.maxEmbeddingsPerCall,
         values
       });
     }
-    const { responseHeaders, value: response } = await dist_postJsonToApi({
+    const { responseHeaders, value: response } = await _ai_sdk_provider_utils_dist_postJsonToApi({
       url: `${this.config.baseURL}/models/${this.modelId}:batchEmbedContents`,
-      headers: dist_combineHeaders(this.config.headers(), headers),
+      headers: _ai_sdk_provider_utils_dist_combineHeaders(this.config.headers(), headers),
       body: {
         requests: values.map((value) => ({
           model: `models/${this.modelId}`,
@@ -57252,7 +77466,7 @@ var GoogleGenerativeAIEmbeddingModel = class {
         }))
       },
       failedResponseHandler: googleFailedResponseHandler,
-      successfulResponseHandler: dist_createJsonResponseHandler(
+      successfulResponseHandler: _ai_sdk_provider_utils_dist_createJsonResponseHandler(
         googleGenerativeAITextEmbeddingResponseSchema
       ),
       abortSignal,
@@ -57272,9 +77486,9 @@ var googleGenerativeAITextEmbeddingResponseSchema = z.object({
 // src/google-provider.ts
 function createGoogleGenerativeAI(options = {}) {
   var _a;
-  const baseURL = (_a = provider_utils_dist_withoutTrailingSlash(options.baseURL)) != null ? _a : "https://generativelanguage.googleapis.com/v1beta";
+  const baseURL = (_a = _ai_sdk_provider_utils_dist_withoutTrailingSlash(options.baseURL)) != null ? _a : "https://generativelanguage.googleapis.com/v1beta";
   const getHeaders = () => ({
-    "x-goog-api-key": provider_utils_dist_loadApiKey({
+    "x-goog-api-key": _ai_sdk_provider_utils_dist_loadApiKey({
       apiKey: options.apiKey,
       environmentVariableName: "GOOGLE_GENERATIVE_AI_API_KEY",
       description: "Google Generative AI"
@@ -57287,7 +77501,7 @@ function createGoogleGenerativeAI(options = {}) {
       provider: "google.generative-ai",
       baseURL,
       headers: getHeaders,
-      generateId: (_a2 = options.generateId) != null ? _a2 : provider_utils_dist_generateId,
+      generateId: (_a2 = options.generateId) != null ? _a2 : node_modules_ai_sdk_provider_utils_dist_generateId,
       fetch: options.fetch
     });
   };
@@ -57316,6 +77530,1697 @@ function createGoogleGenerativeAI(options = {}) {
 var google = createGoogleGenerativeAI();
 
 //# sourceMappingURL=index.mjs.map
+;// CONCATENATED MODULE: ./node_modules/@ai-sdk/google-vertex/node_modules/@ai-sdk/provider/dist/index.mjs
+// src/errors/ai-sdk-error.ts
+var node_modules_ai_sdk_provider_dist_marker = "vercel.ai.error";
+var node_modules_ai_sdk_provider_dist_symbol = Symbol.for(node_modules_ai_sdk_provider_dist_marker);
+var node_modules_ai_sdk_provider_dist_a;
+var google_vertex_node_modules_ai_sdk_provider_dist_AISDKError = class _AISDKError extends Error {
+  /**
+   * Creates an AI SDK Error.
+   *
+   * @param {Object} params - The parameters for creating the error.
+   * @param {string} params.name - The name of the error.
+   * @param {string} params.message - The error message.
+   * @param {unknown} [params.cause] - The underlying cause of the error.
+   */
+  constructor({
+    name: name14,
+    message,
+    cause
+  }) {
+    super(message);
+    this[node_modules_ai_sdk_provider_dist_a] = true;
+    this.name = name14;
+    this.cause = cause;
+  }
+  /**
+   * Checks if the given error is an AI SDK Error.
+   * @param {unknown} error - The error to check.
+   * @returns {boolean} True if the error is an AI SDK Error, false otherwise.
+   */
+  static isInstance(error) {
+    return _AISDKError.hasMarker(error, node_modules_ai_sdk_provider_dist_marker);
+  }
+  static hasMarker(error, marker15) {
+    const markerSymbol = Symbol.for(marker15);
+    return error != null && typeof error === "object" && markerSymbol in error && typeof error[markerSymbol] === "boolean" && error[markerSymbol] === true;
+  }
+};
+node_modules_ai_sdk_provider_dist_a = node_modules_ai_sdk_provider_dist_symbol;
+var _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError = google_vertex_node_modules_ai_sdk_provider_dist_AISDKError;
+
+// src/errors/api-call-error.ts
+var google_vertex_node_modules_ai_sdk_provider_dist_name = "AI_APICallError";
+var node_modules_ai_sdk_provider_dist_marker2 = `vercel.ai.error.${google_vertex_node_modules_ai_sdk_provider_dist_name}`;
+var node_modules_ai_sdk_provider_dist_symbol2 = Symbol.for(node_modules_ai_sdk_provider_dist_marker2);
+var node_modules_ai_sdk_provider_dist_a2;
+var google_vertex_node_modules_ai_sdk_provider_dist_APICallError = class extends _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError {
+  constructor({
+    message,
+    url,
+    requestBodyValues,
+    statusCode,
+    responseHeaders,
+    responseBody,
+    cause,
+    isRetryable = statusCode != null && (statusCode === 408 || // request timeout
+    statusCode === 409 || // conflict
+    statusCode === 429 || // too many requests
+    statusCode >= 500),
+    // server error
+    data
+  }) {
+    super({ name: google_vertex_node_modules_ai_sdk_provider_dist_name, message, cause });
+    this[node_modules_ai_sdk_provider_dist_a2] = true;
+    this.url = url;
+    this.requestBodyValues = requestBodyValues;
+    this.statusCode = statusCode;
+    this.responseHeaders = responseHeaders;
+    this.responseBody = responseBody;
+    this.isRetryable = isRetryable;
+    this.data = data;
+  }
+  static isInstance(error) {
+    return _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, node_modules_ai_sdk_provider_dist_marker2);
+  }
+};
+node_modules_ai_sdk_provider_dist_a2 = node_modules_ai_sdk_provider_dist_symbol2;
+
+// src/errors/empty-response-body-error.ts
+var node_modules_ai_sdk_provider_dist_name2 = "AI_EmptyResponseBodyError";
+var node_modules_ai_sdk_provider_dist_marker3 = `vercel.ai.error.${node_modules_ai_sdk_provider_dist_name2}`;
+var node_modules_ai_sdk_provider_dist_symbol3 = Symbol.for(node_modules_ai_sdk_provider_dist_marker3);
+var node_modules_ai_sdk_provider_dist_a3;
+var google_vertex_node_modules_ai_sdk_provider_dist_EmptyResponseBodyError = class extends (/* unused pure expression or super */ null && (_ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError)) {
+  // used in isInstance
+  constructor({ message = "Empty response body" } = {}) {
+    super({ name: node_modules_ai_sdk_provider_dist_name2, message });
+    this[node_modules_ai_sdk_provider_dist_a3] = true;
+  }
+  static isInstance(error) {
+    return _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, node_modules_ai_sdk_provider_dist_marker3);
+  }
+};
+node_modules_ai_sdk_provider_dist_a3 = node_modules_ai_sdk_provider_dist_symbol3;
+
+// src/errors/get-error-message.ts
+function google_vertex_node_modules_ai_sdk_provider_dist_getErrorMessage(error) {
+  if (error == null) {
+    return "unknown error";
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return JSON.stringify(error);
+}
+
+// src/errors/invalid-argument-error.ts
+var node_modules_ai_sdk_provider_dist_name3 = "AI_InvalidArgumentError";
+var node_modules_ai_sdk_provider_dist_marker4 = `vercel.ai.error.${node_modules_ai_sdk_provider_dist_name3}`;
+var node_modules_ai_sdk_provider_dist_symbol4 = Symbol.for(node_modules_ai_sdk_provider_dist_marker4);
+var node_modules_ai_sdk_provider_dist_a4;
+var node_modules_ai_sdk_provider_dist_InvalidArgumentError = class extends _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError {
+  constructor({
+    message,
+    cause,
+    argument
+  }) {
+    super({ name: node_modules_ai_sdk_provider_dist_name3, message, cause });
+    this[node_modules_ai_sdk_provider_dist_a4] = true;
+    this.argument = argument;
+  }
+  static isInstance(error) {
+    return _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, node_modules_ai_sdk_provider_dist_marker4);
+  }
+};
+node_modules_ai_sdk_provider_dist_a4 = node_modules_ai_sdk_provider_dist_symbol4;
+
+// src/errors/invalid-prompt-error.ts
+var node_modules_ai_sdk_provider_dist_name4 = "AI_InvalidPromptError";
+var node_modules_ai_sdk_provider_dist_marker5 = `vercel.ai.error.${node_modules_ai_sdk_provider_dist_name4}`;
+var node_modules_ai_sdk_provider_dist_symbol5 = Symbol.for(node_modules_ai_sdk_provider_dist_marker5);
+var node_modules_ai_sdk_provider_dist_a5;
+var node_modules_ai_sdk_provider_dist_InvalidPromptError = class extends (/* unused pure expression or super */ null && (_ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError)) {
+  constructor({
+    prompt,
+    message,
+    cause
+  }) {
+    super({ name: node_modules_ai_sdk_provider_dist_name4, message: `Invalid prompt: ${message}`, cause });
+    this[node_modules_ai_sdk_provider_dist_a5] = true;
+    this.prompt = prompt;
+  }
+  static isInstance(error) {
+    return _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, node_modules_ai_sdk_provider_dist_marker5);
+  }
+};
+node_modules_ai_sdk_provider_dist_a5 = node_modules_ai_sdk_provider_dist_symbol5;
+
+// src/errors/invalid-response-data-error.ts
+var node_modules_ai_sdk_provider_dist_name5 = "AI_InvalidResponseDataError";
+var node_modules_ai_sdk_provider_dist_marker6 = `vercel.ai.error.${node_modules_ai_sdk_provider_dist_name5}`;
+var node_modules_ai_sdk_provider_dist_symbol6 = Symbol.for(node_modules_ai_sdk_provider_dist_marker6);
+var node_modules_ai_sdk_provider_dist_a6;
+var node_modules_ai_sdk_provider_dist_InvalidResponseDataError = class extends (/* unused pure expression or super */ null && (_ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError)) {
+  constructor({
+    data,
+    message = `Invalid response data: ${JSON.stringify(data)}.`
+  }) {
+    super({ name: node_modules_ai_sdk_provider_dist_name5, message });
+    this[node_modules_ai_sdk_provider_dist_a6] = true;
+    this.data = data;
+  }
+  static isInstance(error) {
+    return _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, node_modules_ai_sdk_provider_dist_marker6);
+  }
+};
+node_modules_ai_sdk_provider_dist_a6 = node_modules_ai_sdk_provider_dist_symbol6;
+
+// src/errors/json-parse-error.ts
+var node_modules_ai_sdk_provider_dist_name6 = "AI_JSONParseError";
+var node_modules_ai_sdk_provider_dist_marker7 = `vercel.ai.error.${node_modules_ai_sdk_provider_dist_name6}`;
+var node_modules_ai_sdk_provider_dist_symbol7 = Symbol.for(node_modules_ai_sdk_provider_dist_marker7);
+var node_modules_ai_sdk_provider_dist_a7;
+var google_vertex_node_modules_ai_sdk_provider_dist_JSONParseError = class extends _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError {
+  constructor({ text, cause }) {
+    super({
+      name: node_modules_ai_sdk_provider_dist_name6,
+      message: `JSON parsing failed: Text: ${text}.
+Error message: ${google_vertex_node_modules_ai_sdk_provider_dist_getErrorMessage(cause)}`,
+      cause
+    });
+    this[node_modules_ai_sdk_provider_dist_a7] = true;
+    this.text = text;
+  }
+  static isInstance(error) {
+    return _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, node_modules_ai_sdk_provider_dist_marker7);
+  }
+};
+node_modules_ai_sdk_provider_dist_a7 = node_modules_ai_sdk_provider_dist_symbol7;
+
+// src/errors/load-api-key-error.ts
+var node_modules_ai_sdk_provider_dist_name7 = "AI_LoadAPIKeyError";
+var node_modules_ai_sdk_provider_dist_marker8 = `vercel.ai.error.${node_modules_ai_sdk_provider_dist_name7}`;
+var node_modules_ai_sdk_provider_dist_symbol8 = Symbol.for(node_modules_ai_sdk_provider_dist_marker8);
+var node_modules_ai_sdk_provider_dist_a8;
+var google_vertex_node_modules_ai_sdk_provider_dist_LoadAPIKeyError = class extends (/* unused pure expression or super */ null && (_ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError)) {
+  // used in isInstance
+  constructor({ message }) {
+    super({ name: node_modules_ai_sdk_provider_dist_name7, message });
+    this[node_modules_ai_sdk_provider_dist_a8] = true;
+  }
+  static isInstance(error) {
+    return _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, node_modules_ai_sdk_provider_dist_marker8);
+  }
+};
+node_modules_ai_sdk_provider_dist_a8 = node_modules_ai_sdk_provider_dist_symbol8;
+
+// src/errors/load-setting-error.ts
+var node_modules_ai_sdk_provider_dist_name8 = "AI_LoadSettingError";
+var node_modules_ai_sdk_provider_dist_marker9 = `vercel.ai.error.${node_modules_ai_sdk_provider_dist_name8}`;
+var node_modules_ai_sdk_provider_dist_symbol9 = Symbol.for(node_modules_ai_sdk_provider_dist_marker9);
+var node_modules_ai_sdk_provider_dist_a9;
+var google_vertex_node_modules_ai_sdk_provider_dist_LoadSettingError = class extends _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError {
+  // used in isInstance
+  constructor({ message }) {
+    super({ name: node_modules_ai_sdk_provider_dist_name8, message });
+    this[node_modules_ai_sdk_provider_dist_a9] = true;
+  }
+  static isInstance(error) {
+    return _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, node_modules_ai_sdk_provider_dist_marker9);
+  }
+};
+node_modules_ai_sdk_provider_dist_a9 = node_modules_ai_sdk_provider_dist_symbol9;
+
+// src/errors/no-content-generated-error.ts
+var node_modules_ai_sdk_provider_dist_name9 = "AI_NoContentGeneratedError";
+var node_modules_ai_sdk_provider_dist_marker10 = `vercel.ai.error.${node_modules_ai_sdk_provider_dist_name9}`;
+var node_modules_ai_sdk_provider_dist_symbol10 = Symbol.for(node_modules_ai_sdk_provider_dist_marker10);
+var node_modules_ai_sdk_provider_dist_a10;
+var node_modules_ai_sdk_provider_dist_NoContentGeneratedError = class extends _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError {
+  // used in isInstance
+  constructor({
+    message = "No content generated."
+  } = {}) {
+    super({ name: node_modules_ai_sdk_provider_dist_name9, message });
+    this[node_modules_ai_sdk_provider_dist_a10] = true;
+  }
+  static isInstance(error) {
+    return _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, node_modules_ai_sdk_provider_dist_marker10);
+  }
+};
+node_modules_ai_sdk_provider_dist_a10 = node_modules_ai_sdk_provider_dist_symbol10;
+
+// src/errors/no-such-model-error.ts
+var node_modules_ai_sdk_provider_dist_name10 = "AI_NoSuchModelError";
+var node_modules_ai_sdk_provider_dist_marker11 = `vercel.ai.error.${node_modules_ai_sdk_provider_dist_name10}`;
+var node_modules_ai_sdk_provider_dist_symbol11 = Symbol.for(node_modules_ai_sdk_provider_dist_marker11);
+var node_modules_ai_sdk_provider_dist_a11;
+var node_modules_ai_sdk_provider_dist_NoSuchModelError = class extends (/* unused pure expression or super */ null && (_ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError)) {
+  constructor({
+    errorName = node_modules_ai_sdk_provider_dist_name10,
+    modelId,
+    modelType,
+    message = `No such ${modelType}: ${modelId}`
+  }) {
+    super({ name: errorName, message });
+    this[node_modules_ai_sdk_provider_dist_a11] = true;
+    this.modelId = modelId;
+    this.modelType = modelType;
+  }
+  static isInstance(error) {
+    return _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, node_modules_ai_sdk_provider_dist_marker11);
+  }
+};
+node_modules_ai_sdk_provider_dist_a11 = node_modules_ai_sdk_provider_dist_symbol11;
+
+// src/errors/too-many-embedding-values-for-call-error.ts
+var node_modules_ai_sdk_provider_dist_name11 = "AI_TooManyEmbeddingValuesForCallError";
+var node_modules_ai_sdk_provider_dist_marker12 = `vercel.ai.error.${node_modules_ai_sdk_provider_dist_name11}`;
+var node_modules_ai_sdk_provider_dist_symbol12 = Symbol.for(node_modules_ai_sdk_provider_dist_marker12);
+var node_modules_ai_sdk_provider_dist_a12;
+var node_modules_ai_sdk_provider_dist_TooManyEmbeddingValuesForCallError = class extends _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError {
+  constructor(options) {
+    super({
+      name: node_modules_ai_sdk_provider_dist_name11,
+      message: `Too many values for a single embedding call. The ${options.provider} model "${options.modelId}" can only embed up to ${options.maxEmbeddingsPerCall} values per call, but ${options.values.length} values were provided.`
+    });
+    this[node_modules_ai_sdk_provider_dist_a12] = true;
+    this.provider = options.provider;
+    this.modelId = options.modelId;
+    this.maxEmbeddingsPerCall = options.maxEmbeddingsPerCall;
+    this.values = options.values;
+  }
+  static isInstance(error) {
+    return _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, node_modules_ai_sdk_provider_dist_marker12);
+  }
+};
+node_modules_ai_sdk_provider_dist_a12 = node_modules_ai_sdk_provider_dist_symbol12;
+
+// src/errors/type-validation-error.ts
+var node_modules_ai_sdk_provider_dist_name12 = "AI_TypeValidationError";
+var node_modules_ai_sdk_provider_dist_marker13 = `vercel.ai.error.${node_modules_ai_sdk_provider_dist_name12}`;
+var node_modules_ai_sdk_provider_dist_symbol13 = Symbol.for(node_modules_ai_sdk_provider_dist_marker13);
+var node_modules_ai_sdk_provider_dist_a13;
+var google_vertex_node_modules_ai_sdk_provider_dist_TypeValidationError = class _TypeValidationError extends _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError {
+  constructor({ value, cause }) {
+    super({
+      name: node_modules_ai_sdk_provider_dist_name12,
+      message: `Type validation failed: Value: ${JSON.stringify(value)}.
+Error message: ${google_vertex_node_modules_ai_sdk_provider_dist_getErrorMessage(cause)}`,
+      cause
+    });
+    this[node_modules_ai_sdk_provider_dist_a13] = true;
+    this.value = value;
+  }
+  static isInstance(error) {
+    return _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, node_modules_ai_sdk_provider_dist_marker13);
+  }
+  /**
+   * Wraps an error into a TypeValidationError.
+   * If the cause is already a TypeValidationError with the same value, it returns the cause.
+   * Otherwise, it creates a new TypeValidationError.
+   *
+   * @param {Object} params - The parameters for wrapping the error.
+   * @param {unknown} params.value - The value that failed validation.
+   * @param {unknown} params.cause - The original error or cause of the validation failure.
+   * @returns {TypeValidationError} A TypeValidationError instance.
+   */
+  static wrap({
+    value,
+    cause
+  }) {
+    return _TypeValidationError.isInstance(cause) && cause.value === value ? cause : new _TypeValidationError({ value, cause });
+  }
+};
+node_modules_ai_sdk_provider_dist_a13 = node_modules_ai_sdk_provider_dist_symbol13;
+var _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_TypeValidationError = google_vertex_node_modules_ai_sdk_provider_dist_TypeValidationError;
+
+// src/errors/unsupported-functionality-error.ts
+var node_modules_ai_sdk_provider_dist_name13 = "AI_UnsupportedFunctionalityError";
+var node_modules_ai_sdk_provider_dist_marker14 = `vercel.ai.error.${node_modules_ai_sdk_provider_dist_name13}`;
+var node_modules_ai_sdk_provider_dist_symbol14 = Symbol.for(node_modules_ai_sdk_provider_dist_marker14);
+var node_modules_ai_sdk_provider_dist_a14;
+var google_vertex_node_modules_ai_sdk_provider_dist_UnsupportedFunctionalityError = class extends _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError {
+  constructor({ functionality }) {
+    super({
+      name: node_modules_ai_sdk_provider_dist_name13,
+      message: `'${functionality}' functionality not supported.`
+    });
+    this[node_modules_ai_sdk_provider_dist_a14] = true;
+    this.functionality = functionality;
+  }
+  static isInstance(error) {
+    return _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_AISDKError.hasMarker(error, node_modules_ai_sdk_provider_dist_marker14);
+  }
+};
+node_modules_ai_sdk_provider_dist_a14 = node_modules_ai_sdk_provider_dist_symbol14;
+
+// src/json-value/is-json.ts
+function node_modules_ai_sdk_provider_dist_isJSONValue(value) {
+  if (value === null || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.every(node_modules_ai_sdk_provider_dist_isJSONValue);
+  }
+  if (typeof value === "object") {
+    return Object.entries(value).every(
+      ([key, val]) => typeof key === "string" && node_modules_ai_sdk_provider_dist_isJSONValue(val)
+    );
+  }
+  return false;
+}
+function google_vertex_node_modules_ai_sdk_provider_dist_isJSONArray(value) {
+  return Array.isArray(value) && value.every(node_modules_ai_sdk_provider_dist_isJSONValue);
+}
+function google_vertex_node_modules_ai_sdk_provider_dist_isJSONObject(value) {
+  return value != null && typeof value === "object" && Object.entries(value).every(
+    ([key, val]) => typeof key === "string" && node_modules_ai_sdk_provider_dist_isJSONValue(val)
+  );
+}
+
+//# sourceMappingURL=index.mjs.map
+;// CONCATENATED MODULE: ./node_modules/@ai-sdk/google-vertex/node_modules/@ai-sdk/provider-utils/dist/index.mjs
+// src/combine-headers.ts
+function node_modules_ai_sdk_provider_utils_dist_combineHeaders(...headers) {
+  return headers.reduce(
+    (combinedHeaders, currentHeaders) => ({
+      ...combinedHeaders,
+      ...currentHeaders != null ? currentHeaders : {}
+    }),
+    {}
+  );
+}
+
+// src/convert-async-iterator-to-readable-stream.ts
+function _ai_sdk_provider_utils_dist_convertAsyncIteratorToReadableStream(iterator) {
+  return new ReadableStream({
+    /**
+     * Called when the consumer wants to pull more data from the stream.
+     *
+     * @param {ReadableStreamDefaultController<T>} controller - The controller to enqueue data into the stream.
+     * @returns {Promise<void>}
+     */
+    async pull(controller) {
+      try {
+        const { value, done } = await iterator.next();
+        if (done) {
+          controller.close();
+        } else {
+          controller.enqueue(value);
+        }
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+    /**
+     * Called when the consumer cancels the stream.
+     */
+    cancel() {
+    }
+  });
+}
+
+// src/extract-response-headers.ts
+function node_modules_ai_sdk_provider_utils_dist_extractResponseHeaders(response) {
+  const headers = {};
+  response.headers.forEach((value, key) => {
+    headers[key] = value;
+  });
+  return headers;
+}
+
+// src/generate-id.ts
+
+
+var node_modules_ai_sdk_provider_utils_dist_createIdGenerator = ({
+  prefix,
+  size: defaultSize = 16,
+  alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
+  separator = "-"
+} = {}) => {
+  const generator = customAlphabet(alphabet, defaultSize);
+  if (prefix == null) {
+    return generator;
+  }
+  if (alphabet.includes(separator)) {
+    throw new node_modules_ai_sdk_provider_dist_InvalidArgumentError({
+      argument: "separator",
+      message: `The separator "${separator}" must not be part of the alphabet "${alphabet}".`
+    });
+  }
+  return (size) => `${prefix}${separator}${generator(size)}`;
+};
+var google_vertex_node_modules_ai_sdk_provider_utils_dist_generateId = node_modules_ai_sdk_provider_utils_dist_createIdGenerator();
+
+// src/get-error-message.ts
+function google_vertex_node_modules_ai_sdk_provider_utils_dist_getErrorMessage(error) {
+  if (error == null) {
+    return "unknown error";
+  }
+  if (typeof error === "string") {
+    return error;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return JSON.stringify(error);
+}
+
+// src/is-abort-error.ts
+function node_modules_ai_sdk_provider_utils_dist_isAbortError(error) {
+  return error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
+}
+
+// src/load-api-key.ts
+
+function node_modules_ai_sdk_provider_utils_dist_loadApiKey({
+  apiKey,
+  environmentVariableName,
+  apiKeyParameterName = "apiKey",
+  description
+}) {
+  if (typeof apiKey === "string") {
+    return apiKey;
+  }
+  if (apiKey != null) {
+    throw new LoadAPIKeyError({
+      message: `${description} API key must be a string.`
+    });
+  }
+  if (typeof process === "undefined") {
+    throw new LoadAPIKeyError({
+      message: `${description} API key is missing. Pass it using the '${apiKeyParameterName}' parameter. Environment variables is not supported in this environment.`
+    });
+  }
+  apiKey = process.env[environmentVariableName];
+  if (apiKey == null) {
+    throw new LoadAPIKeyError({
+      message: `${description} API key is missing. Pass it using the '${apiKeyParameterName}' parameter or the ${environmentVariableName} environment variable.`
+    });
+  }
+  if (typeof apiKey !== "string") {
+    throw new LoadAPIKeyError({
+      message: `${description} API key must be a string. The value of the ${environmentVariableName} environment variable is not a string.`
+    });
+  }
+  return apiKey;
+}
+
+// src/load-optional-setting.ts
+function node_modules_ai_sdk_provider_utils_dist_loadOptionalSetting({
+  settingValue,
+  environmentVariableName
+}) {
+  if (typeof settingValue === "string") {
+    return settingValue;
+  }
+  if (settingValue != null || typeof process === "undefined") {
+    return void 0;
+  }
+  settingValue = process.env[environmentVariableName];
+  if (settingValue == null || typeof settingValue !== "string") {
+    return void 0;
+  }
+  return settingValue;
+}
+
+// src/load-setting.ts
+
+function node_modules_ai_sdk_provider_utils_dist_loadSetting({
+  settingValue,
+  environmentVariableName,
+  settingName,
+  description
+}) {
+  if (typeof settingValue === "string") {
+    return settingValue;
+  }
+  if (settingValue != null) {
+    throw new google_vertex_node_modules_ai_sdk_provider_dist_LoadSettingError({
+      message: `${description} setting must be a string.`
+    });
+  }
+  if (typeof process === "undefined") {
+    throw new google_vertex_node_modules_ai_sdk_provider_dist_LoadSettingError({
+      message: `${description} setting is missing. Pass it using the '${settingName}' parameter. Environment variables is not supported in this environment.`
+    });
+  }
+  settingValue = process.env[environmentVariableName];
+  if (settingValue == null) {
+    throw new google_vertex_node_modules_ai_sdk_provider_dist_LoadSettingError({
+      message: `${description} setting is missing. Pass it using the '${settingName}' parameter or the ${environmentVariableName} environment variable.`
+    });
+  }
+  if (typeof settingValue !== "string") {
+    throw new google_vertex_node_modules_ai_sdk_provider_dist_LoadSettingError({
+      message: `${description} setting must be a string. The value of the ${environmentVariableName} environment variable is not a string.`
+    });
+  }
+  return settingValue;
+}
+
+// src/parse-json.ts
+
+
+
+// src/validate-types.ts
+
+
+// src/validator.ts
+var node_modules_ai_sdk_provider_utils_dist_validatorSymbol = Symbol.for("vercel.ai.validator");
+function node_modules_ai_sdk_provider_utils_dist_validator(validate) {
+  return { [node_modules_ai_sdk_provider_utils_dist_validatorSymbol]: true, validate };
+}
+function node_modules_ai_sdk_provider_utils_dist_isValidator(value) {
+  return typeof value === "object" && value !== null && node_modules_ai_sdk_provider_utils_dist_validatorSymbol in value && value[node_modules_ai_sdk_provider_utils_dist_validatorSymbol] === true && "validate" in value;
+}
+function node_modules_ai_sdk_provider_utils_dist_asValidator(value) {
+  return node_modules_ai_sdk_provider_utils_dist_isValidator(value) ? value : node_modules_ai_sdk_provider_utils_dist_zodValidator(value);
+}
+function node_modules_ai_sdk_provider_utils_dist_zodValidator(zodSchema) {
+  return node_modules_ai_sdk_provider_utils_dist_validator((value) => {
+    const result = zodSchema.safeParse(value);
+    return result.success ? { success: true, value: result.data } : { success: false, error: result.error };
+  });
+}
+
+// src/validate-types.ts
+function node_modules_ai_sdk_provider_utils_dist_validateTypes({
+  value,
+  schema: inputSchema
+}) {
+  const result = node_modules_ai_sdk_provider_utils_dist_safeValidateTypes({ value, schema: inputSchema });
+  if (!result.success) {
+    throw _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_TypeValidationError.wrap({ value, cause: result.error });
+  }
+  return result.value;
+}
+function node_modules_ai_sdk_provider_utils_dist_safeValidateTypes({
+  value,
+  schema
+}) {
+  const validator2 = node_modules_ai_sdk_provider_utils_dist_asValidator(schema);
+  try {
+    if (validator2.validate == null) {
+      return { success: true, value };
+    }
+    const result = validator2.validate(value);
+    if (result.success) {
+      return result;
+    }
+    return {
+      success: false,
+      error: _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_TypeValidationError.wrap({ value, cause: result.error })
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_TypeValidationError.wrap({ value, cause: error })
+    };
+  }
+}
+
+// src/parse-json.ts
+function node_modules_ai_sdk_provider_utils_dist_parseJSON({
+  text,
+  schema
+}) {
+  try {
+    const value = secure_json_parse.parse(text);
+    if (schema == null) {
+      return value;
+    }
+    return node_modules_ai_sdk_provider_utils_dist_validateTypes({ value, schema });
+  } catch (error) {
+    if (google_vertex_node_modules_ai_sdk_provider_dist_JSONParseError.isInstance(error) || _ai_sdk_google_vertex_node_modules_ai_sdk_provider_dist_TypeValidationError.isInstance(error)) {
+      throw error;
+    }
+    throw new google_vertex_node_modules_ai_sdk_provider_dist_JSONParseError({ text, cause: error });
+  }
+}
+function google_vertex_node_modules_ai_sdk_provider_utils_dist_safeParseJSON({
+  text,
+  schema
+}) {
+  try {
+    const value = secure_json_parse.parse(text);
+    if (schema == null) {
+      return {
+        success: true,
+        value
+      };
+    }
+    return node_modules_ai_sdk_provider_utils_dist_safeValidateTypes({ value, schema });
+  } catch (error) {
+    return {
+      success: false,
+      error: google_vertex_node_modules_ai_sdk_provider_dist_JSONParseError.isInstance(error) ? error : new google_vertex_node_modules_ai_sdk_provider_dist_JSONParseError({ text, cause: error })
+    };
+  }
+}
+function node_modules_ai_sdk_provider_utils_dist_isParsableJson(input) {
+  try {
+    SecureJSON.parse(input);
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+// src/post-to-api.ts
+
+
+// src/remove-undefined-entries.ts
+function node_modules_ai_sdk_provider_utils_dist_removeUndefinedEntries(record) {
+  return Object.fromEntries(
+    Object.entries(record).filter(([_key, value]) => value != null)
+  );
+}
+
+// src/post-to-api.ts
+var node_modules_ai_sdk_provider_utils_dist_getOriginalFetch = () => globalThis.fetch;
+var node_modules_ai_sdk_provider_utils_dist_postJsonToApi = async ({
+  url,
+  headers,
+  body,
+  failedResponseHandler,
+  successfulResponseHandler,
+  abortSignal,
+  fetch
+}) => node_modules_ai_sdk_provider_utils_dist_postToApi({
+  url,
+  headers: {
+    "Content-Type": "application/json",
+    ...headers
+  },
+  body: {
+    content: JSON.stringify(body),
+    values: body
+  },
+  failedResponseHandler,
+  successfulResponseHandler,
+  abortSignal,
+  fetch
+});
+var node_modules_ai_sdk_provider_utils_dist_postToApi = async ({
+  url,
+  headers = {},
+  body,
+  successfulResponseHandler,
+  failedResponseHandler,
+  abortSignal,
+  fetch = node_modules_ai_sdk_provider_utils_dist_getOriginalFetch()
+}) => {
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: node_modules_ai_sdk_provider_utils_dist_removeUndefinedEntries(headers),
+      body: body.content,
+      signal: abortSignal
+    });
+    const responseHeaders = node_modules_ai_sdk_provider_utils_dist_extractResponseHeaders(response);
+    if (!response.ok) {
+      let errorInformation;
+      try {
+        errorInformation = await failedResponseHandler({
+          response,
+          url,
+          requestBodyValues: body.values
+        });
+      } catch (error) {
+        if (node_modules_ai_sdk_provider_utils_dist_isAbortError(error) || google_vertex_node_modules_ai_sdk_provider_dist_APICallError.isInstance(error)) {
+          throw error;
+        }
+        throw new google_vertex_node_modules_ai_sdk_provider_dist_APICallError({
+          message: "Failed to process error response",
+          cause: error,
+          statusCode: response.status,
+          url,
+          responseHeaders,
+          requestBodyValues: body.values
+        });
+      }
+      throw errorInformation.value;
+    }
+    try {
+      return await successfulResponseHandler({
+        response,
+        url,
+        requestBodyValues: body.values
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        if (node_modules_ai_sdk_provider_utils_dist_isAbortError(error) || google_vertex_node_modules_ai_sdk_provider_dist_APICallError.isInstance(error)) {
+          throw error;
+        }
+      }
+      throw new google_vertex_node_modules_ai_sdk_provider_dist_APICallError({
+        message: "Failed to process successful response",
+        cause: error,
+        statusCode: response.status,
+        url,
+        responseHeaders,
+        requestBodyValues: body.values
+      });
+    }
+  } catch (error) {
+    if (node_modules_ai_sdk_provider_utils_dist_isAbortError(error)) {
+      throw error;
+    }
+    if (error instanceof TypeError && error.message === "fetch failed") {
+      const cause = error.cause;
+      if (cause != null) {
+        throw new google_vertex_node_modules_ai_sdk_provider_dist_APICallError({
+          message: `Cannot connect to API: ${cause.message}`,
+          cause,
+          url,
+          requestBodyValues: body.values,
+          isRetryable: true
+          // retry when network error
+        });
+      }
+    }
+    throw error;
+  }
+};
+
+// src/response-handler.ts
+
+
+var node_modules_ai_sdk_provider_utils_dist_createJsonErrorResponseHandler = ({
+  errorSchema,
+  errorToMessage,
+  isRetryable
+}) => async ({ response, url, requestBodyValues }) => {
+  const responseBody = await response.text();
+  const responseHeaders = node_modules_ai_sdk_provider_utils_dist_extractResponseHeaders(response);
+  if (responseBody.trim() === "") {
+    return {
+      responseHeaders,
+      value: new google_vertex_node_modules_ai_sdk_provider_dist_APICallError({
+        message: response.statusText,
+        url,
+        requestBodyValues,
+        statusCode: response.status,
+        responseHeaders,
+        responseBody,
+        isRetryable: isRetryable == null ? void 0 : isRetryable(response)
+      })
+    };
+  }
+  try {
+    const parsedError = node_modules_ai_sdk_provider_utils_dist_parseJSON({
+      text: responseBody,
+      schema: errorSchema
+    });
+    return {
+      responseHeaders,
+      value: new google_vertex_node_modules_ai_sdk_provider_dist_APICallError({
+        message: errorToMessage(parsedError),
+        url,
+        requestBodyValues,
+        statusCode: response.status,
+        responseHeaders,
+        responseBody,
+        data: parsedError,
+        isRetryable: isRetryable == null ? void 0 : isRetryable(response, parsedError)
+      })
+    };
+  } catch (parseError) {
+    return {
+      responseHeaders,
+      value: new google_vertex_node_modules_ai_sdk_provider_dist_APICallError({
+        message: response.statusText,
+        url,
+        requestBodyValues,
+        statusCode: response.status,
+        responseHeaders,
+        responseBody,
+        isRetryable: isRetryable == null ? void 0 : isRetryable(response)
+      })
+    };
+  }
+};
+var node_modules_ai_sdk_provider_utils_dist_createEventSourceResponseHandler = (chunkSchema) => async ({ response }) => {
+  const responseHeaders = node_modules_ai_sdk_provider_utils_dist_extractResponseHeaders(response);
+  if (response.body == null) {
+    throw new EmptyResponseBodyError({});
+  }
+  return {
+    responseHeaders,
+    value: response.body.pipeThrough(new TextDecoderStream()).pipeThrough(new EventSourceParserStream()).pipeThrough(
+      new TransformStream({
+        transform({ data }, controller) {
+          if (data === "[DONE]") {
+            return;
+          }
+          controller.enqueue(
+            google_vertex_node_modules_ai_sdk_provider_utils_dist_safeParseJSON({
+              text: data,
+              schema: chunkSchema
+            })
+          );
+        }
+      })
+    )
+  };
+};
+var node_modules_ai_sdk_provider_utils_dist_createJsonStreamResponseHandler = (chunkSchema) => async ({ response }) => {
+  const responseHeaders = node_modules_ai_sdk_provider_utils_dist_extractResponseHeaders(response);
+  if (response.body == null) {
+    throw new EmptyResponseBodyError({});
+  }
+  let buffer = "";
+  return {
+    responseHeaders,
+    value: response.body.pipeThrough(new TextDecoderStream()).pipeThrough(
+      new TransformStream({
+        transform(chunkText, controller) {
+          if (chunkText.endsWith("\n")) {
+            controller.enqueue(
+              google_vertex_node_modules_ai_sdk_provider_utils_dist_safeParseJSON({
+                text: buffer + chunkText,
+                schema: chunkSchema
+              })
+            );
+            buffer = "";
+          } else {
+            buffer += chunkText;
+          }
+        }
+      })
+    )
+  };
+};
+var node_modules_ai_sdk_provider_utils_dist_createJsonResponseHandler = (responseSchema) => async ({ response, url, requestBodyValues }) => {
+  const responseBody = await response.text();
+  const parsedResult = google_vertex_node_modules_ai_sdk_provider_utils_dist_safeParseJSON({
+    text: responseBody,
+    schema: responseSchema
+  });
+  const responseHeaders = node_modules_ai_sdk_provider_utils_dist_extractResponseHeaders(response);
+  if (!parsedResult.success) {
+    throw new google_vertex_node_modules_ai_sdk_provider_dist_APICallError({
+      message: "Invalid JSON response",
+      cause: parsedResult.error,
+      statusCode: response.status,
+      responseHeaders,
+      responseBody,
+      url,
+      requestBodyValues
+    });
+  }
+  return {
+    responseHeaders,
+    value: parsedResult.value
+  };
+};
+
+// src/uint8-utils.ts
+var { btoa: node_modules_ai_sdk_provider_utils_dist_btoa, atob: node_modules_ai_sdk_provider_utils_dist_atob } = globalThis;
+function node_modules_ai_sdk_provider_utils_dist_convertBase64ToUint8Array(base64String) {
+  const base64Url = base64String.replace(/-/g, "+").replace(/_/g, "/");
+  const latin1string = node_modules_ai_sdk_provider_utils_dist_atob(base64Url);
+  return Uint8Array.from(latin1string, (byte) => byte.codePointAt(0));
+}
+function node_modules_ai_sdk_provider_utils_dist_convertUint8ArrayToBase64(array) {
+  let latin1string = "";
+  for (let i = 0; i < array.length; i++) {
+    latin1string += String.fromCodePoint(array[i]);
+  }
+  return node_modules_ai_sdk_provider_utils_dist_btoa(latin1string);
+}
+
+// src/without-trailing-slash.ts
+function node_modules_ai_sdk_provider_utils_dist_withoutTrailingSlash(url) {
+  return url == null ? void 0 : url.replace(/\/$/, "");
+}
+
+//# sourceMappingURL=index.mjs.map
+// EXTERNAL MODULE: ./node_modules/@google-cloud/vertexai/build/src/index.js
+var build_src = __nccwpck_require__(8871);
+;// CONCATENATED MODULE: ./node_modules/@ai-sdk/google-vertex/dist/index.mjs
+// src/google-vertex-provider.ts
+
+
+
+// src/google-vertex-language-model.ts
+
+
+
+
+// src/convert-json-schema-to-openapi-schema.ts
+function dist_convertJSONSchemaToOpenAPISchema(jsonSchema) {
+  if (typeof jsonSchema === "boolean") {
+    return { type: "boolean", properties: {} };
+  }
+  const {
+    type,
+    description,
+    required,
+    properties,
+    items,
+    allOf,
+    anyOf,
+    oneOf,
+    format,
+    const: constValue,
+    minLength
+  } = jsonSchema;
+  const result = {};
+  if (description)
+    result.description = description;
+  if (required)
+    result.required = required;
+  if (format)
+    result.format = format;
+  if (constValue !== void 0) {
+    result.enum = [constValue];
+  }
+  if (type) {
+    if (Array.isArray(type)) {
+      if (type.includes("null")) {
+        result.type = type.filter((t) => t !== "null")[0];
+        result.nullable = true;
+      } else {
+        result.type = type;
+      }
+    } else if (type === "null") {
+      result.type = "null";
+    } else {
+      result.type = type;
+    }
+  }
+  if (properties) {
+    result.properties = Object.entries(properties).reduce(
+      (acc, [key, value]) => {
+        acc[key] = dist_convertJSONSchemaToOpenAPISchema(value);
+        return acc;
+      },
+      {}
+    );
+  }
+  if (items) {
+    result.items = Array.isArray(items) ? items.map(dist_convertJSONSchemaToOpenAPISchema) : dist_convertJSONSchemaToOpenAPISchema(items);
+  }
+  if (allOf) {
+    result.allOf = allOf.map(dist_convertJSONSchemaToOpenAPISchema);
+  }
+  if (anyOf) {
+    result.anyOf = anyOf.map(dist_convertJSONSchemaToOpenAPISchema);
+  }
+  if (oneOf) {
+    result.oneOf = oneOf.map(dist_convertJSONSchemaToOpenAPISchema);
+  }
+  if (minLength !== void 0)
+    result.minLength = minLength;
+  return result;
+}
+
+// src/convert-to-google-vertex-content-request.ts
+
+
+function convertToGoogleVertexContentRequest(prompt) {
+  var _a, _b;
+  const systemInstructionParts = [];
+  const contents = [];
+  let systemMessagesAllowed = true;
+  for (const { role, content } of prompt) {
+    switch (role) {
+      case "system": {
+        if (!systemMessagesAllowed) {
+          throw new google_vertex_node_modules_ai_sdk_provider_dist_UnsupportedFunctionalityError({
+            functionality: "system messages after first user message"
+          });
+        }
+        systemInstructionParts.push({ text: content });
+        break;
+      }
+      case "user": {
+        systemMessagesAllowed = false;
+        const parts = [];
+        for (const part of content) {
+          switch (part.type) {
+            case "text": {
+              parts.push({ text: part.text });
+              break;
+            }
+            case "image": {
+              parts.push(
+                part.image instanceof URL ? {
+                  fileData: {
+                    mimeType: (_a = part.mimeType) != null ? _a : "image/jpeg",
+                    fileUri: part.image.toString()
+                  }
+                } : {
+                  inlineData: {
+                    mimeType: (_b = part.mimeType) != null ? _b : "image/jpeg",
+                    data: node_modules_ai_sdk_provider_utils_dist_convertUint8ArrayToBase64(part.image)
+                  }
+                }
+              );
+              break;
+            }
+            case "file": {
+              parts.push(
+                part.data instanceof URL ? {
+                  fileData: {
+                    mimeType: part.mimeType,
+                    fileUri: part.data.toString()
+                  }
+                } : {
+                  inlineData: {
+                    mimeType: part.mimeType,
+                    data: part.data
+                  }
+                }
+              );
+              break;
+            }
+            default: {
+              const _exhaustiveCheck = part;
+              throw new google_vertex_node_modules_ai_sdk_provider_dist_UnsupportedFunctionalityError({
+                functionality: `prompt part: ${_exhaustiveCheck}`
+              });
+            }
+          }
+        }
+        contents.push({ role: "user", parts });
+        break;
+      }
+      case "assistant": {
+        systemMessagesAllowed = false;
+        contents.push({
+          role: "assistant",
+          parts: content.filter((part) => part.type !== "text" || part.text.length > 0).map((part) => {
+            switch (part.type) {
+              case "text": {
+                return { text: part.text };
+              }
+              case "tool-call": {
+                return {
+                  functionCall: {
+                    name: part.toolName,
+                    args: part.args
+                  }
+                };
+              }
+              default: {
+                const _exhaustiveCheck = part;
+                throw new google_vertex_node_modules_ai_sdk_provider_dist_UnsupportedFunctionalityError({
+                  functionality: `prompt part: ${_exhaustiveCheck}`
+                });
+              }
+            }
+          })
+        });
+        break;
+      }
+      case "tool": {
+        systemMessagesAllowed = false;
+        contents.push({
+          role: "user",
+          parts: content.map((part) => ({
+            functionResponse: {
+              name: part.toolName,
+              response: part.result
+            }
+          }))
+        });
+        break;
+      }
+      default: {
+        const _exhaustiveCheck = role;
+        throw new google_vertex_node_modules_ai_sdk_provider_dist_UnsupportedFunctionalityError({
+          functionality: `role: ${_exhaustiveCheck}`
+        });
+      }
+    }
+  }
+  return {
+    systemInstruction: systemInstructionParts.length > 0 ? { role: "system", parts: systemInstructionParts } : void 0,
+    contents
+  };
+}
+
+// src/google-vertex-prepare-tools.ts
+
+
+function google_vertex_dist_prepareTools({
+  useSearchGrounding,
+  mode
+}) {
+  var _a, _b;
+  const tools = ((_a = mode.tools) == null ? void 0 : _a.length) ? mode.tools : void 0;
+  const toolWarnings = [];
+  const vertexTools = [];
+  if (tools != null) {
+    const functionDeclarations = [];
+    for (const tool of tools) {
+      if (tool.type === "provider-defined") {
+        toolWarnings.push({ type: "unsupported-tool", tool });
+      } else {
+        functionDeclarations.push({
+          name: tool.name,
+          description: (_b = tool.description) != null ? _b : "",
+          parameters: dist_convertJSONSchemaToOpenAPISchema(
+            tool.parameters
+          )
+        });
+      }
+    }
+    vertexTools.push({ functionDeclarations });
+  }
+  if (useSearchGrounding) {
+    vertexTools.push({ googleSearchRetrieval: {} });
+  }
+  const finalTools = vertexTools.length > 0 ? vertexTools : void 0;
+  const toolChoice = mode.toolChoice;
+  if (toolChoice == null) {
+    return {
+      tools: finalTools,
+      toolConfig: void 0,
+      toolWarnings
+    };
+  }
+  const type = toolChoice.type;
+  switch (type) {
+    case "auto":
+      return {
+        tools: finalTools,
+        toolConfig: {
+          functionCallingConfig: { mode: build_src.FunctionCallingMode.AUTO }
+        },
+        toolWarnings
+      };
+    case "none":
+      return {
+        tools: finalTools,
+        toolConfig: {
+          functionCallingConfig: { mode: build_src.FunctionCallingMode.NONE }
+        },
+        toolWarnings
+      };
+    case "required":
+      return {
+        tools: finalTools,
+        toolConfig: {
+          functionCallingConfig: { mode: build_src.FunctionCallingMode.ANY }
+        },
+        toolWarnings
+      };
+    case "tool":
+      return {
+        tools: finalTools,
+        toolConfig: {
+          functionCallingConfig: {
+            mode: build_src.FunctionCallingMode.ANY,
+            allowedFunctionNames: [toolChoice.toolName]
+          }
+        },
+        toolWarnings
+      };
+    default: {
+      const _exhaustiveCheck = type;
+      throw new google_vertex_node_modules_ai_sdk_provider_dist_UnsupportedFunctionalityError({
+        functionality: `Unsupported tool choice type: ${_exhaustiveCheck}`
+      });
+    }
+  }
+}
+
+// src/map-google-vertex-finish-reason.ts
+function mapGoogleVertexFinishReason({
+  finishReason,
+  hasToolCalls
+}) {
+  switch (finishReason) {
+    case "STOP":
+      return hasToolCalls ? "tool-calls" : "stop";
+    case "MAX_TOKENS":
+      return "length";
+    case "BLOCKLIST":
+    case "PROHIBITED_CONTENT":
+    case "SPII":
+    case "RECITATION":
+    case "SAFETY":
+      return "content-filter";
+    case "FINISH_REASON_UNSPECIFIED":
+    case "OTHER":
+      return "other";
+    default:
+      return "unknown";
+  }
+}
+
+// src/google-vertex-language-model.ts
+var GoogleVertexLanguageModel = class {
+  constructor(modelId, settings, config) {
+    this.specificationVersion = "v1";
+    this.provider = "google-vertex";
+    this.defaultObjectGenerationMode = "json";
+    this.supportsImageUrls = false;
+    this.modelId = modelId;
+    this.settings = settings;
+    this.config = config;
+  }
+  get supportsObjectGeneration() {
+    return this.settings.structuredOutputs !== false;
+  }
+  async getArgs({
+    mode,
+    prompt,
+    maxTokens,
+    temperature,
+    topP,
+    topK,
+    frequencyPenalty,
+    presencePenalty,
+    stopSequences,
+    responseFormat,
+    seed,
+    headers
+  }) {
+    var _a, _b;
+    const warnings = [];
+    if (presencePenalty != null) {
+      warnings.push({
+        type: "unsupported-setting",
+        setting: "presencePenalty"
+      });
+    }
+    if (seed != null) {
+      warnings.push({
+        type: "unsupported-setting",
+        setting: "seed"
+      });
+    }
+    if (headers != null) {
+      warnings.push({
+        type: "unsupported-setting",
+        setting: "headers"
+      });
+    }
+    const generationConfig = {
+      // standardized settings:
+      maxOutputTokens: maxTokens,
+      frequencyPenalty,
+      temperature,
+      topK,
+      topP,
+      stopSequences,
+      // response format:
+      responseMimeType: (responseFormat == null ? void 0 : responseFormat.type) === "json" ? "application/json" : void 0,
+      responseSchema: (responseFormat == null ? void 0 : responseFormat.type) === "json" && responseFormat.schema != null && // Google Vertex does not support all OpenAPI Schema features,
+      // so this is needed as an escape hatch:
+      this.supportsObjectGeneration ? dist_convertJSONSchemaToOpenAPISchema(
+        responseFormat.schema
+      ) : void 0
+    };
+    const type = mode.type;
+    switch (type) {
+      case "regular": {
+        const { tools, toolConfig, toolWarnings } = google_vertex_dist_prepareTools({
+          mode,
+          useSearchGrounding: (_a = this.settings.useSearchGrounding) != null ? _a : false
+        });
+        const configuration = {
+          model: this.modelId,
+          generationConfig,
+          tools,
+          toolConfig,
+          safetySettings: this.settings.safetySettings
+        };
+        return {
+          model: this.config.vertexAI.getGenerativeModel(configuration),
+          contentRequest: convertToGoogleVertexContentRequest(prompt),
+          warnings: [...warnings, ...toolWarnings]
+        };
+      }
+      case "object-json": {
+        return {
+          model: this.config.vertexAI.getGenerativeModel({
+            model: this.modelId,
+            generationConfig: {
+              ...generationConfig,
+              responseMimeType: "application/json",
+              responseSchema: mode.schema != null && // Google Vertex does not support all OpenAPI Schema features,
+              // so this is needed as an escape hatch:
+              this.supportsObjectGeneration ? dist_convertJSONSchemaToOpenAPISchema(
+                mode.schema
+              ) : void 0
+            },
+            safetySettings: this.settings.safetySettings
+          }),
+          contentRequest: convertToGoogleVertexContentRequest(prompt),
+          warnings
+        };
+      }
+      case "object-tool": {
+        const configuration = {
+          model: this.modelId,
+          generationConfig,
+          tools: [
+            {
+              functionDeclarations: [
+                {
+                  name: mode.tool.name,
+                  description: (_b = mode.tool.description) != null ? _b : "",
+                  parameters: dist_convertJSONSchemaToOpenAPISchema(
+                    mode.tool.parameters
+                  )
+                }
+              ]
+            }
+          ],
+          toolConfig: {
+            functionCallingConfig: { mode: build_src.FunctionCallingMode.ANY }
+          },
+          safetySettings: this.settings.safetySettings
+        };
+        return {
+          model: this.config.vertexAI.getGenerativeModel(configuration),
+          contentRequest: convertToGoogleVertexContentRequest(prompt),
+          warnings
+        };
+      }
+      default: {
+        const _exhaustiveCheck = type;
+        throw new Error(`Unsupported type: ${_exhaustiveCheck}`);
+      }
+    }
+  }
+  supportsUrl(url) {
+    return url.protocol === "gs:";
+  }
+  async doGenerate(options) {
+    var _a, _b, _c;
+    const { model, contentRequest, warnings } = await this.getArgs(options);
+    const { response } = await model.generateContent(contentRequest);
+    const firstCandidate = (_a = response.candidates) == null ? void 0 : _a[0];
+    if (firstCandidate == null) {
+      throw new node_modules_ai_sdk_provider_dist_NoContentGeneratedError({ message: "No candidates returned" });
+    }
+    const parts = firstCandidate.content.parts;
+    const usageMetadata = response.usageMetadata;
+    const toolCalls = dist_getToolCallsFromParts({
+      parts,
+      generateId: this.config.generateId
+    });
+    return {
+      text: dist_getTextFromParts(parts),
+      toolCalls,
+      finishReason: mapGoogleVertexFinishReason({
+        finishReason: firstCandidate.finishReason,
+        hasToolCalls: toolCalls != null && toolCalls.length > 0
+      }),
+      usage: {
+        promptTokens: (_b = usageMetadata == null ? void 0 : usageMetadata.promptTokenCount) != null ? _b : NaN,
+        completionTokens: (_c = usageMetadata == null ? void 0 : usageMetadata.candidatesTokenCount) != null ? _c : NaN
+      },
+      rawCall: {
+        rawPrompt: contentRequest,
+        rawSettings: {}
+      },
+      providerMetadata: this.settings.useSearchGrounding ? {
+        vertex: {
+          groundingMetadata: firstCandidate.groundingMetadata
+        }
+      } : void 0,
+      warnings
+    };
+  }
+  async doStream(options) {
+    const { model, contentRequest, warnings } = await this.getArgs(options);
+    const { stream } = await model.generateContentStream(contentRequest);
+    let finishReason = "unknown";
+    let usage = {
+      promptTokens: Number.NaN,
+      completionTokens: Number.NaN
+    };
+    const generateId2 = this.config.generateId;
+    let hasToolCalls = false;
+    let providerMetadata;
+    return {
+      stream: _ai_sdk_provider_utils_dist_convertAsyncIteratorToReadableStream(stream).pipeThrough(
+        new TransformStream(
+          {
+            transform(chunk, controller) {
+              var _a, _b, _c;
+              const usageMetadata = chunk.usageMetadata;
+              if (usageMetadata != null) {
+                usage = {
+                  promptTokens: (_a = usageMetadata.promptTokenCount) != null ? _a : NaN,
+                  completionTokens: (_b = usageMetadata.candidatesTokenCount) != null ? _b : NaN
+                };
+              }
+              const candidate = (_c = chunk.candidates) == null ? void 0 : _c[0];
+              if (candidate == null) {
+                return;
+              }
+              if (candidate.finishReason != null) {
+                finishReason = mapGoogleVertexFinishReason({
+                  finishReason: candidate.finishReason,
+                  hasToolCalls
+                });
+              }
+              if (candidate.groundingMetadata != null) {
+                providerMetadata = {
+                  vertex: {
+                    groundingMetadata: candidate.groundingMetadata
+                  }
+                };
+              }
+              const content = candidate.content;
+              const deltaText = dist_getTextFromParts(content.parts);
+              if (deltaText != null) {
+                controller.enqueue({
+                  type: "text-delta",
+                  textDelta: deltaText
+                });
+              }
+              const toolCallDeltas = dist_getToolCallsFromParts({
+                parts: content.parts,
+                generateId: generateId2
+              });
+              if (toolCallDeltas != null) {
+                for (const toolCall of toolCallDeltas) {
+                  controller.enqueue({
+                    type: "tool-call-delta",
+                    toolCallType: "function",
+                    toolCallId: toolCall.toolCallId,
+                    toolName: toolCall.toolName,
+                    argsTextDelta: toolCall.args
+                  });
+                  controller.enqueue({
+                    type: "tool-call",
+                    toolCallType: "function",
+                    toolCallId: toolCall.toolCallId,
+                    toolName: toolCall.toolName,
+                    args: toolCall.args
+                  });
+                  hasToolCalls = true;
+                }
+              }
+            },
+            flush(controller) {
+              controller.enqueue({
+                type: "finish",
+                finishReason,
+                usage,
+                providerMetadata
+              });
+            }
+          }
+        )
+      ),
+      rawCall: {
+        rawPrompt: contentRequest,
+        rawSettings: {}
+      },
+      warnings
+    };
+  }
+};
+function dist_getToolCallsFromParts({
+  parts,
+  generateId: generateId2
+}) {
+  if (parts == null) {
+    return void 0;
+  }
+  return parts.flatMap(
+    (part) => part.functionCall == null ? [] : {
+      toolCallType: "function",
+      toolCallId: generateId2(),
+      toolName: part.functionCall.name,
+      args: JSON.stringify(part.functionCall.args)
+    }
+  );
+}
+function dist_getTextFromParts(parts) {
+  if (parts == null) {
+    return void 0;
+  }
+  const textParts = parts.filter((part) => "text" in part);
+  return textParts.length === 0 ? void 0 : textParts.map((part) => part.text).join("");
+}
+
+// src/google-vertex-embedding-model.ts
+
+
+
+
+// src/google-error.ts
+
+
+var dist_googleErrorDataSchema = z.object({
+  error: z.object({
+    code: z.number().nullable(),
+    message: z.string(),
+    status: z.string()
+  })
+});
+var dist_googleFailedResponseHandler = node_modules_ai_sdk_provider_utils_dist_createJsonErrorResponseHandler({
+  errorSchema: dist_googleErrorDataSchema,
+  errorToMessage: (data) => data.error.message
+});
+
+// src/google-vertex-embedding-model.ts
+var GoogleVertexEmbeddingModel = class {
+  constructor(modelId, settings, config) {
+    this.specificationVersion = "v1";
+    this.modelId = modelId;
+    this.settings = settings;
+    this.config = config;
+  }
+  get provider() {
+    return this.config.provider;
+  }
+  get maxEmbeddingsPerCall() {
+    return 2048;
+  }
+  get supportsParallelCalls() {
+    return true;
+  }
+  async doEmbed({
+    values,
+    headers,
+    abortSignal
+  }) {
+    if (values.length > this.maxEmbeddingsPerCall) {
+      throw new node_modules_ai_sdk_provider_dist_TooManyEmbeddingValuesForCallError({
+        provider: this.provider,
+        modelId: this.modelId,
+        maxEmbeddingsPerCall: this.maxEmbeddingsPerCall,
+        values
+      });
+    }
+    const { responseHeaders, value: response } = await node_modules_ai_sdk_provider_utils_dist_postJsonToApi({
+      url: `https://${this.config.region}-aiplatform.googleapis.com/v1/projects/${this.config.project}/locations/${this.config.region}/publishers/google/models/${this.modelId}:predict`,
+      headers: node_modules_ai_sdk_provider_utils_dist_combineHeaders(
+        { Authorization: `Bearer ${await this.config.generateAuthToken()}` },
+        headers
+      ),
+      body: {
+        instances: values.map((value) => ({ content: value })),
+        parameters: {
+          outputDimensionality: this.settings.outputDimensionality
+        }
+      },
+      failedResponseHandler: dist_googleFailedResponseHandler,
+      successfulResponseHandler: node_modules_ai_sdk_provider_utils_dist_createJsonResponseHandler(
+        googleVertexTextEmbeddingResponseSchema
+      ),
+      abortSignal
+    });
+    return {
+      embeddings: response.predictions.map(
+        (prediction) => prediction.embeddings.values
+      ),
+      usage: {
+        tokens: response.predictions.reduce(
+          (tokenCount, prediction) => tokenCount + prediction.embeddings.statistics.token_count,
+          0
+        )
+      },
+      rawResponse: { headers: responseHeaders }
+    };
+  }
+};
+var googleVertexTextEmbeddingResponseSchema = z.object({
+  predictions: z.array(
+    z.object({
+      embeddings: z.object({
+        values: z.array(z.number()),
+        statistics: z.object({
+          token_count: z.number()
+        })
+      })
+    })
+  )
+});
+
+// src/google-vertex-provider.ts
+function createVertex(options = {}) {
+  const loadVertexProject = () => node_modules_ai_sdk_provider_utils_dist_loadSetting({
+    settingValue: options.project,
+    settingName: "project",
+    environmentVariableName: "GOOGLE_VERTEX_PROJECT",
+    description: "Google Vertex project"
+  });
+  const loadVertexLocation = () => node_modules_ai_sdk_provider_utils_dist_loadSetting({
+    settingValue: options.location,
+    settingName: "location",
+    environmentVariableName: "GOOGLE_VERTEX_LOCATION",
+    description: "Google Vertex location"
+  });
+  const createVertexAI = () => {
+    var _a, _b;
+    const config = {
+      project: loadVertexProject(),
+      location: loadVertexLocation(),
+      googleAuthOptions: options.googleAuthOptions
+    };
+    return (_b = (_a = options.createVertexAI) == null ? void 0 : _a.call(options, config)) != null ? _b : new build_src.VertexAI(config);
+  };
+  const createChatModel = (modelId, settings = {}) => {
+    var _a;
+    return new GoogleVertexLanguageModel(modelId, settings, {
+      vertexAI: createVertexAI(),
+      generateId: (_a = options.generateId) != null ? _a : google_vertex_node_modules_ai_sdk_provider_utils_dist_generateId
+    });
+  };
+  const createEmbeddingModel = (modelId, settings = {}) => {
+    const vertexAI = createVertexAI();
+    return new GoogleVertexEmbeddingModel(modelId, settings, {
+      provider: "google.vertex",
+      region: loadVertexLocation(),
+      project: loadVertexProject(),
+      generateAuthToken: () => vertexAI.googleAuth.getAccessToken()
+    });
+  };
+  const provider = function(modelId, settings) {
+    if (new.target) {
+      throw new Error(
+        "The Google Vertex AI model function cannot be called with the new keyword."
+      );
+    }
+    return createChatModel(modelId, settings);
+  };
+  provider.languageModel = createChatModel;
+  provider.textEmbeddingModel = createEmbeddingModel;
+  return provider;
+}
+var vertex = createVertex();
+
+//# sourceMappingURL=index.mjs.map
 ;// CONCATENATED MODULE: ./dist/src/main.js
 var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -57337,6 +79242,7 @@ var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argume
 
 
 
+
 if (typeof globalThis.TransformStream === 'undefined') {
     globalThis.TransformStream = TransformStream;
 }
@@ -57346,6 +79252,8 @@ const ANTHROPIC_API_KEY = core.getInput('ANTHROPIC_API_KEY');
 const AI_PROVIDER = core.getInput('AI_PROVIDER') || 'google';
 const COOKBOOK_URL = 'https://gist.githubusercontent.com/herniqeu/35669801a4bbdc8fa52953986fa61277/raw/24932e0a2422f06eb762802ba0efb1e24d11924f/cookbook.md';
 const GOOGLE_API_KEY = core.getInput('GOOGLE_API_KEY');
+const GOOGLE_VERTEX_PROJECT = core.getInput('GOOGLE_VERTEX_PROJECT');
+const GOOGLE_VERTEX_LOCATION = core.getInput('GOOGLE_VERTEX_LOCATION') || 'us-central1';
 const octokit = new dist_node.Octokit({ auth: GITHUB_TOKEN });
 const SKIP_VALIDATION_COMMENT = '// @skip-validation';
 const logger = {
@@ -57389,11 +79297,14 @@ function getPRDetails() {
 const defaultRules = `Review the Pull Request and provide a verdict on whether it should be approved, requires changes, or is blocked.`;
 function resolveModel() {
     logger.debug(`Resolving AI model for provider: ${AI_PROVIDER}`);
-    logger.debug(`API Key present: ${!!GOOGLE_API_KEY}`);
     const modelPerProvider = {
         openai: createOpenAI({ apiKey: OPENAI_API_KEY })('gpt-4o-2024-08-06'),
         anthropic: createAnthropic({ apiKey: ANTHROPIC_API_KEY })('claude-3-5-sonnet-20241022'),
-        google: createGoogleGenerativeAI({ apiKey: GOOGLE_API_KEY })('models/gemini-1.5-pro-001')
+        google: createGoogleGenerativeAI({ apiKey: GOOGLE_API_KEY })('models/gemini-1.5-flash-latest'),
+        vertex: createVertex({
+            project: GOOGLE_VERTEX_PROJECT,
+            location: GOOGLE_VERTEX_LOCATION
+        })('gemini-1.5-pro')
     };
     const model = modelPerProvider[AI_PROVIDER];
     if (!model) {
@@ -57441,7 +79352,6 @@ function getAIResponse(prompt) {
             if (response.isErr()) {
                 return (0,index_cjs/* err */.cn)(response.error);
             }
-            // Add validation for the response format
             if ((_b = (_a = response.value.toolCalls) === null || _a === void 0 ? void 0 : _a[0]) === null || _b === void 0 ? void 0 : _b.args) {
                 const args = response.value.toolCalls[0].args;
                 logger.info('Validating tool call response:', JSON.stringify(args, null, 2));
@@ -57467,7 +79377,7 @@ function getAIResponse(prompt) {
 }
 function createReviewComment(owner, repo, pull_number, comments) {
     return __awaiter(this, void 0, void 0, function* () {
-        logger.review(`Preparing to post ${comments.length} review comments`);
+        logger.info(`Preparing to post ${comments.length} review comments`);
         try {
             const diff = yield getDiff(owner, repo, pull_number);
             if (diff.isErr()) {
@@ -57514,7 +79424,7 @@ function createReviewComment(owner, repo, pull_number, comments) {
                 logger.warn(`No valid diff positions found for any comments`);
                 return (0,index_cjs.ok)(undefined);
             }
-            logger.review(`Posting ${validComments.length} comments (${comments.length - validComments.length} skipped)`);
+            logger.info(`Posting ${validComments.length} comments (${comments.length - validComments.length} skipped)`);
             yield octokit.pulls.createReview({
                 owner,
                 repo,
@@ -57707,7 +79617,6 @@ function normalizeStatus(status) {
     if (['approve', 'request_changes', 'comment'].includes(normalized)) {
         return normalized;
     }
-    // Default to request_changes if invalid
     return 'request_changes';
 }
 function normalizeSeverity(severity) {
@@ -57715,7 +79624,7 @@ function normalizeSeverity(severity) {
     if (['critical', 'warning', 'info'].includes(normalized)) {
         return normalized;
     }
-    return 'info'; // Default to info if invalid
+    return 'info';
 }
 function generateFinalSummary(fileResults, prDetails, cookbook) {
     return __awaiter(this, void 0, void 0, function* () {

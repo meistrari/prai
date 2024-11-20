@@ -12,6 +12,7 @@ import { err, ok, ResultAsync } from 'neverthrow'
 import parseDiff from 'parse-diff'
 import z from 'zod'
 import { createGoogleGenerativeAI } from '@ai-sdk/google'
+import { createVertex } from '@ai-sdk/google-vertex'
 
 if (typeof globalThis.TransformStream === 'undefined') {
   globalThis.TransformStream = TransformStream
@@ -23,6 +24,8 @@ const ANTHROPIC_API_KEY: string = core.getInput('ANTHROPIC_API_KEY')
 const AI_PROVIDER: string = core.getInput('AI_PROVIDER') || 'google'
 const COOKBOOK_URL: string = 'https://gist.githubusercontent.com/herniqeu/35669801a4bbdc8fa52953986fa61277/raw/24932e0a2422f06eb762802ba0efb1e24d11924f/cookbook.md'
 const GOOGLE_API_KEY: string = core.getInput('GOOGLE_API_KEY')
+const GOOGLE_VERTEX_PROJECT: string = core.getInput('GOOGLE_VERTEX_PROJECT')
+const GOOGLE_VERTEX_LOCATION: string = core.getInput('GOOGLE_VERTEX_LOCATION') || 'us-central1'
 
 const octokit = new Octokit({ auth: GITHUB_TOKEN })
 
@@ -159,12 +162,15 @@ const defaultRules = `Review the Pull Request and provide a verdict on whether i
 
 function resolveModel() {
     logger.debug(`Resolving AI model for provider: ${AI_PROVIDER}`);
-    logger.debug(`API Key present: ${!!GOOGLE_API_KEY}`);
     
     const modelPerProvider = {
         openai: createOpenAI({ apiKey: OPENAI_API_KEY })('gpt-4o-2024-08-06'),
         anthropic: createAnthropic({ apiKey: ANTHROPIC_API_KEY })('claude-3-5-sonnet-20241022'),
-        google: createGoogleGenerativeAI({ apiKey: GOOGLE_API_KEY })('models/gemini-1.5-pro-001')
+        google: createGoogleGenerativeAI({ apiKey: GOOGLE_API_KEY })('models/gemini-1.5-flash-latest'),
+        vertex: createVertex({ 
+            project: GOOGLE_VERTEX_PROJECT,
+            location: GOOGLE_VERTEX_LOCATION
+        })('gemini-1.5-pro')
     } as Record<string, LanguageModelV1>
 
     const model = modelPerProvider[AI_PROVIDER]
@@ -222,7 +228,6 @@ async function getAIResponse(prompt: { system: string, user: string, format?: z.
             return err(response.error);
         }
 
-        // Add validation for the response format
         if (response.value.toolCalls?.[0]?.args) {
             const args = response.value.toolCalls[0].args;
             logger.info('Validating tool call response:', JSON.stringify(args, null, 2));
@@ -253,7 +258,7 @@ async function createReviewComment(
     pull_number: number,
     comments: Array<{ body: string; path: string; line: number }>,
 ): Promise<Result<void, Error>> {
-    logger.review(`Preparing to post ${comments.length} review comments`)
+    logger.info(`Preparing to post ${comments.length} review comments`)
 
     try {
         const diff = await getDiff(owner, repo, pull_number)
@@ -312,7 +317,7 @@ async function createReviewComment(
             return ok(undefined)
         }
 
-        logger.review(`Posting ${validComments.length} comments (${comments.length - validComments.length} skipped)`)
+        logger.info(`Posting ${validComments.length} comments (${comments.length - validComments.length} skipped)`)
 
         await octokit.pulls.createReview({
             owner,
@@ -534,7 +539,6 @@ function normalizeStatus(status: string): 'approve' | 'request_changes' | 'comme
     if (['approve', 'request_changes', 'comment'].includes(normalized)) {
         return normalized as 'approve' | 'request_changes' | 'comment';
     }
-    // Default to request_changes if invalid
     return 'request_changes';
 }
 
@@ -543,7 +547,7 @@ function normalizeSeverity(severity: string): 'critical' | 'warning' | 'info' {
     if (['critical', 'warning', 'info'].includes(normalized)) {
         return normalized as 'critical' | 'warning' | 'info';
     }
-    return 'info'; // Default to info if invalid
+    return 'info';
 }
 
 async function generateFinalSummary(
