@@ -30,6 +30,7 @@ const COOKBOOK_URL = 'https://gist.githubusercontent.com/herniqeu/35669801a4bbdc
 const GOOGLE_API_KEY = core.getInput('GOOGLE_API_KEY');
 const GOOGLE_VERTEX_PROJECT = core.getInput('GOOGLE_VERTEX_PROJECT');
 const GOOGLE_VERTEX_LOCATION = core.getInput('GOOGLE_VERTEX_LOCATION') || 'us-central1';
+const GOOGLE_VERTEX_SA_KEY_B64 = core.getInput('GOOGLE_VERTEX_SA_KEY_B64');
 const octokit = new Octokit({ auth: GITHUB_TOKEN });
 const SKIP_VALIDATION_COMMENT = '// @skip-validation';
 const logger = {
@@ -79,7 +80,10 @@ function resolveModel() {
         google: createGoogleGenerativeAI({ apiKey: GOOGLE_API_KEY })('models/gemini-1.5-flash-latest'),
         vertex: createVertex({
             project: GOOGLE_VERTEX_PROJECT,
-            location: GOOGLE_VERTEX_LOCATION
+            location: GOOGLE_VERTEX_LOCATION,
+            googleAuthOptions: GOOGLE_VERTEX_SA_KEY_B64 ? {
+                credentials: JSON.parse(Buffer.from(GOOGLE_VERTEX_SA_KEY_B64, 'base64').toString())
+            } : undefined
         })('gemini-1.5-pro')
     };
     const model = modelPerProvider[AI_PROVIDER];

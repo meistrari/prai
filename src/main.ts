@@ -26,6 +26,7 @@ const COOKBOOK_URL: string = 'https://gist.githubusercontent.com/herniqeu/356698
 const GOOGLE_API_KEY: string = core.getInput('GOOGLE_API_KEY')
 const GOOGLE_VERTEX_PROJECT: string = core.getInput('GOOGLE_VERTEX_PROJECT')
 const GOOGLE_VERTEX_LOCATION: string = core.getInput('GOOGLE_VERTEX_LOCATION') || 'us-central1'
+const GOOGLE_VERTEX_SA_KEY_B64: string = core.getInput('GOOGLE_VERTEX_SA_KEY_B64')
 
 const octokit = new Octokit({ auth: GITHUB_TOKEN })
 
@@ -169,7 +170,12 @@ function resolveModel() {
         google: createGoogleGenerativeAI({ apiKey: GOOGLE_API_KEY })('models/gemini-1.5-flash-latest'),
         vertex: createVertex({ 
             project: GOOGLE_VERTEX_PROJECT,
-            location: GOOGLE_VERTEX_LOCATION
+            location: GOOGLE_VERTEX_LOCATION,
+            googleAuthOptions: GOOGLE_VERTEX_SA_KEY_B64 ? {
+                credentials: JSON.parse(
+                    Buffer.from(GOOGLE_VERTEX_SA_KEY_B64, 'base64').toString()
+                )
+            } : undefined
         })('gemini-1.5-pro')
     } as Record<string, LanguageModelV1>
 

@@ -31,6 +31,9 @@ inputs:
   COOKBOOK_URL:
     description: "URL to fetch validation rules cookbook from"
     required: true
+  GOOGLE_VERTEX_SA_KEY_B64:
+    description: "Base64 encoded Google service account key for Vertex AI authentication"
+    required: false
 
 runs:
   using: "node20"
