@@ -18,7 +18,43 @@ jobs:
           node-version: '16'
 
       - name: Install dependencies
+        run: |name: Dependency & Migration Validator
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+permissions: write-all
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
         run: |
+          npm install
+          npm install p-limit@3.1.0
+
+      - name: Validate Dependencies & Migrations
+        uses: ./
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GOOGLE_VERTEX_PROJECT: ${{ secrets.GOOGLE_VERTEX_PROJECT }}
+          GOOGLE_VERTEX_LOCATION: ${{ secrets.GOOGLE_VERTEX_LOCATION }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          exclude: "*.md,*.txt"
+          COOKBOOK_URL: ${{ vars.COOKBOOK_URL }}
+        env:
+          NODE_OPTIONS: "--experimental-specifier-resolution=node"
           npm install
           npm install p-limit@3.1.0
 

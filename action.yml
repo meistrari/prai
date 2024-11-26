@@ -10,10 +10,20 @@ inputs:
   ANTHROPIC_API_KEY:
     description: "Anthropic API key for Claude"
     required: false
-  AI_PROVIDER:
-    description: "AI provider to use (openai or anthropic)"
+  GOOGLE_API_KEY:
+    description: "Google API key for Gemini models"
     required: false
-    default: "openai"
+  GOOGLE_VERTEX_PROJECT:
+    description: "Google Cloud project ID for Vertex AI"
+    required: false
+  GOOGLE_VERTEX_LOCATION:
+    description: "Google Cloud location for Vertex AI"
+    required: false
+    default: "us-central1"
+  AI_PROVIDER:
+    description: "AI provider to use (openai, anthropic, google, or vertex)"
+    required: false
+    default: "anthropic"
   exclude:
     description: "Glob patterns to exclude files from analysis"
     required: false
@@ -21,9 +31,14 @@ inputs:
   COOKBOOK_URL:
     description: "URL to fetch validation rules cookbook from"
     required: true
+  GOOGLE_VERTEX_SA_KEY_B64:
+    description: "Base64 encoded Google service account key for Vertex AI authentication"
+    required: false
+
 runs:
-  using: "node16"
+  using: "node20"
   main: "dist/src/main.js"
+
 branding:
   icon: "shield"
   color: "blue"

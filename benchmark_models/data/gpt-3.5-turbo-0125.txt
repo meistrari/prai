@@ -1,0 +1,334 @@
+{
+  "model_info": {
+    "name": "GPT",
+    "version": "3.5-turbo-0125",
+    "provider": "OpenAI",
+    "timestamp": "2024-11-19"
+  },
+  "performance_metrics": {
+    "detection_rate": {
+      "critical": {
+        "total_caught": 4,
+        "total_possible": 10,
+        "percentage": 40
+      },
+      "warning": {
+        "total_caught": 3,
+        "total_possible": 24,
+        "percentage": 12.5
+      },
+      "info": {
+        "total_caught": 2,
+        "total_possible": 10,
+        "percentage": 20
+      },
+      "overall": {
+        "total_caught": 9,
+        "total_possible": 43,
+        "percentage": 20.9
+      }
+    },
+    "false_positives": 2,
+    "missed_vulnerabilities": 34
+  },
+  "error_detection": {
+    "UserService.ts": {
+      "error_US001": {
+        "description": "Hardcoded database credentials in constructor",
+        "severity": "CRITICAL",
+        "detected": false
+      },
+      "error_US002": {
+        "description": "SQL injection vulnerability in all queries",
+        "severity": "CRITICAL",
+        "detected": true
+      },
+      "error_US003": {
+        "description": "Using MD5 for password hashing",
+        "severity": "CRITICAL",
+        "detected": false
+      },
+      "error_US004": {
+        "description": "Untyped userData parameter",
+        "severity": "WARNING",
+        "detected": false
+      }
+    },
+    "TransactionProcessor.ts": {
+      "error_TP001": {
+        "description": "Hardcoded API key in code",
+        "severity": "CRITICAL",
+        "detected": true
+      },
+      "error_TP002": {
+        "description": "Untyped cardDetails parameter",
+        "severity": "WARNING",
+        "detected": true
+      },
+      "error_TP003": {
+        "description": "Sequential processing in bulkProcess",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_TP004": {
+        "description": "Missing transaction logging",
+        "severity": "INFO",
+        "detected": false
+      }
+    },
+    "DatabaseConnection.ts": {
+      "error_DB001": {
+        "description": "Hardcoded database credentials",
+        "severity": "CRITICAL",
+        "detected": true
+      },
+      "error_DB002": {
+        "description": "No connection pooling",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_DB003": {
+        "description": "No timeout handling",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_DB004": {
+        "description": "Console.log in production code",
+        "severity": "INFO",
+        "detected": true
+      }
+    },
+    "OrderController.ts": {
+      "error_OC001": {
+        "description": "SQL injection in queries",
+        "severity": "CRITICAL",
+        "detected": true
+      },
+      "error_OC002": {
+        "description": "No input validation",
+        "severity": "CRITICAL",
+        "detected": false
+      },
+      "error_OC003": {
+        "description": "Missing error handling",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_OC004": {
+        "description": "No transaction wrapping",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_OC005": {
+        "description": "Implicit global 'db' variable usage",
+        "severity": "WARNING",
+        "detected": false
+      }
+    },
+    "CacheManager.ts": {
+      "error_CM001": {
+        "description": "No cache size limits",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_CM002": {
+        "description": "No expired items cleanup mechanism",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_CM003": {
+        "description": "Singleton pattern could cause testing issues",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_CM004": {
+        "description": "Missing cache hit/miss metrics",
+        "severity": "INFO",
+        "detected": false
+      }
+    },
+    "DataTransformer.ts": {
+      "error_DT001": {
+        "description": "Inefficient sequential processing",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_DT002": {
+        "description": "Untyped parameters",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_DT003": {
+        "description": "Potential memory issues with large datasets",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_DT004": {
+        "description": "Missing progress tracking",
+        "severity": "INFO",
+        "detected": false
+      }
+    },
+    "LogProcessor.ts": {
+      "error_LP001": {
+        "description": "Hardcoded file path",
+        "severity": "CRITICAL",
+        "detected": false
+      },
+      "error_LP002": {
+        "description": "No log rotation handling",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_LP003": {
+        "description": "Potential memory issues with large logs",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_LP004": {
+        "description": "Silent error swallowing in JSON.parse",
+        "severity": "INFO",
+        "detected": true
+      }
+    },
+    "RateLimiter.ts": {
+      "error_RL001": {
+        "description": "Memory leak in old requests",
+        "severity": "CRITICAL",
+        "detected": false
+      },
+      "error_RL002": {
+        "description": "Race conditions in checkLimit",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_RL003": {
+        "description": "No distributed rate limiting support",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_RL004": {
+        "description": "Missing rate limit headers",
+        "severity": "INFO",
+        "detected": false
+      }
+    },
+    "DataProcessor.ts": {
+      "error_DP001": {
+        "description": "Race condition in processData",
+        "severity": "CRITICAL",
+        "detected": false
+      },
+      "error_DP002": {
+        "description": "No error handling in processing loop",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_DP003": {
+        "description": "No backpressure mechanism",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_DP004": {
+        "description": "Potential memory leaks",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_DP005": {
+        "description": "Missing processing metrics",
+        "severity": "INFO",
+        "detected": false
+      }
+    },
+    "ConfigLoader.ts": {
+      "error_CL001": {
+        "description": "No error handling for missing config",
+        "severity": "CRITICAL",
+        "detected": false
+      },
+      "error_CL002": {
+        "description": "Race condition in loadConfig",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_CL003": {
+        "description": "No config validation",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_CL004": {
+        "description": "No environment variables support",
+        "severity": "WARNING",
+        "detected": false
+      },
+      "error_CL005": {
+        "description": "Missing config reload capability",
+        "severity": "INFO",
+        "detected": false
+      }
+    }
+  },
+  "qualitative_analysis": {
+    "security_analysis": {
+      "strengths": [
+        "Basic detection of SQL injection vulnerabilities",
+        "Identification of hardcoded credentials",
+        "Recognition of some API key security issues"
+      ],
+      "limitations": [
+        "Missed many critical security vulnerabilities",
+        "Limited detection of cryptographic issues",
+        "Poor recognition of access control problems",
+        "Incomplete analysis of security patterns"
+      ]
+    },
+    "performance_analysis": {
+      "strengths": [
+        "Basic recognition of error handling issues"
+      ],
+      "limitations": [
+        "Missed most performance-related issues",
+        "Failed to identify memory leaks",
+        "No detection of concurrency issues",
+        "Limited understanding of scalability concerns"
+      ]
+    },
+    "code_quality_analysis": {
+      "strengths": [
+        "Detection of basic type safety issues",
+        "Identification of production logging issues"
+      ],
+      "limitations": [
+        "Limited architectural pattern recognition",
+        "Poor detection of code organization issues",
+        "Missed most validation concerns",
+        "Incomplete error handling analysis"
+      ]
+    },
+    "contextual_understanding": {
+      "strengths": [
+        "Basic understanding of database security",
+        "Recognition of some type safety importance"
+      ],
+      "limitations": [
+        "Limited grasp of system architecture",
+        "Poor understanding of testing implications",
+        "Missed most context-dependent security issues",
+        "Shallow analysis of code implications"
+      ]
+    },
+    "notable_differences_from_claude": {
+      "key_gaps": [
+        "Significantly lower detection rate across all severity levels",
+        "Limited detection of architectural issues",
+        "Poor recognition of complex security patterns",
+        "Missed most performance and scalability concerns"
+      ],
+      "relative_strengths": [
+        "Similar ability to detect basic SQL injection",
+        "Comparable detection of hardcoded credentials",
+        "Consistent detection of basic logging issues"
+      ]
+    }
+  }
+}
